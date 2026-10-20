@@ -12,6 +12,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import com.familycare.app.presentation.ai_assistant.AiAssistantScreen
 import com.familycare.app.presentation.biometrics.BiometricsScreen
+import com.familycare.app.presentation.biometrics.ppg.CameraPpgScreen
 import com.familycare.app.presentation.dashboard.DashboardScreen
 import com.familycare.app.presentation.medication.MedicationScreen
 import com.familycare.app.presentation.profile.ProfileScreen
@@ -70,7 +71,7 @@ fun AppNavHost() {
         ) {
             composable(Screen.Dashboard.route) {
                 DashboardScreen(
-                    onNavigateToPpg = { navController.navigate(Screen.Biometrics.route) },
+                    onNavigateToPpg = { navController.navigate(Screen.CameraPpg.route) },
                     onNavigateToAi = { navController.navigate(Screen.AiAssistant.route) },
                     onNavigateToOcr = { navController.navigate(Screen.Medication.route) },
                     onNavigateToEmergency = { /* Navigate to SOS */ }
@@ -78,7 +79,12 @@ fun AppNavHost() {
             }
             composable(Screen.Biometrics.route) {
                 BiometricsScreen(
-                    onNavigateToCameraPpg = { /* Handled in feature_biometrics */ }
+                    onNavigateToCameraPpg = { navController.navigate(Screen.CameraPpg.route) }
+                )
+            }
+            composable(Screen.CameraPpg.route) {
+                CameraPpgScreen(
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Medication.route) {
