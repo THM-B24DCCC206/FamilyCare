@@ -8,12 +8,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.familycare.app.core.common.SessionManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,6 +26,9 @@ fun DashboardScreen(
     onNavigateToOcr: () -> Unit,
     onNavigateToEmergency: () -> Unit
 ) {
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -34,7 +40,7 @@ fun DashboardScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Tổ ấm: Gia đình Bác Nam",
+                            text = "Tổ ấm: ${sessionManager.familyName}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

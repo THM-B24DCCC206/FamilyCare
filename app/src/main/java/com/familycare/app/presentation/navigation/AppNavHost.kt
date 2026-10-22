@@ -4,13 +4,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
+import com.familycare.app.core.common.SessionManager
 import com.familycare.app.presentation.ai_assistant.AiAssistantScreen
+import com.familycare.app.presentation.auth.FamilySetupScreen
+import com.familycare.app.presentation.auth.LoginScreen
 import com.familycare.app.presentation.biometrics.BiometricsScreen
 import com.familycare.app.presentation.biometrics.ppg.CameraPpgScreen
 import com.familycare.app.presentation.dashboard.DashboardScreen
@@ -25,9 +28,20 @@ data class BottomNavItem(
 
 @Composable
 fun AppNavHost() {
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // Kiểm tra điểm khởi đầu dựa vào phiên đăng nhập
+    val startDestination = remember {
+        when {
+            !sessionManager.isLoggedIn -> Screen.Login.route
+            !sessionManager.hasFamily -> Screen.FamilySetup.route
+            else -> Screen.Dashboard.route
+        }
+    }
 
     val bottomNavItems = listOf(
         BottomNavItem("Trang chủ", Screen.Dashboard.route, Icons.Default.Home),
@@ -66,9 +80,37 @@ fun AppNavHost() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Dashboard.route,
+            startDestination = startDestination,
             modifier = Modifier.padding(innerPadding)
         ) {
+            // 1. Luồng Xác thực & Gia đình (Thành viên 1)
+            composable(Screen.Login.route) {
+                LoginScreen(
+                    onLoginSuccess = { hasFamily ->
+                        if (hasFamily) {
+                            navController.navigate(Screen.Dashboard.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        } else {
+                            navController.navigate(Screen.FamilySetup.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    }
+                )
+            }
+
+            composable(Screen.FamilySetup.route) {
+                FamilySetupScreen(
+                    onSetupComplete = {
+                        navController.navigate(Screen.Dashboard.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            // 2. Các Tab Chính
             composable(Screen.Dashboard.route) {
                 DashboardScreen(
                     onNavigateToPpg = { navController.navigate(Screen.CameraPpg.route) },
@@ -77,27 +119,37 @@ fun AppNavHost() {
                     onNavigateToEmergency = { /* Navigate to SOS */ }
                 )
             }
+
             composable(Screen.Biometrics.route) {
                 BiometricsScreen(
                     onNavigateToCameraPpg = { navController.navigate(Screen.CameraPpg.route) }
                 )
             }
+
             composable(Screen.CameraPpg.route) {
                 CameraPpgScreen(
                     onBack = { navController.popBackStack() }
                 )
             }
+
             composable(Screen.Medication.route) {
                 MedicationScreen(
                     onNavigateToOcr = { /* Handled in feature_medication */ }
                 )
             }
+
             composable(Screen.AiAssistant.route) {
                 AiAssistantScreen()
             }
+
             composable(Screen.Profile.route) {
                 ProfileScreen(
-                    onNavigateToPdfReport = { /* Handled in feature_report */ }
+                    onNavigateToPdfReport = { /* Handled in feature_report */ },
+                    onLogout = {
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
                 )
             }
         }
