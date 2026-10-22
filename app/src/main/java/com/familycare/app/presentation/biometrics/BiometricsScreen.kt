@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.familycare.app.core.database.AppDatabase
+import com.familycare.app.presentation.biometrics.chart.BiometricsLineChart
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -45,7 +46,7 @@ fun BiometricsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Card kêu gọi đo PPG bằng Camera
+            // 1. Card kêu gọi đo PPG bằng Camera
             item {
                 Card(
                     colors = CardDefaults.cardColors(
@@ -85,7 +86,12 @@ fun BiometricsScreen(
                 }
             }
 
-            // Tiêu đề Lịch sử đo
+            // 2. BIỂU ĐỒ ĐƯỜNG XU HƯỚNG NHỊP TIM (LINE CHART CANVAS)
+            item {
+                BiometricsLineChart(metrics = metricsList)
+            }
+
+            // 3. Tiêu đề Lịch sử đo
             item {
                 Text(
                     text = "Lịch sử đo chỉ số (${metricsList.size} lần đo)",
@@ -94,7 +100,7 @@ fun BiometricsScreen(
                 )
             }
 
-            // Danh sách các lần đo lấy trực tiếp từ Room Database
+            // 4. Danh sách các lần đo lấy trực tiếp từ Database
             if (metricsList.isEmpty()) {
                 item {
                     Card(
