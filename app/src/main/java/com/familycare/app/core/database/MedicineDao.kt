@@ -16,4 +16,6 @@ interface MedicineDao {
 
     @Query("DELETE FROM medicines WHERE id = :medicineId")
     suspend fun deleteMedicine(medicineId: String)
+    @androidx.room.Update
+    suspend fun updateMedicine(medicine: MedicineEntity)
 }

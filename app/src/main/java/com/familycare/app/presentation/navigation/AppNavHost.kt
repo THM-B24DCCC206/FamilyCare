@@ -11,10 +11,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import com.familycare.app.presentation.ai_assistant.AiAssistantScreen
+import com.familycare.app.presentation.appointment.AppointmentScreen
 import com.familycare.app.presentation.biometrics.BiometricsScreen
 import com.familycare.app.presentation.dashboard.DashboardScreen
 import com.familycare.app.presentation.medication.MedicationScreen
 import com.familycare.app.presentation.profile.ProfileScreen
+import com.familycare.app.presentation.ocr.OcrPrescriptionScreen
 
 data class BottomNavItem(
     val title: String,
@@ -29,14 +31,41 @@ fun AppNavHost() {
     val currentRoute = navBackStackEntry?.destination?.route
 
     val bottomNavItems = listOf(
-        BottomNavItem("Trang chủ", Screen.Dashboard.route, Icons.Default.Home),
-        BottomNavItem("Chỉ số", Screen.Biometrics.route, Icons.Default.Favorite),
-        BottomNavItem("Thuốc", Screen.Medication.route, Icons.Default.Medication),
-        BottomNavItem("Trợ lý AI", Screen.AiAssistant.route, Icons.Default.AutoAwesome),
-        BottomNavItem("Hồ sơ", Screen.Profile.route, Icons.Default.Person)
+        BottomNavItem(
+            "Trang chủ",
+            Screen.Dashboard.route,
+            Icons.Default.Home
+        ),
+        BottomNavItem(
+            "Chỉ số",
+            Screen.Biometrics.route,
+            Icons.Default.Favorite
+        ),
+        BottomNavItem(
+            "Thuốc",
+            Screen.Medication.route,
+            Icons.Default.Medication
+        ),
+        BottomNavItem(
+            "Lịch khám",
+            Screen.Appointments.route,
+            Icons.Default.CalendarMonth
+        ),
+        BottomNavItem(
+            "Trợ lý AI",
+            Screen.AiAssistant.route,
+            Icons.Default.AutoAwesome
+        ),
+        BottomNavItem(
+            "Hồ sơ",
+            Screen.Profile.route,
+            Icons.Default.Person
+        )
     )
 
-    val showBottomBar = bottomNavItems.any { it.route == currentRoute }
+    val showBottomBar = bottomNavItems.any {
+        it.route == currentRoute
+    }
 
     Scaffold(
         bottomBar = {
@@ -44,19 +73,29 @@ fun AppNavHost() {
                 NavigationBar {
                     bottomNavItems.forEach { item ->
                         val selected = currentRoute == item.route
+
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
                                 navController.navigate(item.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
+                                    popUpTo(
+                                        navController.graph.findStartDestination().id
+                                    ) {
                                         saveState = true
                                     }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
                             },
-                            icon = { Icon(item.icon, contentDescription = item.title) },
-                            label = { Text(item.title) }
+                            icon = {
+                                Icon(
+                                    imageVector = item.icon,
+                                    contentDescription = item.title
+                                )
+                            },
+                            label = {
+                                Text(item.title)
+                            }
                         )
                     }
                 }
@@ -70,29 +109,55 @@ fun AppNavHost() {
         ) {
             composable(Screen.Dashboard.route) {
                 DashboardScreen(
-                    onNavigateToPpg = { navController.navigate(Screen.Biometrics.route) },
-                    onNavigateToAi = { navController.navigate(Screen.AiAssistant.route) },
-                    onNavigateToOcr = { navController.navigate(Screen.Medication.route) },
-                    onNavigateToEmergency = { /* Navigate to SOS */ }
+                    onNavigateToPpg = {
+                        navController.navigate(Screen.Biometrics.route)
+                    },
+                    onNavigateToAi = {
+                        navController.navigate(Screen.AiAssistant.route)
+                    },
+                    onNavigateToOcr = {
+                        navController.navigate(Screen.OcrPrescription.route)
+                    },
+                    onNavigateToEmergency = {
+                        // TODO: Kết nối màn hình cảnh báo khẩn cấp
+                    }
                 )
             }
+
             composable(Screen.Biometrics.route) {
                 BiometricsScreen(
-                    onNavigateToCameraPpg = { /* Handled in feature_biometrics */ }
+                    onNavigateToCameraPpg = {
+                        // TODO: Kết nối chức năng đo nhịp tim bằng camera
+                    }
                 )
             }
+
             composable(Screen.Medication.route) {
                 MedicationScreen(
-                    onNavigateToOcr = { /* Handled in feature_medication */ }
+                    onNavigateToOcr = {
+                        navController.navigate(Screen.OcrPrescription.route)
+                    }
                 )
             }
+
+            composable(Screen.OcrPrescription.route) {
+                OcrPrescriptionScreen(
+                    onBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable(Screen.Appointments.route) {
+                AppointmentScreen()
+            }
+
             composable(Screen.AiAssistant.route) {
                 AiAssistantScreen()
             }
+
             composable(Screen.Profile.route) {
-                ProfileScreen(
-                    onNavigateToPdfReport = { /* Handled in feature_report */ }
-                )
+                ProfileScreen()
             }
         }
     }
