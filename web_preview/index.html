@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FamilyCare - Trình Mô Phỏng Web Trực Tuyến</title>
+    <title>FamilyCare - Mô Phỏng Giao Diện Chuẩn Nhóm</title>
     <style>
         :root {
             --primary: #1976D2;
@@ -20,6 +20,7 @@
             --error-container: #FFDAD6;
             --on-error: #FFFFFF;
             --on-error-container: #410002;
+            --divider: #E0E0E0;
         }
 
         * {
@@ -43,7 +44,7 @@
         .container {
             display: flex;
             gap: 40px;
-            max-width: 1150px;
+            max-width: 1180px;
             width: 100%;
             align-items: center;
             justify-content: center;
@@ -53,7 +54,7 @@
         .info-panel {
             flex: 1;
             min-width: 320px;
-            max-width: 500px;
+            max-width: 520px;
         }
 
         .info-panel h1 {
@@ -158,7 +159,7 @@
 
         .app-header {
             background: #fff;
-            padding: 12px 16px;
+            padding: 12px 18px;
             border-bottom: 1px solid rgba(0,0,0,0.06);
             display: flex;
             justify-content: space-between;
@@ -166,42 +167,9 @@
         }
 
         .app-header h2 {
-            font-size: 1.25rem; /* 26sp titleLarge */
+            font-size: 1.25rem;
             font-weight: 800;
             color: var(--primary);
-        }
-
-        /* Bottom Tab Bar */
-        .tab-bar {
-            background: #fff;
-            height: 64px;
-            display: flex;
-            border-top: 1px solid rgba(0,0,0,0.06);
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.02);
-        }
-
-        .tab-btn {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: none;
-            border: none;
-            color: #79747E;
-            font-size: 11px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .tab-btn.active {
-            color: var(--primary);
-        }
-
-        .tab-btn span.icon {
-            font-size: 20px;
-            margin-bottom: 2px;
         }
 
         .screen-content {
@@ -217,83 +185,289 @@
             display: flex;
         }
 
-        /* Dashboard Styles */
-        .member-row {
+        /* Bottom Tab Bar (5 Tabs chuẩn Nhánh 1 / Android App) */
+        .tab-bar {
+            background: #fff;
+            height: 64px;
             display: flex;
-            gap: 10px;
-            overflow-x: auto;
-            scrollbar-width: none;
-            padding-bottom: 4px;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.02);
+            z-index: 20;
         }
-        .member-row::-webkit-scrollbar { display: none; }
 
-        .member-chip {
+        .tab-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            color: #79747E;
+            font-size: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            gap: 2px;
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+        }
+
+        .tab-btn span.icon {
+            font-size: 18px;
+        }
+
+        /* ======================================================== */
+        /* GIAO DIỆN TRANG CHỦ CHUẨN THÀNH VIÊN 1 (DASHBOARD SCREEN) */
+        /* ======================================================== */
+        .sos-card-tv1 {
+            background: var(--error-container);
+            border-radius: 16px;
+            padding: 16px;
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 14px;
-            background: #fff;
-            border-radius: 24px;
-            border: 2px solid transparent;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .sos-title-tv1 {
+            font-size: 15px;
+            font-weight: 800;
+            color: var(--on-error-container);
+            margin-bottom: 4px;
+        }
+
+        .sos-sub-tv1 {
+            font-size: 12px;
+            color: var(--on-error-container);
+            line-height: 1.4;
+        }
+
+        .sos-btn-tv1 {
+            background: var(--error);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: 800;
             cursor: pointer;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 10px rgba(211,47,47,0.3);
             white-space: nowrap;
         }
-        .member-chip.selected {
-            background: var(--primary-container);
-            border-color: var(--primary);
+
+        .section-title-tv1 {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--on-surface);
+            margin-top: 4px;
         }
-        .member-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--primary);
-            color: #fff;
+
+        .smart-features-grid-tv1 {
+            display: flex;
+            gap: 12px;
+        }
+
+        .smart-card-tv1 {
+            flex: 1;
+            background: #fff;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid rgba(0,0,0,0.04);
+        }
+
+        .smart-card-tv1:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+        }
+
+        .smart-icon-tv1 {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .smart-name-tv1 {
+            font-size: 15px;
+            font-weight: 800;
+            color: #111;
+            margin-bottom: 2px;
+        }
+
+        .smart-desc-tv1 {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .vitals-card-tv1 {
+            background: #fff;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.04);
+        }
+
+        .vitals-row-tv1 {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             font-size: 14px;
         }
 
-        .dashboard-card {
-            background: var(--surface-card);
-            border-radius: 20px;
-            padding: 18px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        .vitals-label-tv1 {
+            color: #444;
+            font-weight: 500;
+        }
+
+        .vitals-val-tv1 {
+            font-weight: 800;
+            font-size: 15px;
+        }
+
+        .divider-tv1 {
+            height: 1px;
+            background: #eee;
+            margin: 10px 0;
+        }
+
+        /* ======================================================== */
+        /* GIAO DIỆN CHỈ SỐ SINH TỒN THÀNH VIÊN 1 (BIOMETRICS)       */
+        /* ======================================================== */
+        .ppg-banner-card {
+            background: var(--primary-container);
+            color: var(--on-primary-container);
+            border-radius: 16px;
+            padding: 16px;
             display: flex;
             flex-direction: column;
+            align-items: center;
+            text-align: center;
             gap: 10px;
         }
 
-        .red-alert-card {
-            background: var(--error-container);
-            color: var(--on-error-container);
+        .filter-row {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            padding: 2px 0;
+        }
+        .filter-row::-webkit-scrollbar { display: none; }
+
+        .filter-chip {
+            padding: 6px 12px;
+            background: #fff;
             border-radius: 16px;
-            padding: 16px;
-            border-left: 6px solid var(--error);
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+            cursor: pointer;
+            border: 1px solid #ddd;
+            white-space: nowrap;
         }
 
-        .btn-large {
-            height: 56px; /* Design System standard */
+        .filter-chip.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        .chart-box {
+            background: #fff;
             border-radius: 16px;
-            border: none;
-            font-size: 16px;
+            padding: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chart-canvas {
+            width: 100%;
+            height: 150px;
+            background: #FAFBFD;
+            border-radius: 10px;
+            border: 1px dashed #D0D7DE;
+            position: relative;
+        }
+
+        .history-item {
+            background: #fff;
+            border-radius: 14px;
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+            border: 1px solid rgba(0,0,0,0.03);
+        }
+
+        /* ======================================================== */
+        /* GIAO DIỆN HỒ SƠ THÀNH VIÊN 1 (PROFILE SCREEN)            */
+        /* ======================================================== */
+        .avatar-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--primary-container);
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 38px;
+            margin: 0 auto 10px auto;
+        }
+
+        .family-invite-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.04);
+        }
+
+        .invite-code-box {
+            font-size: 26px;
+            font-weight: 900;
+            color: var(--primary);
+            letter-spacing: 4px;
+            margin: 6px 0;
+        }
+
+        .btn-action-full {
+            width: 100%;
+            height: 50px;
+            border-radius: 12px;
             font-weight: 700;
+            font-size: 15px;
             cursor: pointer;
+            border: none;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
-            width: 100%;
-            transition: all 0.2s;
         }
 
-        .btn-primary { background: var(--primary); color: #fff; }
-        .btn-secondary { background: var(--secondary); color: #fff; }
-        .btn-error { background: var(--error); color: #fff; }
+        .btn-pdf {
+            background: #fff;
+            color: var(--primary);
+            border: 1.5px solid var(--primary);
+        }
 
-        .btn-large:active { transform: scale(0.98); }
+        .btn-logout {
+            background: var(--error-container);
+            color: var(--error);
+        }
 
         /* Chat styles */
         .chat-list {
@@ -301,65 +475,72 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
         }
+
         .msg {
-            max-width: 85%;
+            max-width: 82%;
             padding: 12px 14px;
             border-radius: 18px;
-            font-size: 0.95rem; /* 16sp bodyLarge */
+            font-size: 13.5px;
             line-height: 1.45;
         }
-        .msg-user {
-            align-self: flex-end;
-            background: var(--primary);
-            color: #fff;
-            border-bottom-right-radius: 4px;
-        }
+
         .msg-ai {
+            background: #E8F0FE;
+            color: #1A3A60;
             align-self: flex-start;
-            background: #E7EEF6;
-            color: #191C1E;
             border-bottom-left-radius: 4px;
         }
 
-        /* SOS Progress */
+        .msg-user {
+            background: var(--primary);
+            color: #fff;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* SOS styles */
         .sos-circle {
-            width: 170px;
-            height: 170px;
+            width: 180px;
+            height: 180px;
             border-radius: 50%;
             background: radial-gradient(circle, #E53935 0%, #B71C1C 100%);
-            box-shadow: 0 10px 30px rgba(229, 57, 53, 0.45);
+            color: #fff;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #fff;
+            box-shadow: 0 0 35px rgba(229, 57, 53, 0.6);
             cursor: pointer;
             user-select: none;
+            transition: transform 0.1s;
         }
+        .sos-circle:active { transform: scale(0.96); }
     </style>
 </head>
 <body>
 
 <div class="container">
+    <!-- Panel giới thiệu bên trái -->
     <div class="info-panel">
-        <div class="feature-badge">🏥 FamilyCare Design System Preview</div>
-        <h1>FamilyCare Mobile</h1>
-        <p>Ứng dụng giám sát sức khỏe gia đình chuẩn <strong>Material Design 3</strong>, được tối ưu cho người cao tuổi với cỡ chữ lớn và nút bấm to bản $\ge 56$dp.</p>
+        <div class="feature-badge">🏥 FamilyCare Android Native • Jetpack Compose</div>
+        <h1>Giao Diện Chuẩn Thành Viên 1 & Tích Hợp Hệ Thống</h1>
+        <p>Mô phỏng toàn diện giao diện Trang chủ, Đo nhịp tim Camera PPG, Biểu đồ đa chỉ số, Hồ sơ bệnh án của Thành viên 1 kết hợp Trợ lý AI và SOS khẩn cấp.</p>
 
         <div class="instruction-card">
-            <h3>🎨 4 Quy Chuẩn Thiết Kế Đã Áp Dụng:</h3>
+            <h3>📱 Hướng dẫn thử nghiệm nhanh trên điện thoại:</h3>
             <ul>
-                <li><strong>Màu sắc:</strong> Medical Blue (#1976D2), Medical Mint (#00897B), Alert Red (#D32F2F).</li>
-                <li><strong>Typography người cao tuổi:</strong> Title 26sp, Body 17sp, Button 16sp đậm.</li>
-                <li><strong>Nút bấm to bản:</strong> Chiều cao $\ge 56$dp (Nút SOS, Xác nhận uống thuốc).</li>
-                <li><strong>Quản lý trạng thái:</strong> StateFlow kết nối Room Database và thuật toán cảnh báo đỏ.</li>
+                <li><strong>Tab Trang chủ:</strong> Bố cục chuẩn TV1 gồm Nút SOS khẩn cấp, 2 thẻ lớn Tính năng thông minh (Đo Nhịp Tim PPG & Trợ lý AI) và Tóm tắt chỉ số.</li>
+                <li><strong>Tab Chỉ số:</strong> Màn hình Biometrics mới nhất của TV1 với Biểu đồ Canvas đa chỉ số, Đo nhịp tim PPG và Lịch sử đo.</li>
+                <li><strong>Tab Thuốc:</strong> Lịch thuốc trong ngày.</li>
+                <li><strong>Tab Trợ lý AI:</strong> Chatbot Gemini 1.5 Flash có Context Injection.</li>
+                <li><strong>Tab Hồ sơ:</strong> Thẻ Tổ ấm Gia đình (Mã mời 6 ký tự), nút Xuất PDF và Đăng xuất.</li>
             </ul>
         </div>
     </div>
 
-    <!-- Phone Frame -->
+    <!-- Khung Điện Thoại Mô Phỏng -->
     <div class="phone-frame">
         <div class="phone-top-bar">
             <span>15:45</span>
@@ -368,7 +549,9 @@
         </div>
 
         <div class="app-screen">
-            <!-- 1. MÀN HÌNH DASHBOARD -->
+            <!-- ======================================================== -->
+            <!-- 1. MÀN HÌNH DASHBOARD (CHUẨN 100% GIAO DIỆN THÀNH VIÊN 1)  -->
+            <!-- ======================================================== -->
             <div id="screen-dashboard" class="screen-content active">
                 <div class="app-header">
                     <div>
@@ -378,115 +561,202 @@
                     <span style="font-size:22px;cursor:pointer;" onclick="switchTab('sos')">🔔</span>
                 </div>
 
-                <!-- Member Switcher -->
-                <div>
-                    <div style="font-size:15px;font-weight:700;margin-bottom:8px;">Thành viên đang theo dõi:</div>
-                    <div class="member-row">
-                        <div class="member-chip selected" onclick="selectMember(this, 'Bác Nguyễn Văn Nam', '68 tuổi • Cao huyết áp')">
-                            <div class="member-avatar">N</div>
-                            <div>
-                                <div style="font-weight:700;font-size:14px;">Bác Nam</div>
-                                <div style="font-size:11px;color:#555;">68 tuổi (Cao huyết áp)</div>
-                            </div>
-                        </div>
-                        <div class="member-chip" onclick="selectMember(this, 'Bác Trần Thị Lan', '65 tuổi • Ổn định')">
-                            <div class="member-avatar" style="background:#00897B;">L</div>
-                            <div>
-                                <div style="font-weight:700;font-size:14px;">Bác Lan</div>
-                                <div style="font-size:11px;color:#555;">65 tuổi</div>
-                            </div>
-                        </div>
-                        <div class="member-chip" onclick="selectMember(this, 'Con Hoàng', '38 tuổi')">
-                            <div class="member-avatar" style="background:#555;">H</div>
-                            <div>
-                                <div style="font-weight:700;font-size:14px;">Con Hoàng</div>
-                                <div style="font-size:11px;color:#555;">Giám sát</div>
-                            </div>
-                        </div>
+                <!-- Thẻ 1: NÚT KHẨN CẤP SOS (Chuẩn Nhánh 1) -->
+                <div class="sos-card-tv1">
+                    <div>
+                        <div class="sos-title-tv1">NÚT KHẨN CẤP SOS</div>
+                        <div class="sos-sub-tv1">Nhấn giữ 2s để hú còi & gửi định vị GPS cho người thân</div>
+                    </div>
+                    <button class="sos-btn-tv1" onclick="switchTab('sos')">SOS</button>
+                </div>
+
+                <!-- Thẻ 2: Tính năng thông minh (Chuẩn Nhánh 1: 2 Card lớn song song) -->
+                <div class="section-title-tv1">Tính năng thông minh</div>
+                <div class="smart-features-grid-tv1">
+                    <div class="smart-card-tv1" onclick="switchTab('biometrics')">
+                        <div class="smart-icon-tv1" style="color:#E91E63; background:rgba(233,30,99,0.1);">❤️</div>
+                        <div class="smart-name-tv1">Đo Nhịp Tim</div>
+                        <div class="smart-desc-tv1">Camera & Flash (PPG)</div>
+                    </div>
+                    <div class="smart-card-tv1" onclick="switchTab('chat')">
+                        <div class="smart-icon-tv1" style="color:#673AB7; background:rgba(103,58,183,0.1);">✨</div>
+                        <div class="smart-name-tv1">Trợ Lý AI</div>
+                        <div class="smart-desc-tv1">Gemini Health Copilot</div>
                     </div>
                 </div>
 
-                <!-- Thẻ Cảnh báo đỏ vượt ngưỡng -->
-                <div class="red-alert-card">
-                    <div style="font-weight:800;font-size:15px;display:flex;align-items:center;gap:6px;color:#B3261E;">
-                        ⚠️ CẢNH BÁO ĐỎ: 3 LẦN ĐO VƯỢT NGƯỠNG
+                <!-- Thẻ 3: Chỉ số sức khỏe mới nhất (Chuẩn Nhánh 1) -->
+                <div class="section-title-tv1">Chỉ số sức khỏe mới nhất</div>
+                <div class="vitals-card-tv1">
+                    <div class="vitals-row-tv1">
+                        <span class="vitals-label-tv1">Huyết áp sáng nay:</span>
+                        <span class="vitals-val-tv1" style="color:#2E7D32;">125/82 mmHg</span>
                     </div>
-                    <p style="font-size:13px;margin:6px 0 10px 0;line-height:1.4;">
-                        Bác Nam có 3 lần đo liên tiếp $\ge 145/92$ mmHg trong 48h qua. Vui lòng kiểm tra cữ thuốc và cho bác nghỉ ngơi!
-                    </p>
-                    <button class="btn-large btn-error" onclick="switchTab('chat')">HỎI TRỢ LÝ AI COPILOT</button>
-                </div>
-
-                <!-- Nút SOS to bản 56dp -->
-                <button class="btn-large btn-error" onclick="switchTab('sos')">
-                    🚨 NÚT KHẨN CẤP SOS (NHẤN GIỮ 2S)
-                </button>
-
-                <!-- Tóm tắt chỉ số -->
-                <div class="dashboard-card">
-                    <div style="font-size:16px;font-weight:700;display:flex;justify-content:space-between;">
-                        <span>Chỉ số sinh tồn gần nhất</span>
-                        <span style="color:var(--primary);font-size:13px;cursor:pointer;">Đo mới +</span>
-                    </div>
-                    <div style="background:#FFEAEA;padding:12px;border-radius:14px;display:flex;justify-content:space-between;align-items:center;">
-                        <div>
-                            <div style="font-weight:700;font-size:15px;">Huyết áp (Sáng nay)</div>
-                            <div style="font-size:12px;color:#D32F2F;font-weight:600;">Tăng huyết áp độ 1 (Vượt ngưỡng)</div>
-                        </div>
-                        <div style="font-size:18px;font-weight:800;color:#D32F2F;">145/92 mmHg</div>
-                    </div>
-                    <div style="background:#E0F2F1;padding:12px;border-radius:14px;display:flex;justify-content:space-between;align-items:center;">
-                        <div>
-                            <div style="font-weight:700;font-size:15px;">Nhịp tim lúc nghỉ (PPG)</div>
-                            <div style="font-size:12px;color:#00796B;">Camera & Đèn Flash</div>
-                        </div>
-                        <div style="font-size:18px;font-weight:800;color:#00796B;">86 BPM</div>
+                    <div class="divider-tv1"></div>
+                    <div class="vitals-row-tv1">
+                        <span class="vitals-label-tv1">Nhịp tim lúc nghỉ:</span>
+                        <span class="vitals-val-tv1" style="color:#1976D2;">72 BPM</span>
                     </div>
                 </div>
+            </div>
 
-                <!-- Lịch uống thuốc với nút ĐÃ UỐNG to bản >= 56dp -->
-                <div class="dashboard-card">
-                    <div style="font-size:16px;font-weight:700;display:flex;justify-content:space-between;">
-                        <span>Lịch thuốc hôm nay</span>
-                        <span style="color:var(--secondary);font-size:13px;font-weight:700;">Tuân thủ: 94%</span>
+            <!-- ======================================================== -->
+            <!-- 2. MÀN HÌNH CHỈ SỐ SINH TỒN (BIOMETRICS - CHUẨN THÀNH VIÊN 1) -->
+            <!-- ======================================================== -->
+            <div id="screen-biometrics" class="screen-content">
+                <div class="app-header">
+                    <h2>Chỉ Số Sinh Tồn</h2>
+                    <span style="font-size:22px;cursor:pointer;color:var(--primary);font-weight:bold;" onclick="alert('Mở hộp thoại nhập chỉ số thủ công (AddMetricDialog)')">+</span>
+                </div>
+
+                <!-- Banner đo nhịp tim Camera PPG -->
+                <div class="ppg-banner-card">
+                    <div style="font-size:28px;">❤️⚡</div>
+                    <div style="font-weight:800;font-size:15px;">Đo Nhịp Tim Bằng Camera (PPG)</div>
+                    <div style="font-size:12px;opacity:0.9;">Đặt ngón tay che kín camera sau & đèn flash để đo nhịp tim quang học 30 FPS</div>
+                    <button class="btn-action-full" style="background:#E91E63;color:#fff;margin-top:4px;" onclick="alert('Mở CameraX Optical PPG Analyzer (Thành viên 1)')">
+                        BẮT ĐẦU ĐO PPG
+                    </button>
+                </div>
+
+                <!-- Filter Row -->
+                <div class="filter-row">
+                    <div class="filter-chip active">Tất cả</div>
+                    <div class="filter-chip">Huyết áp</div>
+                    <div class="filter-chip">Đường huyết</div>
+                    <div class="filter-chip">Thân nhiệt</div>
+                    <div class="filter-chip">Nhịp tim</div>
+                </div>
+
+                <!-- Biểu đồ Canvas Đa Chỉ Số (BiometricsLineChart) -->
+                <div class="chart-box">
+                    <div style="font-size:14px;font-weight:700;display:flex;justify-content:space-between;">
+                        <span>Biểu Đồ Xu Hướng 7 Ngày</span>
+                        <span style="font-size:11px;color:#2E7D32;font-weight:bold;">Vùng an toàn (Xanh)</span>
                     </div>
-                    <div style="background:#F0FDF4;padding:12px;border-radius:14px;border:1px solid #DCFCE7;">
-                        <div style="font-weight:700;font-size:15px;">Amlodipine 5mg (Hạ huyết áp)</div>
-                        <div style="font-size:12px;color:#555;">Liều: 1 viên • Sau ăn trưa 12:00</div>
+                    <div class="chart-canvas" style="display:flex;align-items:center;justify-content:center;overflow:hidden;">
+                        <svg width="100%" height="100%" viewBox="0 0 320 140" style="padding:10px;">
+                            <!-- Vùng an toàn xanh -->
+                            <rect x="0" y="40" width="320" height="60" fill="rgba(46,125,50,0.08)" />
+                            <line x1="0" y1="40" x2="320" y2="40" stroke="#4CAF50" stroke-dasharray="4" stroke-width="1"/>
+                            <line x1="0" y1="100" x2="320" y2="100" stroke="#4CAF50" stroke-dasharray="4" stroke-width="1"/>
+                            <!-- Đường biểu đồ nhịp tim/huyết áp -->
+                            <polyline fill="none" stroke="#1976D2" stroke-width="3" points="20,85 70,65 120,72 170,55 220,68 270,58 310,60" />
+                            <circle cx="20" cy="85" r="4" fill="#1976D2"/>
+                            <circle cx="70" cy="65" r="4" fill="#1976D2"/>
+                            <circle cx="120" cy="72" r="4" fill="#1976D2"/>
+                            <circle cx="170" cy="55" r="4" fill="#1976D2"/>
+                            <circle cx="220" cy="68" r="4" fill="#1976D2"/>
+                            <circle cx="270" cy="58" r="4" fill="#1976D2"/>
+                            <circle cx="310" cy="60" r="4" fill="#1976D2"/>
+                        </svg>
                     </div>
-                    <button id="btnMedTaken" class="btn-large btn-secondary" onclick="markMedDone()">
+                </div>
+
+                <!-- Lịch sử đo -->
+                <div style="font-size:14px;font-weight:700;">Lịch sử đo sinh tồn gần đây:</div>
+                <div class="history-item">
+                    <div>
+                        <div style="font-weight:700;font-size:14px;">Huyết áp: 125/82 mmHg</div>
+                        <div style="font-size:11px;color:#666;">08:15 • Hôm nay</div>
+                    </div>
+                    <span style="font-size:11px;font-weight:700;color:#2E7D32;background:rgba(46,125,50,0.1);padding:4px 8px;border-radius:6px;">Bình thường</span>
+                </div>
+                <div class="history-item">
+                    <div>
+                        <div style="font-weight:700;font-size:14px;">Nhịp tim PPG: 74 BPM</div>
+                        <div style="font-size:11px;color:#E91E63;font-weight:bold;">⚡ Đo bằng CameraX</div>
+                    </div>
+                    <span style="font-size:11px;font-weight:700;color:#1976D2;background:rgba(25,118,210,0.1);padding:4px 8px;border-radius:6px;">Bình thường</span>
+                </div>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- 3. MÀN HÌNH THUỐC (MEDICATION)                              -->
+            <!-- ======================================================== -->
+            <div id="screen-medication" class="screen-content">
+                <div class="app-header">
+                    <h2>Lịch Uống Thuốc</h2>
+                    <span style="font-size:20px;">💊</span>
+                </div>
+
+                <div class="vitals-card-tv1">
+                    <div style="font-size:15px;font-weight:800;color:var(--primary);margin-bottom:6px;">Lịch thuốc hôm nay</div>
+                    <div style="font-size:14px;font-weight:700;">Amlodipine 5mg (Hạ áp)</div>
+                    <div style="font-size:12px;color:#555;margin-bottom:12px;">Liều: 1 viên • Sau ăn trưa 12:00</div>
+                    <button class="btn-action-full" style="background:#00897B;color:#fff;" onclick="alert('Đã ghi nhận tuân thủ uống thuốc!')">
                         ✓ XÁC NHẬN ĐÃ UỐNG THUỐC
                     </button>
                 </div>
             </div>
 
-            <!-- 2. MÀN HÌNH CHAT AI COPILOT -->
+            <!-- ======================================================== -->
+            <!-- 4. MÀN HÌNH TRỢ LÝ AI (AI HEALTH COPILOT)                  -->
+            <!-- ======================================================== -->
             <div id="screen-chat" class="screen-content">
                 <div class="app-header">
                     <div>
                         <h2>✨ AI Health Copilot</h2>
-                        <span style="font-size:11px;color:#6750A4;font-weight:600;">Ngữ cảnh: Bác Nam (68t) • Huyết áp 145/92</span>
+                        <span style="font-size:11px;color:#6750A4;font-weight:600;">Gemini 1.5 Flash • Context Injection</span>
                     </div>
                 </div>
                 <div class="chat-list" id="chatList">
                     <div class="msg msg-ai">
                         Dạ kính chào Bác Nam! Cháu là <strong>Trợ lý AI FamilyCare</strong>.<br><br>
-                        Huyết áp gần nhất của bác là <strong>145/92 mmHg</strong>. Bác nhớ uống đủ nước ấm và không tự ý uống các thuốc chống chỉ định như Panadol Extra hay Aspirin nhé!
+                        Chỉ số huyết áp gần nhất của bác là <strong>125/82 mmHg</strong> (ở mức an toàn). Bác nhớ duy trì uống thuốc đúng giờ và hạn chế ăn mặn nhé!
                     </div>
                 </div>
                 <div style="display:flex;gap:8px;padding:8px 0;border-top:1px solid #eee;">
-                    <input type="text" id="chatInput" placeholder="Hỏi về huyết áp, cách dùng thuốc..." style="flex:1;padding:12px;border-radius:24px;border:1px solid #ddd;font-size:14px;outline:none;" onkeydown="if(event.key==='Enter') sendChat()">
+                    <input type="text" id="chatInput" placeholder="Hỏi bác sĩ AI..." style="flex:1;padding:12px;border-radius:24px;border:1px solid #ddd;font-size:14px;outline:none;" onkeydown="if(event.key==='Enter') sendChat()">
                     <button style="width:44px;height:44px;border-radius:50%;background:var(--primary);color:#fff;border:none;cursor:pointer;font-weight:bold;" onclick="sendChat()">➤</button>
                 </div>
             </div>
 
-            <!-- 3. MÀN HÌNH SOS KHẨN CẤP -->
+            <!-- ======================================================== -->
+            <!-- 5. MÀN HÌNH HỒ SƠ (PROFILE - CHUẨN THÀNH VIÊN 1)           -->
+            <!-- ======================================================== -->
+            <div id="screen-profile" class="screen-content" style="align-items:center;">
+                <div class="app-header" style="width:100%;">
+                    <h2>Hồ Sơ Sức Khỏe</h2>
+                    <span style="color:#D32F2F;cursor:pointer;font-weight:bold;" onclick="alert('Đã xác nhận đăng xuất tài khoản!')">Đăng xuất</span>
+                </div>
+
+                <div class="avatar-circle">👤</div>
+                <h3 style="font-size:18px;font-weight:800;">Bác Nguyễn Văn Nam</h3>
+                <span style="font-size:13px;color:#666;">bacnam@familycare.vn</span>
+                <span style="background:var(--primary-container);color:var(--primary);padding:4px 12px;border-radius:12px;font-size:12px;font-weight:700;margin-top:6px;">Trưởng Gia Đình</span>
+
+                <!-- Thẻ Tổ ấm Gia đình (Mã mời 6 ký tự chuẩn TV1) -->
+                <div class="family-invite-card" style="width:100%;margin-top:10px;">
+                    <div style="font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px;">
+                        <span>🏡</span> Tổ ấm: Gia đình Bác Nam
+                    </div>
+                    <div class="divider-tv1"></div>
+                    <div style="font-size:12px;color:#666;">Mã mời gia đình của bạn:</div>
+                    <div class="invite-code-box">FC8899</div>
+                    <div style="font-size:11px;color:#777;">Chia sẻ mã 6 ký tự này cho người thân để cùng vào chung tổ ấm và theo dõi sức khỏe.</div>
+                </div>
+
+                <button class="btn-action-full btn-pdf" style="margin-top:10px;" onclick="alert('Đang kết xuất báo cáo y tế PDF A4...')">
+                    📄 Xuất Báo Cáo Y Tế Tháng (PDF)
+                </button>
+
+                <button class="btn-action-full btn-logout" onclick="alert('Đăng xuất thành công!')">
+                    🚪 Đăng Xuất Tài Khoản
+                </button>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- 6. MÀN HÌNH SOS (CỨU HỘ KHẨN CẤP)                         -->
+            <!-- ======================================================== -->
             <div id="screen-sos" class="screen-content" style="align-items:center;justify-content:center;text-align:center;">
                 <div class="app-header" style="width:100%;">
-                    <h2>🚨 Trung Tâm SOS Khẩn Cấp</h2>
+                    <h2>🚨 Nút Khẩn Cấp SOS</h2>
+                    <span style="cursor:pointer;" onclick="switchTab('dashboard')">✕</span>
                 </div>
-                <h3 style="color:#D32F2F;font-size:18px;margin-top:20px;">NÚT BẤM CỨU HỘ 1-CHẠM</h3>
-                <p style="color:#666;font-size:13px;">Nhấn và <strong>giữ chuột đủ 2 giây</strong> để kích hoạt còi hú và gửi vị trí GPS cho con cái.</p>
+
+                <h3 style="color:#D32F2F;font-size:18px;margin-top:20px;">HỆ THỐNG CỨU HỘ 1-CHẠM</h3>
+                <p style="color:#666;font-size:13px;max-width:280px;margin-top:6px;">Nhấn và <strong>giữ chuột đủ 2 giây</strong> để kích hoạt còi hú và gửi định vị GPS cho người thân.</p>
 
                 <div style="position:relative;width:220px;height:220px;display:flex;align-items:center;justify-content:center;margin:30px 0;">
                     <svg style="position:absolute;width:220px;height:220px;transform:rotate(-90deg);">
@@ -501,25 +771,35 @@
 
                 <div id="sosAlert" style="display:none;background:#FFDAD6;color:#410002;padding:14px;border-radius:16px;text-align:left;width:100%;">
                     <strong>🚨 ĐÃ BÁO ĐỘNG KHẨN CẤP!</strong><br>
-                    • Tọa độ: 10.7769, 106.7009<br>
-                    • Đang phát còi hú mức âm lượng cực đại<br>
-                    <button class="btn-large btn-error" style="height:44px;margin-top:10px;font-size:14px;" onclick="stopSos()">TẮT CÒI HÚ</button>
+                    • Tọa độ GPS: 10.7769, 106.7009<br>
+                    • Đang phát còi hú âm lượng tối đa<br>
+                    <button class="btn-action-full" style="background:#D32F2F;color:#fff;margin-top:10px;height:42px;" onclick="stopSos()">TẮT CÒI HÚ</button>
                 </div>
             </div>
 
-            <!-- Bottom Navigation Bar -->
+            <!-- ======================================================== -->
+            <!-- BOTTOM NAVIGATION BAR (5 TABS CHUẨN THÀNH VIÊN 1 / NHÓM)   -->
+            <!-- ======================================================== -->
             <div class="tab-bar">
                 <button class="tab-btn active" id="btnTabDash" onclick="switchTab('dashboard')">
                     <span class="icon">🏠</span>
                     <span>Trang chủ</span>
                 </button>
+                <button class="tab-btn" id="btnTabBio" onclick="switchTab('biometrics')">
+                    <span class="icon">❤️</span>
+                    <span>Chỉ số</span>
+                </button>
+                <button class="tab-btn" id="btnTabMed" onclick="switchTab('medication')">
+                    <span class="icon">💊</span>
+                    <span>Thuốc</span>
+                </button>
                 <button class="tab-btn" id="btnTabChat" onclick="switchTab('chat')">
-                    <span class="icon">💬</span>
+                    <span class="icon">✨</span>
                     <span>Trợ lý AI</span>
                 </button>
-                <button class="tab-btn" id="btnTabSos" onclick="switchTab('sos')">
-                    <span class="icon">🚨</span>
-                    <span>SOS</span>
+                <button class="tab-btn" id="btnTabProf" onclick="switchTab('profile')">
+                    <span class="icon">👤</span>
+                    <span>Hồ sơ</span>
                 </button>
             </div>
         </div>
@@ -527,88 +807,90 @@
 </div>
 
 <script>
-    function switchTab(tab) {
-        document.getElementById('screen-dashboard').classList.remove('active');
-        document.getElementById('screen-chat').classList.remove('active');
-        document.getElementById('screen-sos').classList.remove('active');
+    let sosTimer = null;
+    let sosProgress = 0;
+    const circle = document.getElementById('sosProgress');
+    const circumference = 2 * Math.PI * 95;
 
-        document.getElementById('btnTabDash').classList.remove('active');
-        document.getElementById('btnTabChat').classList.remove('active');
-        document.getElementById('btnTabSos').classList.remove('active');
+    function switchTab(tab) {
+        document.querySelectorAll('.screen-content').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
         if (tab === 'dashboard') {
             document.getElementById('screen-dashboard').classList.add('active');
             document.getElementById('btnTabDash').classList.add('active');
+        } else if (tab === 'biometrics') {
+            document.getElementById('screen-biometrics').classList.add('active');
+            document.getElementById('btnTabBio').classList.add('active');
+        } else if (tab === 'medication') {
+            document.getElementById('screen-medication').classList.add('active');
+            document.getElementById('btnTabMed').classList.add('active');
         } else if (tab === 'chat') {
             document.getElementById('screen-chat').classList.add('active');
             document.getElementById('btnTabChat').classList.add('active');
+        } else if (tab === 'profile') {
+            document.getElementById('screen-profile').classList.add('active');
+            document.getElementById('btnTabProf').classList.add('active');
         } else if (tab === 'sos') {
             document.getElementById('screen-sos').classList.add('active');
-            document.getElementById('btnTabSos').classList.add('active');
         }
     }
 
-    function selectMember(el, name, desc) {
-        document.querySelectorAll('.member-chip').forEach(c => c.classList.remove('selected'));
-        el.classList.add('selected');
+    function startSos() {
+        sosProgress = 0;
+        circle.style.strokeDashoffset = circumference;
+        document.getElementById('sosLabel').innerText = "ĐANG GIỮ...";
+        const interval = 20;
+        const step = circumference / (2000 / interval);
+
+        sosTimer = setInterval(() => {
+            sosProgress += step;
+            if (sosProgress >= circumference) {
+                clearInterval(sosTimer);
+                sosTimer = null;
+                circle.style.strokeDashoffset = 0;
+                document.getElementById('sosLabel').innerText = "ĐÃ KÍCH HOẠT!";
+                document.getElementById('sosAlert').style.display = 'block';
+            } else {
+                circle.style.strokeDashoffset = circumference - sosProgress;
+            }
+        }, interval);
     }
 
-    function markMedDone() {
-        const btn = document.getElementById('btnMedTaken');
-        btn.innerText = "✓ ĐÃ XÁC NHẬN UỐNG THUỐC";
-        btn.style.background = "#A7F3D0";
-        btn.style.color = "#065F46";
+    function cancelSos() {
+        if (sosTimer) {
+            clearInterval(sosTimer);
+            sosTimer = null;
+            circle.style.strokeDashoffset = circumference;
+            document.getElementById('sosLabel').innerText = "GIỮ 2 GIÂY";
+        }
+    }
+
+    function stopSos() {
+        cancelSos();
+        document.getElementById('sosAlert').style.display = 'none';
+        document.getElementById('sosLabel').innerText = "GIỮ 2 GIÂY";
     }
 
     function sendChat() {
         const input = document.getElementById('chatInput');
         const text = input.value.trim();
         if (!text) return;
-        appendChat(text, 'user');
+
+        const chatList = document.getElementById('chatList');
+        const userMsg = document.createElement('div');
+        userMsg.className = 'msg msg-user';
+        userMsg.innerText = text;
+        chatList.appendChild(userMsg);
         input.value = '';
 
         setTimeout(() => {
-            appendChat("Dạ thưa Bác Nam, mức huyết áp 145/92 mmHg là tăng huyết áp độ 1. Bác ngồi nghỉ 15 phút và kiểm tra lại cữ thuốc hạ áp nhé!", 'ai');
-        }, 800);
-    }
-
-    function appendChat(text, sender) {
-        const list = document.getElementById('chatList');
-        const div = document.createElement('div');
-        div.className = `msg msg-${sender}`;
-        div.innerText = text;
-        list.appendChild(div);
-        list.scrollTop = list.scrollHeight;
-    }
-
-    let timer = null;
-    let start = 0;
-    function startSos() {
-        start = Date.now();
-        document.getElementById('sosLabel').innerText = "GIỮ YÊN...";
-        const circle = document.getElementById('sosProgress');
-        timer = setInterval(() => {
-            const elapsed = Date.now() - start;
-            const pct = Math.min(elapsed / 2000, 1);
-            circle.style.strokeDashoffset = 597 * (1 - pct);
-            if (pct >= 1) {
-                clearInterval(timer);
-                document.getElementById('sosLabel').innerText = "ĐÃ PHÁT CÒI";
-                document.getElementById('sosAlert').style.display = "block";
-            }
-        }, 30);
-    }
-    function cancelSos() {
-        if (timer) clearInterval(timer);
-        if (document.getElementById('sosLabel').innerText !== "ĐÃ PHÁT CÒI") {
-            document.getElementById('sosLabel').innerText = "GIỮ 2 GIÂY";
-            document.getElementById('sosProgress').style.strokeDashoffset = 597;
-        }
-    }
-    function stopSos() {
-        document.getElementById('sosAlert').style.display = "none";
-        document.getElementById('sosLabel').innerText = "GIỮ 2 GIÂY";
-        document.getElementById('sosProgress').style.strokeDashoffset = 597;
+            const aiMsg = document.createElement('div');
+            aiMsg.className = 'msg msg-ai';
+            aiMsg.innerHTML = "Dạ Bác Nam ơi, với câu hỏi <em>\"" + text + "\"</em>, huyết áp của bác hiện tại là 125/82 mmHg ở mức rất ổn định. Bác tiếp tục nghỉ ngơi hợp lý và uống thuốc đúng lịch nhé!";
+            chatList.appendChild(aiMsg);
+            chatList.scrollTop = chatList.scrollHeight;
+        }, 500);
     }
 </script>
 
