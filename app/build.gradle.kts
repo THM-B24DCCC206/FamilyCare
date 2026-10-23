@@ -66,6 +66,8 @@ dependencies {
 
     // JSON
     implementation(libs.gson)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
 
     // Local Database
     implementation(libs.androidx.room.runtime)

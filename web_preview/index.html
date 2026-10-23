@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FamilyCare - Trình Mô Phỏng Web Trực Tuyến</title>
+    <style>
+        :root {
+            --primary: #1976D2;
+            --primary-container: #D1E4FF;
+            --on-primary: #FFFFFF;
+            --on-primary-container: #001D36;
+            --secondary: #00897B;
+            --secondary-container: #B2DFDB;
+            --surface: #F8F9FA;
+            --surface-card: #FFFFFF;
+            --on-surface: #191C1E;
+            --on-surface-variant: #41484D;
+            --error: #D32F2F;
+            --error-container: #FFDAD6;
+            --on-error: #FFFFFF;
+            --on-error-container: #410002;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0d1b2a 0%, #1b263b 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .container {
+            display: flex;
+            gap: 40px;
+            max-width: 1150px;
+            width: 100%;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .info-panel {
+            flex: 1;
+            min-width: 320px;
+            max-width: 500px;
+        }
+
+        .info-panel h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, #64B5F6, #80CBC4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 12px;
+        }
+
+        .info-panel p {
+            color: #b0b3c1;
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .feature-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(25, 118, 210, 0.25);
+            border: 1px solid rgba(100, 181, 246, 0.4);
+            color: #64B5F6;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .instruction-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 18px;
+            margin-top: 18px;
+        }
+
+        .instruction-card h3 {
+            font-size: 1.05rem;
+            color: #80CBC4;
+            margin-bottom: 10px;
+        }
+
+        .instruction-card ul {
+            padding-left: 20px;
+            color: #d1d5db;
+            font-size: 0.92rem;
+            line-height: 1.7;
+        }
+
+        /* Mobile Device Frame Mockup */
+        .phone-frame {
+            width: 390px;
+            height: 780px;
+            background: #000;
+            border-radius: 48px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.7), 0 0 0 10px #2c2d35, 0 0 0 12px #1f1f24;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .phone-top-bar {
+            height: 36px;
+            background: #fff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 24px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #000;
+            position: relative;
+            z-index: 10;
+        }
+
+        .notch {
+            position: absolute;
+            top: 6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 20px;
+            background: #000;
+            border-radius: 12px;
+        }
+
+        /* App Screen */
+        .app-screen {
+            flex: 1;
+            background: var(--surface);
+            color: var(--on-surface);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .app-header {
+            background: #fff;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .app-header h2 {
+            font-size: 1.25rem; /* 26sp titleLarge */
+            font-weight: 800;
+            color: var(--primary);
+        }
+
+        /* Bottom Tab Bar */
+        .tab-bar {
+            background: #fff;
+            height: 64px;
+            display: flex;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.02);
+        }
+
+        .tab-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            color: #79747E;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+        }
+
+        .tab-btn span.icon {
+            font-size: 20px;
+            margin-bottom: 2px;
+        }
+
+        .screen-content {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 16px;
+            gap: 16px;
+        }
+
+        .screen-content.active {
+            display: flex;
+        }
+
+        /* Dashboard Styles */
+        .member-row {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            padding-bottom: 4px;
+        }
+        .member-row::-webkit-scrollbar { display: none; }
+
+        .member-chip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: #fff;
+            border-radius: 24px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            white-space: nowrap;
+        }
+        .member-chip.selected {
+            background: var(--primary-container);
+            border-color: var(--primary);
+        }
+        .member-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .dashboard-card {
+            background: var(--surface-card);
+            border-radius: 20px;
+            padding: 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .red-alert-card {
+            background: var(--error-container);
+            color: var(--on-error-container);
+            border-radius: 16px;
+            padding: 16px;
+            border-left: 6px solid var(--error);
+        }
+
+        .btn-large {
+            height: 56px; /* Design System standard */
+            border-radius: 16px;
+            border: none;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-secondary { background: var(--secondary); color: #fff; }
+        .btn-error { background: var(--error); color: #fff; }
+
+        .btn-large:active { transform: scale(0.98); }
+
+        /* Chat styles */
+        .chat-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .msg {
+            max-width: 85%;
+            padding: 12px 14px;
+            border-radius: 18px;
+            font-size: 0.95rem; /* 16sp bodyLarge */
+            line-height: 1.45;
+        }
+        .msg-user {
+            align-self: flex-end;
+            background: var(--primary);
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        .msg-ai {
+            align-self: flex-start;
+            background: #E7EEF6;
+            color: #191C1E;
+            border-bottom-left-radius: 4px;
+        }
+
+        /* SOS Progress */
+        .sos-circle {
+            width: 170px;
+            height: 170px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #E53935 0%, #B71C1C 100%);
+            box-shadow: 0 10px 30px rgba(229, 57, 53, 0.45);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            cursor: pointer;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="info-panel">
+        <div class="feature-badge">🏥 FamilyCare Design System Preview</div>
+        <h1>FamilyCare Mobile</h1>
+        <p>Ứng dụng giám sát sức khỏe gia đình chuẩn <strong>Material Design 3</strong>, được tối ưu cho người cao tuổi với cỡ chữ lớn và nút bấm to bản $\ge 56$dp.</p>
+
+        <div class="instruction-card">
+            <h3>🎨 4 Quy Chuẩn Thiết Kế Đã Áp Dụng:</h3>
+            <ul>
+                <li><strong>Màu sắc:</strong> Medical Blue (#1976D2), Medical Mint (#00897B), Alert Red (#D32F2F).</li>
+                <li><strong>Typography người cao tuổi:</strong> Title 26sp, Body 17sp, Button 16sp đậm.</li>
+                <li><strong>Nút bấm to bản:</strong> Chiều cao $\ge 56$dp (Nút SOS, Xác nhận uống thuốc).</li>
+                <li><strong>Quản lý trạng thái:</strong> StateFlow kết nối Room Database và thuật toán cảnh báo đỏ.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Phone Frame -->
+    <div class="phone-frame">
+        <div class="phone-top-bar">
+            <span>15:45</span>
+            <div class="notch"></div>
+            <span>5G 99%</span>
+        </div>
+
+        <div class="app-screen">
+            <!-- 1. MÀN HÌNH DASHBOARD -->
+            <div id="screen-dashboard" class="screen-content active">
+                <div class="app-header">
+                    <div>
+                        <h2>FamilyCare</h2>
+                        <span style="font-size:12px;color:#666;">Tổ ấm: Gia đình Bác Nam</span>
+                    </div>
+                    <span style="font-size:22px;cursor:pointer;" onclick="switchTab('sos')">🔔</span>
+                </div>
+
+                <!-- Member Switcher -->
+                <div>
+                    <div style="font-size:15px;font-weight:700;margin-bottom:8px;">Thành viên đang theo dõi:</div>
+                    <div class="member-row">
+                        <div class="member-chip selected" onclick="selectMember(this, 'Bác Nguyễn Văn Nam', '68 tuổi • Cao huyết áp')">
+                            <div class="member-avatar">N</div>
+                            <div>
+                                <div style="font-weight:700;font-size:14px;">Bác Nam</div>
+                                <div style="font-size:11px;color:#555;">68 tuổi (Cao huyết áp)</div>
+                            </div>
+                        </div>
+                        <div class="member-chip" onclick="selectMember(this, 'Bác Trần Thị Lan', '65 tuổi • Ổn định')">
+                            <div class="member-avatar" style="background:#00897B;">L</div>
+                            <div>
+                                <div style="font-weight:700;font-size:14px;">Bác Lan</div>
+                                <div style="font-size:11px;color:#555;">65 tuổi</div>
+                            </div>
+                        </div>
+                        <div class="member-chip" onclick="selectMember(this, 'Con Hoàng', '38 tuổi')">
+                            <div class="member-avatar" style="background:#555;">H</div>
+                            <div>
+                                <div style="font-weight:700;font-size:14px;">Con Hoàng</div>
+                                <div style="font-size:11px;color:#555;">Giám sát</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thẻ Cảnh báo đỏ vượt ngưỡng -->
+                <div class="red-alert-card">
+                    <div style="font-weight:800;font-size:15px;display:flex;align-items:center;gap:6px;color:#B3261E;">
+                        ⚠️ CẢNH BÁO ĐỎ: 3 LẦN ĐO VƯỢT NGƯỠNG
+                    </div>
+                    <p style="font-size:13px;margin:6px 0 10px 0;line-height:1.4;">
+                        Bác Nam có 3 lần đo liên tiếp $\ge 145/92$ mmHg trong 48h qua. Vui lòng kiểm tra cữ thuốc và cho bác nghỉ ngơi!
+                    </p>
+                    <button class="btn-large btn-error" onclick="switchTab('chat')">HỎI TRỢ LÝ AI COPILOT</button>
+                </div>
+
+                <!-- Nút SOS to bản 56dp -->
+                <button class="btn-large btn-error" onclick="switchTab('sos')">
+                    🚨 NÚT KHẨN CẤP SOS (NHẤN GIỮ 2S)
+                </button>
+
+                <!-- Tóm tắt chỉ số -->
+                <div class="dashboard-card">
+                    <div style="font-size:16px;font-weight:700;display:flex;justify-content:space-between;">
+                        <span>Chỉ số sinh tồn gần nhất</span>
+                        <span style="color:var(--primary);font-size:13px;cursor:pointer;">Đo mới +</span>
+                    </div>
+                    <div style="background:#FFEAEA;padding:12px;border-radius:14px;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <div style="font-weight:700;font-size:15px;">Huyết áp (Sáng nay)</div>
+                            <div style="font-size:12px;color:#D32F2F;font-weight:600;">Tăng huyết áp độ 1 (Vượt ngưỡng)</div>
+                        </div>
+                        <div style="font-size:18px;font-weight:800;color:#D32F2F;">145/92 mmHg</div>
+                    </div>
+                    <div style="background:#E0F2F1;padding:12px;border-radius:14px;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <div style="font-weight:700;font-size:15px;">Nhịp tim lúc nghỉ (PPG)</div>
+                            <div style="font-size:12px;color:#00796B;">Camera & Đèn Flash</div>
+                        </div>
+                        <div style="font-size:18px;font-weight:800;color:#00796B;">86 BPM</div>
+                    </div>
+                </div>
+
+                <!-- Lịch uống thuốc với nút ĐÃ UỐNG to bản >= 56dp -->
+                <div class="dashboard-card">
+                    <div style="font-size:16px;font-weight:700;display:flex;justify-content:space-between;">
+                        <span>Lịch thuốc hôm nay</span>
+                        <span style="color:var(--secondary);font-size:13px;font-weight:700;">Tuân thủ: 94%</span>
+                    </div>
+                    <div style="background:#F0FDF4;padding:12px;border-radius:14px;border:1px solid #DCFCE7;">
+                        <div style="font-weight:700;font-size:15px;">Amlodipine 5mg (Hạ huyết áp)</div>
+                        <div style="font-size:12px;color:#555;">Liều: 1 viên • Sau ăn trưa 12:00</div>
+                    </div>
+                    <button id="btnMedTaken" class="btn-large btn-secondary" onclick="markMedDone()">
+                        ✓ XÁC NHẬN ĐÃ UỐNG THUỐC
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. MÀN HÌNH CHAT AI COPILOT -->
+            <div id="screen-chat" class="screen-content">
+                <div class="app-header">
+                    <div>
+                        <h2>✨ AI Health Copilot</h2>
+                        <span style="font-size:11px;color:#6750A4;font-weight:600;">Ngữ cảnh: Bác Nam (68t) • Huyết áp 145/92</span>
+                    </div>
+                </div>
+                <div class="chat-list" id="chatList">
+                    <div class="msg msg-ai">
+                        Dạ kính chào Bác Nam! Cháu là <strong>Trợ lý AI FamilyCare</strong>.<br><br>
+                        Huyết áp gần nhất của bác là <strong>145/92 mmHg</strong>. Bác nhớ uống đủ nước ấm và không tự ý uống các thuốc chống chỉ định như Panadol Extra hay Aspirin nhé!
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;padding:8px 0;border-top:1px solid #eee;">
+                    <input type="text" id="chatInput" placeholder="Hỏi về huyết áp, cách dùng thuốc..." style="flex:1;padding:12px;border-radius:24px;border:1px solid #ddd;font-size:14px;outline:none;" onkeydown="if(event.key==='Enter') sendChat()">
+                    <button style="width:44px;height:44px;border-radius:50%;background:var(--primary);color:#fff;border:none;cursor:pointer;font-weight:bold;" onclick="sendChat()">➤</button>
+                </div>
+            </div>
+
+            <!-- 3. MÀN HÌNH SOS KHẨN CẤP -->
+            <div id="screen-sos" class="screen-content" style="align-items:center;justify-content:center;text-align:center;">
+                <div class="app-header" style="width:100%;">
+                    <h2>🚨 Trung Tâm SOS Khẩn Cấp</h2>
+                </div>
+                <h3 style="color:#D32F2F;font-size:18px;margin-top:20px;">NÚT BẤM CỨU HỘ 1-CHẠM</h3>
+                <p style="color:#666;font-size:13px;">Nhấn và <strong>giữ chuột đủ 2 giây</strong> để kích hoạt còi hú và gửi vị trí GPS cho con cái.</p>
+
+                <div style="position:relative;width:220px;height:220px;display:flex;align-items:center;justify-content:center;margin:30px 0;">
+                    <svg style="position:absolute;width:220px;height:220px;transform:rotate(-90deg);">
+                        <circle cx="110" cy="110" r="95" stroke="rgba(229,57,53,0.15)" stroke-width="8" fill="none"></circle>
+                        <circle id="sosProgress" cx="110" cy="110" r="95" stroke="#D32F2F" stroke-width="8" stroke-dasharray="597" stroke-dashoffset="597" fill="none" stroke-linecap="round"></circle>
+                    </svg>
+                    <div class="sos-circle" id="sosBtn" onmousedown="startSos()" onmouseup="cancelSos()" onmouseleave="cancelSos()">
+                        <h1 style="font-size:42px;font-weight:900;">SOS</h1>
+                        <span id="sosLabel" style="font-size:11px;font-weight:700;">GIỮ 2 GIÂY</span>
+                    </div>
+                </div>
+
+                <div id="sosAlert" style="display:none;background:#FFDAD6;color:#410002;padding:14px;border-radius:16px;text-align:left;width:100%;">
+                    <strong>🚨 ĐÃ BÁO ĐỘNG KHẨN CẤP!</strong><br>
+                    • Tọa độ: 10.7769, 106.7009<br>
+                    • Đang phát còi hú mức âm lượng cực đại<br>
+                    <button class="btn-large btn-error" style="height:44px;margin-top:10px;font-size:14px;" onclick="stopSos()">TẮT CÒI HÚ</button>
+                </div>
+            </div>
+
+            <!-- Bottom Navigation Bar -->
+            <div class="tab-bar">
+                <button class="tab-btn active" id="btnTabDash" onclick="switchTab('dashboard')">
+                    <span class="icon">🏠</span>
+                    <span>Trang chủ</span>
+                </button>
+                <button class="tab-btn" id="btnTabChat" onclick="switchTab('chat')">
+                    <span class="icon">💬</span>
+                    <span>Trợ lý AI</span>
+                </button>
+                <button class="tab-btn" id="btnTabSos" onclick="switchTab('sos')">
+                    <span class="icon">🚨</span>
+                    <span>SOS</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function switchTab(tab) {
+        document.getElementById('screen-dashboard').classList.remove('active');
+        document.getElementById('screen-chat').classList.remove('active');
+        document.getElementById('screen-sos').classList.remove('active');
+
+        document.getElementById('btnTabDash').classList.remove('active');
+        document.getElementById('btnTabChat').classList.remove('active');
+        document.getElementById('btnTabSos').classList.remove('active');
+
+        if (tab === 'dashboard') {
+            document.getElementById('screen-dashboard').classList.add('active');
+            document.getElementById('btnTabDash').classList.add('active');
+        } else if (tab === 'chat') {
+            document.getElementById('screen-chat').classList.add('active');
+            document.getElementById('btnTabChat').classList.add('active');
+        } else if (tab === 'sos') {
+            document.getElementById('screen-sos').classList.add('active');
+            document.getElementById('btnTabSos').classList.add('active');
+        }
+    }
+
+    function selectMember(el, name, desc) {
+        document.querySelectorAll('.member-chip').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+    }
+
+    function markMedDone() {
+        const btn = document.getElementById('btnMedTaken');
+        btn.innerText = "✓ ĐÃ XÁC NHẬN UỐNG THUỐC";
+        btn.style.background = "#A7F3D0";
+        btn.style.color = "#065F46";
+    }
+
+    function sendChat() {
+        const input = document.getElementById('chatInput');
+        const text = input.value.trim();
+        if (!text) return;
+        appendChat(text, 'user');
+        input.value = '';
+
+        setTimeout(() => {
+            appendChat("Dạ thưa Bác Nam, mức huyết áp 145/92 mmHg là tăng huyết áp độ 1. Bác ngồi nghỉ 15 phút và kiểm tra lại cữ thuốc hạ áp nhé!", 'ai');
+        }, 800);
+    }
+
+    function appendChat(text, sender) {
+        const list = document.getElementById('chatList');
+        const div = document.createElement('div');
+        div.className = `msg msg-${sender}`;
+        div.innerText = text;
+        list.appendChild(div);
+        list.scrollTop = list.scrollHeight;
+    }
+
+    let timer = null;
+    let start = 0;
+    function startSos() {
+        start = Date.now();
+        document.getElementById('sosLabel').innerText = "GIỮ YÊN...";
+        const circle = document.getElementById('sosProgress');
+        timer = setInterval(() => {
+            const elapsed = Date.now() - start;
+            const pct = Math.min(elapsed / 2000, 1);
+            circle.style.strokeDashoffset = 597 * (1 - pct);
+            if (pct >= 1) {
+                clearInterval(timer);
+                document.getElementById('sosLabel').innerText = "ĐÃ PHÁT CÒI";
+                document.getElementById('sosAlert').style.display = "block";
+            }
+        }, 30);
+    }
+    function cancelSos() {
+        if (timer) clearInterval(timer);
+        if (document.getElementById('sosLabel').innerText !== "ĐÃ PHÁT CÒI") {
+            document.getElementById('sosLabel').innerText = "GIỮ 2 GIÂY";
+            document.getElementById('sosProgress').style.strokeDashoffset = 597;
+        }
+    }
+    function stopSos() {
+        document.getElementById('sosAlert').style.display = "none";
+        document.getElementById('sosLabel').innerText = "GIỮ 2 GIÂY";
+        document.getElementById('sosProgress').style.strokeDashoffset = 597;
+    }
+</script>
+
+</body>
+</html>

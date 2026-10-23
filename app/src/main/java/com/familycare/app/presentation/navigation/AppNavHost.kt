@@ -12,11 +12,13 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import com.familycare.app.core.common.SessionManager
 import com.familycare.app.presentation.ai_assistant.AiAssistantScreen
+import com.familycare.app.presentation.alert.AlertListScreen
 import com.familycare.app.presentation.auth.FamilySetupScreen
 import com.familycare.app.presentation.auth.LoginScreen
 import com.familycare.app.presentation.biometrics.BiometricsScreen
 import com.familycare.app.presentation.biometrics.ppg.CameraPpgScreen
 import com.familycare.app.presentation.dashboard.DashboardScreen
+import com.familycare.app.presentation.emergency.EmergencyScreen
 import com.familycare.app.presentation.medication.MedicationScreen
 import com.familycare.app.presentation.profile.ProfileScreen
 
@@ -116,7 +118,8 @@ fun AppNavHost() {
                     onNavigateToPpg = { navController.navigate(Screen.CameraPpg.route) },
                     onNavigateToAi = { navController.navigate(Screen.AiAssistant.route) },
                     onNavigateToOcr = { navController.navigate(Screen.Medication.route) },
-                    onNavigateToEmergency = { /* Navigate to SOS */ }
+                    onNavigateToEmergency = { navController.navigate(Screen.EmergencyAlerts.route) },
+                    onNavigateToSos = { navController.navigate(Screen.SosPanic.route) }
                 )
             }
 
@@ -150,6 +153,17 @@ fun AppNavHost() {
                             popUpTo(0) { inclusive = true }
                         }
                     }
+                )
+            }
+            composable(Screen.EmergencyAlerts.route) {
+                AlertListScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToSos = { navController.navigate(Screen.SosPanic.route) }
+                )
+            }
+            composable(Screen.SosPanic.route) {
+                EmergencyScreen(
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
         }
