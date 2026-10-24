@@ -11,10 +11,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Calendar
@@ -72,42 +75,71 @@ fun MedicationScreen(
                             contentDescription = "Quét OCR đơn thuốc"
                         )
                     }
-                }
-            )
-        },
-        floatingActionButton = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FloatingActionButton(
-                    onClick = {
+                    IconButton(onClick = {
                         resetForm()
                         editingMedicine = null
                         showAddDialog = true
-                    }
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Thêm thuốc")
-                }
-
-                ExtendedFloatingActionButton(
-                    onClick = onNavigateToOcr,
-                    icon = {
+                    }) {
                         Icon(
-                            Icons.Default.DocumentScanner,
-                            contentDescription = null
+                            Icons.Default.Add,
+                            contentDescription = "Thêm thuốc"
                         )
-                    },
-                    text = { Text("Quét đơn thuốc AI") }
-                )
-            }
+                    }
+                }
+            )
         }
     ) { paddingValues ->
         if (medicines.isEmpty()) {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Text("Chưa có thuốc. Nhấn nút + để thêm thuốc.")
+                Icon(
+                    imageVector = Icons.Default.MedicalServices,
+                    contentDescription = null,
+                    modifier = Modifier.size(72.dp),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Chưa có thuốc trong danh sách",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Thêm thuốc thủ công hoặc chụp ảnh đơn thuốc để AI tự động trích xuất lịch uống.",
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            resetForm()
+                            editingMedicine = null
+                            showAddDialog = true
+                        }
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Thêm thuốc")
+                    }
+                    OutlinedButton(
+                        onClick = onNavigateToOcr
+                    ) {
+                        Icon(Icons.Default.DocumentScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Quét OCR AI")
+                    }
+                }
             }
         } else {
             LazyColumn(
@@ -117,6 +149,35 @@ fun MedicationScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                resetForm()
+                                editingMedicine = null
+                                showAddDialog = true
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Thêm thuốc")
+                        }
+                        OutlinedButton(
+                            onClick = onNavigateToOcr,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.DocumentScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Quét OCR AI")
+                        }
+                    }
+                }
                 items(medicines, key = { it.id }) { medicine ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),

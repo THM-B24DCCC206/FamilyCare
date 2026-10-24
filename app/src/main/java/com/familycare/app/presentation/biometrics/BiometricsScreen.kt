@@ -71,18 +71,6 @@ fun BiometricsScreen(
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = {
-                    dialogInitialType = MetricType.BLOOD_PRESSURE
-                    showAddDialog = true
-                },
-                icon = { Icon(Icons.Default.EditNote, contentDescription = null) },
-                text = { Text("Nhập Chỉ Số", fontWeight = FontWeight.Bold) },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            )
         }
     ) { paddingValues ->
         LazyColumn(
