@@ -50,10 +50,20 @@
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Receiver nhận tín hiệu nhắc lịch khám -->
+        <receiver
+            android:name=".presentation.appointment.AppointmentReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+        <receiver
+            android:name=".presentation.medication.MedicationReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
     </application>
 
 </manifest>

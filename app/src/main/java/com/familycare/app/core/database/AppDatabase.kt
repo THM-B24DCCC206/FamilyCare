@@ -29,6 +29,9 @@ class AppDatabase private constructor(context: Context) {
     val userDao: UserDao = UserDaoImpl(dbHelper)
     fun userDao(): UserDao = userDao
 
+    val appointmentDao: AppointmentDao = AppointmentDaoImpl(dbHelper)
+    fun appointmentDao(): AppointmentDao = appointmentDao
+
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -43,7 +46,7 @@ class AppDatabase private constructor(context: Context) {
     }
 }
 
-class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_db.db", null, 2) {
+class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_db.db", null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
@@ -112,6 +115,21 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
             )
             """.trimIndent()
         )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS appointments (
+                id TEXT PRIMARY KEY NOT NULL,
+                userId TEXT NOT NULL,
+                hospitalName TEXT NOT NULL,
+                department TEXT NOT NULL,
+                doctorName TEXT NOT NULL,
+                appointmentTime INTEGER NOT NULL,
+                notes TEXT NOT NULL,
+                isCompleted INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -119,6 +137,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         db.execSQL("DROP TABLE IF EXISTS medicines")
         db.execSQL("DROP TABLE IF EXISTS alerts")
         db.execSQL("DROP TABLE IF EXISTS users")
+        db.execSQL("DROP TABLE IF EXISTS appointments")
         onCreate(db)
     }
 }
@@ -145,33 +164,14 @@ class HealthMetricDaoImpl(private val dbHelper: DatabaseHelper) : HealthMetricDa
     override fun getRecentMetrics(userId: String, limit: Int): Flow<List<HealthMetricEntity>> {
         return _signal.map {
             withContext(Dispatchers.IO) {
-                queryMetrics(userId, null, limit.toString())
+                queryMetrics(userId, null, limit)
             }
         }
     }
 
-    override suspend fun getLatestMetricByType(userId: String, type: String): HealthMetricEntity? {
-        return withContext(Dispatchers.IO) {
-            val list = queryMetrics(userId, type, "1")
-            list.firstOrNull()
-        }
-    }
-
-    override suspend fun insertMetric(metric: HealthMetricEntity) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put("id", metric.id)
-            put("userId", metric.userId)
-            put("type", metric.type)
-            put("valuePrimary", metric.valuePrimary)
-            metric.valueSecondary?.let { put("valueSecondary", it) }
-            put("unit", metric.unit)
-            put("timestamp", metric.timestamp)
-            put("notes", metric.notes)
-            put("isFromCameraPpg", if (metric.isFromCameraPpg) 1 else 0)
-        }
-        db.insertWithOnConflict("health_metrics", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-        _signal.value = System.currentTimeMillis()
+    override suspend fun getLatestMetricByType(userId: String, type: String): HealthMetricEntity? = withContext(Dispatchers.IO) {
+        val list = queryMetrics(userId, type, 1)
+        list.firstOrNull()
     }
 
     override suspend fun insertMetrics(metrics: List<HealthMetricEntity>) = withContext(Dispatchers.IO) {
@@ -199,28 +199,87 @@ class HealthMetricDaoImpl(private val dbHelper: DatabaseHelper) : HealthMetricDa
         _signal.value = System.currentTimeMillis()
     }
 
+    override suspend fun insertMetric(metric: HealthMetricEntity) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("id", metric.id)
+            put("userId", metric.userId)
+            put("type", metric.type)
+            put("valuePrimary", metric.valuePrimary)
+            metric.valueSecondary?.let { put("valueSecondary", it) }
+            put("unit", metric.unit)
+            put("timestamp", metric.timestamp)
+            put("notes", metric.notes)
+            put("isFromCameraPpg", if (metric.isFromCameraPpg) 1 else 0)
+        }
+        db.insertWithOnConflict("health_metrics", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        _signal.value = System.currentTimeMillis()
+    }
+
     override suspend fun deleteMetric(metricId: String) = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
         db.delete("health_metrics", "id = ?", arrayOf(metricId))
         _signal.value = System.currentTimeMillis()
     }
 
-    private fun queryMetrics(userId: String, type: String?, limit: String?): List<HealthMetricEntity> {
-        val db = dbHelper.readableDatabase
-        val selection = if (type == null) "userId = ?" else "userId = ? AND type = ?"
-        val selectionArgs = if (type == null) arrayOf(userId) else arrayOf(userId, type)
+    suspend fun getRecentMetricsDirect(userId: String, limit: Int): List<HealthMetricEntity> = withContext(Dispatchers.IO) {
+        queryMetrics(userId, null, limit)
+    }
 
+    suspend fun getMetricsByTypeAndDateRange(
+        userId: String,
+        type: String,
+        startTime: Long,
+        endTime: Long
+    ): List<HealthMetricEntity> = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
         val cursor = db.query(
             "health_metrics",
             null,
-            selection,
-            selectionArgs,
+            "userId = ? AND type = ? AND timestamp >= ? AND timestamp <= ?",
+            arrayOf(userId, type, startTime.toString(), endTime.toString()),
             null,
             null,
-            "timestamp DESC",
-            limit
+            "timestamp DESC"
         )
+        val list = mutableListOf<HealthMetricEntity>()
+        cursor.use { c ->
+            val idCol = c.getColumnIndexOrThrow("id")
+            val userCol = c.getColumnIndexOrThrow("userId")
+            val typeCol = c.getColumnIndexOrThrow("type")
+            val val1Col = c.getColumnIndexOrThrow("valuePrimary")
+            val val2Col = c.getColumnIndexOrThrow("valueSecondary")
+            val unitCol = c.getColumnIndexOrThrow("unit")
+            val timeCol = c.getColumnIndexOrThrow("timestamp")
+            val noteCol = c.getColumnIndexOrThrow("notes")
+            val ppgCol = c.getColumnIndexOrThrow("isFromCameraPpg")
 
+            while (c.moveToNext()) {
+                list.add(
+                    HealthMetricEntity(
+                        id = c.getString(idCol),
+                        userId = c.getString(userCol),
+                        type = c.getString(typeCol),
+                        valuePrimary = c.getDouble(val1Col),
+                        valueSecondary = if (!c.isNull(val2Col)) c.getDouble(val2Col) else null,
+                        unit = c.getString(unitCol),
+                        timestamp = c.getLong(timeCol),
+                        notes = c.getString(noteCol),
+                        isFromCameraPpg = c.getInt(ppgCol) == 1
+                    )
+                )
+            }
+        }
+        list
+    }
+
+    private fun queryMetrics(userId: String, type: String?, limit: Int?): List<HealthMetricEntity> {
+        val db = dbHelper.readableDatabase
+        val selection = if (type == null) "userId = ?" else "userId = ? AND type = ?"
+        val selectionArgs = if (type == null) arrayOf(userId) else arrayOf(userId, type)
+        val limitStr = limit?.toString()
+
+        val cursor = db.query("health_metrics", null, selection, selectionArgs, null, null, "timestamp DESC", limitStr)
         val list = mutableListOf<HealthMetricEntity>()
         cursor.use { c ->
             val idCol = c.getColumnIndexOrThrow("id")
@@ -317,6 +376,8 @@ class MedicineDaoImpl(private val dbHelper: DatabaseHelper) : MedicineDao {
         _signal.value = System.currentTimeMillis()
     }
 
+    override suspend fun updateMedicine(medicine: MedicineEntity) = insertMedicine(medicine)
+
     override suspend fun deleteMedicine(medicineId: String) = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
         db.delete("medicines", "id = ?", arrayOf(medicineId))
@@ -375,6 +436,22 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         }
     }
 
+    fun getUnreadAlerts(familyId: String): Flow<List<AlertEntity>> {
+        return _signal.map {
+            withContext(Dispatchers.IO) {
+                val db = dbHelper.readableDatabase
+                val cursor = db.query("alerts", null, "familyId = ? AND isRead = 0", arrayOf(familyId), null, null, "timestamp DESC")
+                val list = mutableListOf<AlertEntity>()
+                cursor.use { c ->
+                    while (c.moveToNext()) {
+                        list.add(cursorToAlert(c))
+                    }
+                }
+                list
+            }
+        }
+    }
+
     override suspend fun insertAlert(alert: AlertEntity) = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
         val values = ContentValues().apply {
@@ -397,8 +474,19 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
 
     override suspend fun markAsRead(alertId: String) = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
-        val values = ContentValues().apply { put("isRead", 1) }
+        val values = ContentValues().apply {
+            put("isRead", 1)
+        }
         db.update("alerts", values, "id = ?", arrayOf(alertId))
+        _signal.value = System.currentTimeMillis()
+    }
+
+    suspend fun markAllAsRead(familyId: String) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("isRead", 1)
+        }
+        db.update("alerts", values, "familyId = ?", arrayOf(familyId))
         _signal.value = System.currentTimeMillis()
     }
 
@@ -408,13 +496,25 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         _signal.value = System.currentTimeMillis()
     }
 
+    suspend fun getRecentAlertsDirect(familyId: String, limit: Int): List<AlertEntity> = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.query("alerts", null, "familyId = ?", arrayOf(familyId), null, null, "timestamp DESC", limit.toString())
+        val list = mutableListOf<AlertEntity>()
+        cursor.use { c ->
+            while (c.moveToNext()) {
+                list.add(cursorToAlert(c))
+            }
+        }
+        list
+    }
+
     private fun cursorToAlert(c: Cursor): AlertEntity {
         val idCol = c.getColumnIndexOrThrow("id")
         val famCol = c.getColumnIndexOrThrow("familyId")
         val userCol = c.getColumnIndexOrThrow("targetUserId")
         val nameCol = c.getColumnIndexOrThrow("targetUserName")
         val typeCol = c.getColumnIndexOrThrow("type")
-        val levelCol = c.getColumnIndexOrThrow("level")
+        val lvlCol = c.getColumnIndexOrThrow("level")
         val titleCol = c.getColumnIndexOrThrow("title")
         val msgCol = c.getColumnIndexOrThrow("message")
         val timeCol = c.getColumnIndexOrThrow("timestamp")
@@ -428,7 +528,7 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
             targetUserId = c.getString(userCol),
             targetUserName = c.getString(nameCol),
             type = c.getString(typeCol),
-            level = c.getString(levelCol),
+            level = c.getString(lvlCol),
             title = c.getString(titleCol),
             message = c.getString(msgCol),
             timestamp = c.getLong(timeCol),
@@ -512,5 +612,70 @@ class UserDaoImpl(private val dbHelper: DatabaseHelper) : UserDao {
             chronicDiseasesJson = c.getString(disCol),
             drugAllergiesJson = c.getString(allCol)
         )
+    }
+}
+
+class AppointmentDaoImpl(private val dbHelper: DatabaseHelper) : AppointmentDao {
+    private val _signal = MutableStateFlow(System.currentTimeMillis())
+
+    override fun getAppointmentsByMember(userId: String): Flow<List<AppointmentEntity>> {
+        return _signal.map {
+            withContext(Dispatchers.IO) {
+                val list = mutableListOf<AppointmentEntity>()
+                val db = dbHelper.readableDatabase
+                val cursor = db.rawQuery(
+                    "SELECT * FROM appointments WHERE userId = ? ORDER BY appointmentTime ASC",
+                    arrayOf(userId)
+                )
+                cursor.use { c ->
+                    val idCol = c.getColumnIndexOrThrow("id")
+                    val userCol = c.getColumnIndexOrThrow("userId")
+                    val hospCol = c.getColumnIndexOrThrow("hospitalName")
+                    val deptCol = c.getColumnIndexOrThrow("department")
+                    val docCol = c.getColumnIndexOrThrow("doctorName")
+                    val timeCol = c.getColumnIndexOrThrow("appointmentTime")
+                    val notesCol = c.getColumnIndexOrThrow("notes")
+                    val compCol = c.getColumnIndexOrThrow("isCompleted")
+
+                    while (c.moveToNext()) {
+                        list.add(
+                            AppointmentEntity(
+                                id = c.getString(idCol),
+                                userId = c.getString(userCol),
+                                hospitalName = c.getString(hospCol),
+                                department = c.getString(deptCol),
+                                doctorName = c.getString(docCol),
+                                appointmentTime = c.getLong(timeCol),
+                                notes = c.getString(notesCol),
+                                isCompleted = c.getInt(compCol) == 1
+                            )
+                        )
+                    }
+                }
+                list
+            }
+        }
+    }
+
+    override suspend fun insertAppointment(appointment: AppointmentEntity) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("id", appointment.id)
+            put("userId", appointment.userId)
+            put("hospitalName", appointment.hospitalName)
+            put("department", appointment.department)
+            put("doctorName", appointment.doctorName)
+            put("appointmentTime", appointment.appointmentTime)
+            put("notes", appointment.notes)
+            put("isCompleted", if (appointment.isCompleted) 1 else 0)
+        }
+        db.insertWithOnConflict("appointments", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        _signal.value = System.currentTimeMillis()
+    }
+
+    override suspend fun deleteAppointment(appointmentId: String) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.delete("appointments", "id = ?", arrayOf(appointmentId))
+        _signal.value = System.currentTimeMillis()
     }
 }
