@@ -517,6 +517,68 @@
             transition: transform 0.1s;
         }
         .sos-circle:active { transform: scale(0.96); }
+
+        /* Nút nổi AI Chatbot ở góc phải ứng dụng */
+        .ai-fab-btn {
+            position: absolute;
+            bottom: 76px;
+            right: 14px;
+            background: linear-gradient(135deg, #1976D2 0%, #7B1FA2 100%);
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 28px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 6px 18px rgba(25, 118, 210, 0.45);
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            user-select: none;
+        }
+
+        .ai-fab-btn:hover {
+            transform: translateY(-2px) scale(1.03);
+            box-shadow: 0 8px 24px rgba(123, 31, 162, 0.55);
+        }
+
+        .ai-fab-btn:active {
+            transform: scale(0.95);
+        }
+
+        .ai-fab-icon {
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0% { transform: scale(1); filter: drop-shadow(0 0 2px #fff); }
+            50% { transform: scale(1.2); filter: drop-shadow(0 0 8px #FFD54F); }
+            100% { transform: scale(1); filter: drop-shadow(0 0 2px #fff); }
+        }
+
+        .ai-fab-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.15;
+            text-align: left;
+        }
+
+        .ai-fab-title {
+            font-size: 12.5px;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+        }
+
+        .ai-fab-sub {
+            font-size: 9.5px;
+            opacity: 0.9;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -531,10 +593,10 @@
         <div class="instruction-card">
             <h3>📱 Hướng dẫn thử nghiệm nhanh trên điện thoại:</h3>
             <ul>
-                <li><strong>Tab Trang chủ:</strong> Bố cục chuẩn TV1 gồm Nút SOS khẩn cấp, 2 thẻ lớn Tính năng thông minh (Đo Nhịp Tim PPG & Trợ lý AI) và Tóm tắt chỉ số.</li>
-                <li><strong>Tab Chỉ số:</strong> Màn hình Biometrics mới nhất của TV1 với Biểu đồ Canvas đa chỉ số, Đo nhịp tim PPG và Lịch sử đo.</li>
-                <li><strong>Tab Thuốc:</strong> Lịch thuốc trong ngày.</li>
-                <li><strong>Tab Trợ lý AI:</strong> Chatbot Gemini 1.5 Flash có Context Injection.</li>
+                <li><strong>Nút nổi AI Chatbot góc phải:</strong> Nút nổi Floating Action Button màu Gradient ở góc dưới phải màn hình, bấm để mở ngay Trợ lý AI Chatbot từ bất kỳ đâu.</li>
+                <li><strong>Tab Trang chủ:</strong> Bố cục chuẩn gồm Nút SOS khẩn cấp, 2 thẻ lớn Tính năng thông minh (Đo Nhịp Tim PPG & Trợ lý AI) và Tóm tắt chỉ số.</li>
+                <li><strong>Tab Chỉ số:</strong> Màn hình Biometrics với Biểu đồ Canvas đa chỉ số, Đo nhịp tim PPG và Lịch sử đo.</li>
+                <li><strong>Tab Thuốc:</strong> Lịch thuốc trong ngày & xác nhận uống thuốc.</li>
                 <li><strong>Tab Hồ sơ:</strong> Thẻ Tổ ấm Gia đình (Mã mời 6 ký tự), nút Xuất PDF và Đăng xuất.</li>
             </ul>
         </div>
@@ -695,9 +757,12 @@
             <!-- ======================================================== -->
             <div id="screen-chat" class="screen-content">
                 <div class="app-header">
-                    <div>
-                        <h2>✨ AI Health Copilot</h2>
-                        <span style="font-size:11px;color:#6750A4;font-weight:600;">Gemini 1.5 Flash • Context Injection</span>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <span style="font-size:22px;cursor:pointer;font-weight:bold;color:var(--primary);" onclick="closeAiChat()">←</span>
+                        <div>
+                            <h2>✨ AI Health Copilot</h2>
+                            <span style="font-size:11px;color:#6750A4;font-weight:600;">Gemini 1.5 Flash • Context Injection</span>
+                        </div>
                     </div>
                 </div>
                 <div class="chat-list" id="chatList">
@@ -778,7 +843,18 @@
             </div>
 
             <!-- ======================================================== -->
-            <!-- BOTTOM NAVIGATION BAR (5 TABS CHUẨN THÀNH VIÊN 1 / NHÓM)   -->
+            <!-- NÚT NỔI AI CHATBOT Ở GÓC PHẢI (FLOATING ACTION BUTTON)    -->
+            <!-- ======================================================== -->
+            <div id="aiFloatingBtn" class="ai-fab-btn" onclick="openAiChat()">
+                <div class="ai-fab-icon">✨</div>
+                <div class="ai-fab-text">
+                    <span class="ai-fab-title">AI Chatbot</span>
+                    <span class="ai-fab-sub">Hỏi bác sĩ AI</span>
+                </div>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- BOTTOM NAVIGATION BAR (4 TABS CHUẨN THÀNH VIÊN 1)         -->
             <!-- ======================================================== -->
             <div class="tab-bar">
                 <button class="tab-btn active" id="btnTabDash" onclick="switchTab('dashboard')">
@@ -792,10 +868,6 @@
                 <button class="tab-btn" id="btnTabMed" onclick="switchTab('medication')">
                     <span class="icon">💊</span>
                     <span>Thuốc</span>
-                </button>
-                <button class="tab-btn" id="btnTabChat" onclick="switchTab('chat')">
-                    <span class="icon">✨</span>
-                    <span>Trợ lý AI</span>
                 </button>
                 <button class="tab-btn" id="btnTabProf" onclick="switchTab('profile')">
                     <span class="icon">👤</span>
@@ -811,10 +883,29 @@
     let sosProgress = 0;
     const circle = document.getElementById('sosProgress');
     const circumference = 2 * Math.PI * 95;
+    let currentActiveTab = 'dashboard';
+    let previousTab = 'dashboard';
+
+    function openAiChat() {
+        previousTab = currentActiveTab;
+        switchTab('chat');
+    }
+
+    function closeAiChat() {
+        switchTab(previousTab);
+    }
 
     function switchTab(tab) {
         document.querySelectorAll('.screen-content').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+        const fab = document.getElementById('aiFloatingBtn');
+        if (tab === 'chat' || tab === 'sos') {
+            if (fab) fab.style.display = 'none';
+        } else {
+            if (fab) fab.style.display = 'flex';
+            currentActiveTab = tab;
+        }
 
         if (tab === 'dashboard') {
             document.getElementById('screen-dashboard').classList.add('active');
@@ -827,7 +918,6 @@
             document.getElementById('btnTabMed').classList.add('active');
         } else if (tab === 'chat') {
             document.getElementById('screen-chat').classList.add('active');
-            document.getElementById('btnTabChat').classList.add('active');
         } else if (tab === 'profile') {
             document.getElementById('screen-profile').classList.add('active');
             document.getElementById('btnTabProf').classList.add('active');

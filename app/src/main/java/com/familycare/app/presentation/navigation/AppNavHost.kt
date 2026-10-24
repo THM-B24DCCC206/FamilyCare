@@ -1,13 +1,25 @@
 package com.familycare.app.presentation.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import com.familycare.app.core.common.SessionManager
@@ -49,13 +61,62 @@ fun AppNavHost() {
         BottomNavItem("Trang chủ", Screen.Dashboard.route, Icons.Default.Home),
         BottomNavItem("Chỉ số", Screen.Biometrics.route, Icons.Default.Favorite),
         BottomNavItem("Thuốc", Screen.Medication.route, Icons.Default.Medication),
-        BottomNavItem("Trợ lý AI", Screen.AiAssistant.route, Icons.Default.AutoAwesome),
         BottomNavItem("Hồ sơ", Screen.Profile.route, Icons.Default.Person)
     )
 
     val showBottomBar = bottomNavItems.any { it.route == currentRoute }
+    val showAiFab = currentRoute in listOf(
+        Screen.Dashboard.route,
+        Screen.Biometrics.route,
+        Screen.Medication.route,
+        Screen.Profile.route
+    )
 
     Scaffold(
+        floatingActionButton = {
+            if (showAiFab) {
+                ExtendedFloatingActionButton(
+                    onClick = { navController.navigate(Screen.AiAssistant.route) },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    icon = {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "AI Chatbot",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    },
+                    text = {
+                        Column {
+                            Text(
+                                text = "AI Chatbot",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Hỏi bác sĩ AI",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                )
+            }
+        },
+        floatingActionButtonPosition = FabPosition.End,
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -142,7 +203,9 @@ fun AppNavHost() {
             }
 
             composable(Screen.AiAssistant.route) {
-                AiAssistantScreen()
+                AiAssistantScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
 
             composable(Screen.Profile.route) {
