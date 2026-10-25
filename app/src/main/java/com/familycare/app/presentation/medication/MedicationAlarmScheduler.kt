@@ -39,20 +39,45 @@ class MedicationAlarmScheduler(private val context: Context) {
             }
 
             val pendingIntent = createPendingIntent(
-                medicineId, medicineName, dosage, time,
+                medicineId,
+                medicineName,
+                dosage,
+                time,
                 PendingIntent.FLAG_UPDATE_CURRENT
             ) ?: return@forEach
 
-            if (
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.S
-            ) {
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    pendingIntent
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                        !alarmManager.canScheduleExactAlarms()
+                    ) {
+                        alarmManager.setAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            calendar.timeInMillis,
+                            pendingIntent
+                        )
+                    } else {
+                        alarmManager.setExactAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            calendar.timeInMillis,
+                            pendingIntent
+                        )
+                    }
+                } else {
+                    alarmManager.setExact(
+                        AlarmManager.RTC_WAKEUP,
+                        calendar.timeInMillis,
+                        pendingIntent
+                    )
+                }
+            } catch (e: SecurityException) {
+                android.util.Log.e(
+                    "MedicationScheduler",
+                    "Không đặt được báo thức chính xác: $time",
+                    e
                 )
-            } else {
+
                 alarmManager.setAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     calendar.timeInMillis,
@@ -75,7 +100,8 @@ class MedicationAlarmScheduler(private val context: Context) {
                 context,
                 requestCode(medicineId, time),
                 intent,
-                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+                PendingIntent.FLAG_NO_CREATE or
+                    PendingIntent.FLAG_IMMUTABLE
             )
 
             if (pendingIntent != null) {
@@ -114,6 +140,7 @@ class MedicationAlarmScheduler(private val context: Context) {
     companion object {
         const val ACTION_MEDICATION_REMINDER =
             "com.familycare.app.MEDICATION_REMINDER"
+
         const val EXTRA_MEDICINE_ID = "medicine_id"
         const val EXTRA_MEDICINE_NAME = "medicine_name"
         const val EXTRA_DOSAGE = "medicine_dosage"

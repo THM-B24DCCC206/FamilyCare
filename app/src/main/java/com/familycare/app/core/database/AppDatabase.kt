@@ -14,19 +14,23 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         HealthMetricEntity::class,
         MedicineEntity::class,
         AlertEntity::class,
-        AppointmentEntity::class
+        AppointmentEntity::class,
+        MedicationLogEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
+
     abstract val healthMetricDao: HealthMetricDao
     abstract val medicineDao: MedicineDao
     abstract val alertDao: AlertDao
     abstract val appointmentDao: AppointmentDao
+    abstract val medicationLogDao: MedicationLogDao
 
     companion object {
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -50,18 +54,60 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS medication_logs (
+                        id TEXT NOT NULL,
+                        medicineId TEXT NOT NULL,
+                        medicineName TEXT NOT NULL,
+                        userId TEXT NOT NULL,
+                        scheduledDate TEXT NOT NULL,
+                        scheduledTime TEXT NOT NULL,
+                        actualTakenTime INTEGER,
+                        isTaken INTEGER NOT NULL,
+                        isSkipped INTEGER NOT NULL,
+                        PRIMARY KEY(id)
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS
+                    index_medication_logs_medicineId_scheduledDate_scheduledTime
+                    ON medication_logs (
+                        medicineId,
+                        scheduledDate,
+                        scheduledTime
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE INDEX IF NOT EXISTS
+                    index_medication_logs_userId_scheduledDate
+                    ON medication_logs (userId, scheduledDate)
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
+                INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "familycare_db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3
+                    )
                     .build()
-
-                INSTANCE = instance
-                instance
+                    .also { INSTANCE = it }
             }
         }
     }

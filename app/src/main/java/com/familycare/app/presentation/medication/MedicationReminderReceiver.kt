@@ -2,69 +2,83 @@
 package com.familycare.app.presentation.medication
 
 import android.Manifest
-import android.app.Notification
-import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
-import com.familycare.app.FamilyCareApp
-import com.familycare.app.R
 
 class MedicationReminderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        val id = intent.getStringExtra(
+        val medicineId = intent.getStringExtra(
             MedicationAlarmScheduler.EXTRA_MEDICINE_ID
         ) ?: return
-        val name = intent.getStringExtra(
+
+        val medicineName = intent.getStringExtra(
             MedicationAlarmScheduler.EXTRA_MEDICINE_NAME
         ) ?: "Thuốc"
+
         val dosage = intent.getStringExtra(
             MedicationAlarmScheduler.EXTRA_DOSAGE
         ) ?: ""
+
         val time = intent.getStringExtra(
             MedicationAlarmScheduler.EXTRA_TIME
         ) ?: return
 
+        // Android 13 trở lên cần quyền thông báo.
         if (
-            Build.VERSION.SDK_INT >= 33 &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
-                context, Manifest.permission.POST_NOTIFICATIONS
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
-        ) return
-
-        val notification = if (Build.VERSION.SDK_INT >= 26) {
-            Notification.Builder(context, FamilyCareApp.CHANNEL_MEDICATION)
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(context)
+        ) {
+            return
         }
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Đến giờ uống thuốc")
-            .setContentText("$name — $dosage")
-            .setStyle(
-                Notification.BigTextStyle().bigText(
-                    "Đã đến giờ uống $name. Liều lượng: $dosage. " +
-                        "Giờ đã cài: $time."
-                )
+
+        // Khởi chạy dịch vụ chuông báo thức.
+        val serviceIntent = Intent(
+            context,
+            MedicationAlarmService::class.java
+        ).apply {
+            action = MedicationAlarmService.ACTION_START
+            putExtra(
+                MedicationAlarmScheduler.EXTRA_MEDICINE_ID,
+                medicineId
             )
-            .setAutoCancel(true)
-            .setPriority(Notification.PRIORITY_HIGH)
-            .build()
+            putExtra(
+                MedicationAlarmScheduler.EXTRA_MEDICINE_NAME,
+                medicineName
+            )
+            putExtra(
+                MedicationAlarmScheduler.EXTRA_DOSAGE,
+                dosage
+            )
+            putExtra(
+                MedicationAlarmScheduler.EXTRA_TIME,
+                time
+            )
+        }
 
-        val manager = context.getSystemService(
-            Context.NOTIFICATION_SERVICE
-        ) as NotificationManager
+        try {
+            ContextCompat.startForegroundService(context, serviceIntent)
+        } catch (e: Exception) {
+            // Không để lỗi khởi chạy service làm crash receiver.
+            android.util.Log.e(
+                "MedicationReminder",
+                "Không thể khởi chạy dịch vụ chuông",
+                e
+            )
+            return
+        }
 
-        manager.notify("$id-$time".hashCode(), notification)
-
-        // Đặt lại lịch cho ngày mai.
+        // Lên lịch nhắc lại vào ngày tiếp theo.
         MedicationAlarmScheduler(context).schedule(
-            medicineId = id,
-            medicineName = name,
+            medicineId = medicineId,
+            medicineName = medicineName,
             dosage = dosage,
             times = listOf(time)
         )

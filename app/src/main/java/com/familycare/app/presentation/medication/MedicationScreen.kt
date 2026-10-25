@@ -1,4 +1,3 @@
-
 package com.familycare.app.presentation.medication
 
 import android.app.TimePickerDialog
@@ -8,12 +7,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -27,6 +28,7 @@ fun MedicationScreen(
     medicationViewModel: MedicationViewModel = viewModel()
 ) {
     val medicines by medicationViewModel.medicines.collectAsState()
+    val todayLogs by medicationViewModel.todayLogs.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var editingMedicine by remember {
@@ -47,7 +49,9 @@ fun MedicationScreen(
         validationError = false
     }
 
-    fun startEditing(medicine: com.familycare.app.domain.model.Medicine) {
+    fun startEditing(
+        medicine: com.familycare.app.domain.model.Medicine
+    ) {
         editingMedicine = medicine
         name = medicine.name
         dosage = medicine.dosage
@@ -76,7 +80,9 @@ fun MedicationScreen(
             )
         },
         floatingActionButton = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 FloatingActionButton(
                     onClick = {
                         resetForm()
@@ -84,7 +90,10 @@ fun MedicationScreen(
                         showAddDialog = true
                     }
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Thêm thuốc")
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Thêm thuốc"
+                    )
                 }
 
                 ExtendedFloatingActionButton(
@@ -100,6 +109,7 @@ fun MedicationScreen(
             }
         }
     ) { paddingValues ->
+
         if (medicines.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -122,33 +132,44 @@ fun MedicationScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
                                     Text(
-                                        medicine.name,
+                                        text = medicine.name,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
+
                                     Text("Liều lượng: ${medicine.dosage}")
+
                                     Text(
-                                        "Giờ uống: ${
-                                            medicine.reminderTimes.joinToString(", ")
+                                        text = "Giờ uống: ${
+                                            medicine.reminderTimes
+                                                .joinToString(", ")
                                                 .ifBlank { "Chưa thiết lập" }
                                         }"
                                     )
 
                                     if (medicine.instruction.isNotBlank()) {
-                                        Text("Hướng dẫn: ${medicine.instruction}")
+                                        Text(
+                                            "Hướng dẫn: ${medicine.instruction}"
+                                        )
                                     }
                                 }
 
                                 Column {
                                     IconButton(
-                                        onClick = { startEditing(medicine) }
+                                        onClick = {
+                                            startEditing(medicine)
+                                        }
                                     ) {
                                         Icon(
                                             Icons.Default.Edit,
@@ -158,7 +179,9 @@ fun MedicationScreen(
 
                                     IconButton(
                                         onClick = {
-                                            medicationViewModel.deleteMedicine(medicine.id)
+                                            medicationViewModel.deleteMedicine(
+                                                medicine.id
+                                            )
                                         }
                                     ) {
                                         Icon(
@@ -167,6 +190,100 @@ fun MedicationScreen(
                                         )
                                     }
                                 }
+                            }
+
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            )
+
+                            Text(
+                                text = "Xác nhận uống thuốc hôm nay",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+
+                            if (medicine.reminderTimes.isEmpty()) {
+                                Text(
+                                    text = "Thuốc này chưa có giờ nhắc uống.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                OutlinedButton(
+                                    onClick = { startEditing(medicine) },
+                                    modifier = Modifier.padding(top = 8.dp)
+                                ) {
+                                    Text("Thiết lập giờ uống")
+                                }
+                            } else {
+                                medicine.reminderTimes
+                                    .distinct()
+                                    .sorted()
+                                    .forEach { time ->
+
+                                        val log = todayLogs.firstOrNull {
+                                            it.medicineId == medicine.id &&
+                                                it.scheduledTime.substringAfterLast(" ") == time
+                                        }
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .padding(vertical = 8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "🕒 $time",
+                                                    style = MaterialTheme.typography.bodyLarge
+                                                )
+
+                                                Text(
+                                                    text = when {
+                                                        log?.isTaken == true -> "Đã xác nhận uống"
+                                                        log == null -> "Chưa có nhật ký uống thuốc"
+                                                        else -> "Chưa xác nhận"
+                                                    },
+                                                    color = if (log?.isTaken == true) {
+                                                        Color(0xFF2E7D32)
+                                                    } else {
+                                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                                    },
+                                                    style = MaterialTheme.typography.bodySmall
+                                                )
+                                            }
+
+                                            if (log?.isTaken == true) {
+                                                Icon(
+                                                    imageVector = Icons.Default.CheckCircle,
+                                                    contentDescription = "Đã uống",
+                                                    tint = Color(0xFF2E7D32),
+                                                    modifier = Modifier.padding(
+                                                        top = 12.dp,
+                                                        end = 12.dp
+                                                    )
+                                                )
+                                            } else {
+                                                Button(
+                                                    onClick = {
+                                                        medicationViewModel.markTimeAsTaken(
+                                                            medicine = medicine,
+                                                            time = time
+                                                        )
+                                                    }
+                                                ) {
+                                                    Text("Đã uống")
+                                                }
+                                            }
+                                        }
+                                    }
+                            
+
                             }
                         }
                     }
@@ -186,7 +303,10 @@ fun MedicationScreen(
                 resetForm()
             },
             title = {
-                Text(if (isEditing) "Sửa thông tin thuốc" else "Thêm thuốc")
+                Text(
+                    if (isEditing) "Sửa thông tin thuốc"
+                    else "Thêm thuốc"
+                )
             },
             text = {
                 Column(
@@ -216,12 +336,17 @@ fun MedicationScreen(
                     OutlinedButton(
                         onClick = {
                             val calendar = Calendar.getInstance()
+
                             TimePickerDialog(
                                 context,
                                 { _, hour, minute ->
                                     val selectedTime = String.format(
-                                        Locale.US, "%02d:%02d", hour, minute
+                                        Locale.US,
+                                        "%02d:%02d",
+                                        hour,
+                                        minute
                                     )
+
                                     if (selectedTime !in reminderTimes) {
                                         reminderTimes =
                                             (reminderTimes + selectedTime).sorted()
@@ -234,7 +359,10 @@ fun MedicationScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null
+                        )
                         Spacer(Modifier.width(8.dp))
                         Text("Chọn giờ bằng đồng hồ")
                     }
@@ -248,12 +376,14 @@ fun MedicationScreen(
                         reminderTimes.forEach { time ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement =
+                                    Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    "🕒  $time",
+                                    "🕒 $time",
                                     modifier = Modifier.padding(vertical = 8.dp)
                                 )
+
                                 TextButton(
                                     onClick = {
                                         reminderTimes = reminderTimes - time
@@ -287,10 +417,12 @@ fun MedicationScreen(
                     onClick = {
                         val validTimes = reminderTimes.isNotEmpty() &&
                             reminderTimes.all {
-                                Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(it)
+                                Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
+                                    .matches(it)
                             }
 
-                        if (name.isNotBlank() &&
+                        if (
+                            name.isNotBlank() &&
                             dosage.isNotBlank() &&
                             validTimes
                         ) {
@@ -302,14 +434,18 @@ fun MedicationScreen(
                                     name = name,
                                     dosage = dosage,
                                     instruction = instruction,
-                                    reminderTimes = reminderTimes.distinct().sorted()
+                                    reminderTimes = reminderTimes
+                                        .distinct()
+                                        .sorted()
                                 )
                             } else {
                                 medicationViewModel.addMedicine(
                                     name = name,
                                     dosage = dosage,
                                     instruction = instruction,
-                                    reminderTimes = reminderTimes.distinct().sorted()
+                                    reminderTimes = reminderTimes
+                                        .distinct()
+                                        .sorted()
                                 )
                             }
 
