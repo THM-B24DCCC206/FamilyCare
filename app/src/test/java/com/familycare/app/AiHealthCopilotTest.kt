@@ -156,4 +156,48 @@ class AiHealthCopilotTest {
         assertEquals("https://maps.google.com/?q=10.7769,106.7009", fcmMap["mapsUrl"])
         assertTrue(fcmMap["title"]!!.contains("Bác Nam CẦN TRỢ GIÚP"))
     }
+
+    @Test
+    fun testSmartwatchTelemetryDataModel() {
+        val telemetry = SmartwatchTelemetry(
+            heartRate = 78,
+            systolicBp = 122,
+            diastolicBp = 79,
+            temperature = 36.8,
+            spO2 = 99,
+            steps = 5420,
+            batteryLevel = 90,
+            deviceName = "Apple Watch Ultra 2",
+            isRealTimeMeasuring = true
+        )
+
+        assertTrue(telemetry.isAvailable)
+        assertEquals(78, telemetry.heartRate)
+        assertEquals("Apple Watch Ultra 2", telemetry.deviceName)
+        assertEquals(5420, telemetry.steps)
+        assertTrue(telemetry.isRealTimeMeasuring)
+    }
+
+    @Test
+    fun testDashboardUiStateMemberSelection() {
+        val user1 = User(id = "u1", email = "u1@test.com", fullName = "Bác An")
+        val user2 = User(id = "u2", email = "u2@test.com", fullName = "Bà Hoa")
+
+        val state = com.familycare.app.presentation.dashboard.DashboardUiState(
+            familyMembers = listOf(user1, user2),
+            selectedMember = user1,
+            isMedicineTakenToday = false
+        )
+
+        assertEquals("u1", state.selectedMember?.id)
+        assertFalse(state.isMedicineTakenToday)
+
+        val updatedState = state.copy(
+            selectedMember = user2,
+            isMedicineTakenToday = true
+        )
+
+        assertEquals("u2", updatedState.selectedMember?.id)
+        assertTrue(updatedState.isMedicineTakenToday)
+    }
 }
