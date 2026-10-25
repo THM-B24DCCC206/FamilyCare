@@ -30,7 +30,8 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BiometricsScreen(
-    onNavigateToCameraPpg: () -> Unit
+    onNavigateToCameraPpg: () -> Unit,
+    onNavigateToSmartwatch: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val database = remember { AppDatabase.getInstance(context) }
@@ -124,6 +125,58 @@ fun BiometricsScreen(
                             Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Bắt đầu đo Camera")
+                        }
+                    }
+                }
+            }
+
+            // Card Kết nối Đồng hồ thông minh BLE
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.secondary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Watch,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Đồng Hồ Thông Minh (BLE)",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = "Lấy chỉ số nhịp tim, huyết áp trực tiếp qua Bluetooth",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Button(
+                            onClick = onNavigateToSmartwatch,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Text("Kết nối", fontSize = 11.sp)
                         }
                     }
                 }

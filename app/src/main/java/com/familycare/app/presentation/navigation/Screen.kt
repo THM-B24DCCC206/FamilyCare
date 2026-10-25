@@ -20,4 +20,5 @@ sealed class Screen(val route: String) {
     object PdfReport : Screen("pdf_report")             // [Thành viên 3] Xuất báo cáo PDF
     object EmergencyAlerts : Screen("emergency_alerts") // [Thành viên 2] Danh sách cảnh báo
     object SosPanic : Screen("sos_panic")               // [Thành viên 2] Màn hình nút SOS & Còi hú
+    object Smartwatch : Screen("smartwatch")           // Kết nối đồng hồ thông minh BLE
 }

@@ -159,13 +159,15 @@ fun AppNavHost() {
                     onNavigateToAi = { navController.navigate(Screen.AiAssistant.route) },
                     onNavigateToOcr = { navController.navigate(Screen.OcrPrescription.route) },
                     onNavigateToEmergency = { navController.navigate(Screen.EmergencyAlerts.route) },
-                    onNavigateToSos = { navController.navigate(Screen.SosPanic.route) }
+                    onNavigateToSos = { navController.navigate(Screen.SosPanic.route) },
+                    onNavigateToSmartwatch = { navController.navigate(Screen.Smartwatch.route) }
                 )
             }
 
             composable(Screen.Biometrics.route) {
                 BiometricsScreen(
-                    onNavigateToCameraPpg = { navController.navigate(Screen.CameraPpg.route) }
+                    onNavigateToCameraPpg = { navController.navigate(Screen.CameraPpg.route) },
+                    onNavigateToSmartwatch = { navController.navigate(Screen.Smartwatch.route) }
                 )
             }
 
@@ -216,6 +218,12 @@ fun AppNavHost() {
 
             composable(Screen.SosPanic.route) {
                 EmergencyScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.Smartwatch.route) {
+                com.familycare.app.presentation.smartwatch.SmartwatchScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

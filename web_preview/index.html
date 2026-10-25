@@ -648,6 +648,18 @@
                     </div>
                 </div>
 
+                <!-- Thẻ Đồng Hồ Thông Minh BLE -->
+                <div style="background:#E3F2FD; border:1px solid #BBDEFB; border-radius:14px; padding:12px 14px; margin-top:10px; display:flex; align-items:center; gap:12px; cursor:pointer;" onclick="switchTab('smartwatch')">
+                    <div style="width:36px; height:36px; border-radius:50%; background:#1976D2; color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px;">⌚</div>
+                    <div style="flex:1;">
+                        <div style="font-size:13px; font-weight:800; color:#0D47A1; display:flex; align-items:center; gap:6px;">
+                            Đồng Hồ Thông Minh BLE <span style="background:#C8E6C9; color:#1B5E20; font-size:9px; padding:2px 6px; border-radius:4px;">Bluetooth</span>
+                        </div>
+                        <div style="font-size:11px; color:#546E7A;">Đo & đồng bộ nhịp tim, huyết áp thời gian thực</div>
+                    </div>
+                    <span style="color:#1976D2; font-weight:800;">›</span>
+                </div>
+
                 <!-- Thẻ 3: Chỉ số sức khỏe mới nhất (Chuẩn Nhánh 1) -->
                 <div class="section-title-tv1">Chỉ số sức khỏe mới nhất</div>
                 <div class="vitals-card-tv1">
@@ -880,6 +892,89 @@
             </div>
 
             <!-- ======================================================== -->
+            <!-- 7. MÀN HÌNH ĐỒNG HỒ THÔNG MINH (BLE SMARTWATCH)         -->
+            <!-- ======================================================== -->
+            <div id="screen-smartwatch" class="screen-content">
+                <div class="app-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="cursor:pointer; font-size:18px;" onclick="switchTab('dashboard')">←</span>
+                        <h2>Đồng Hồ Thông Minh (BLE)</h2>
+                    </div>
+                    <button style="border:none; background:none; font-size:16px; cursor:pointer;" onclick="syncSmartwatchData()">🔄</button>
+                </div>
+
+                <!-- Card Trạng thái kết nối -->
+                <div style="background:#E8F5E9; border-radius:16px; padding:14px; margin-bottom:14px; border:1px solid #C8E6C9;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <div style="width:44px; height:44px; border-radius:50%; background:#2E7D32; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px;">⌚</div>
+                        <div style="flex:1;">
+                            <div style="font-weight:800; font-size:14px; color:#1B5E20;" id="swDeviceName">Apple Watch Ultra 2</div>
+                            <div style="font-size:11px; color:#388E3C;">Địa chỉ: E4:5F:01:99:A2:BC • Pin: 92% • Đã ghép đôi</div>
+                        </div>
+                        <span style="background:#2E7D32; color:#fff; font-size:10px; font-weight:800; padding:4px 8px; border-radius:8px;">ĐÃ KẾT NỐI</span>
+                    </div>
+                </div>
+
+                <!-- Lưới 4 chỉ số đo đạc trực tiếp -->
+                <div style="font-size:13px; font-weight:800; color:#333; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <span>Dữ liệu đo đạc trực tiếp (BLE)</span>
+                    <span style="font-size:10px; color:#2E7D32; font-weight:700;">● Cảm biến đang đo</span>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+                    <div style="background:#FFF0F5; border-radius:12px; padding:10px 12px;">
+                        <div style="font-size:11px; color:#666;">❤️ Nhịp tim</div>
+                        <div style="font-size:20px; font-weight:800; color:#C2185B;" id="swLiveHr">78 <span style="font-size:11px; font-weight:500;">BPM</span></div>
+                    </div>
+                    <div style="background:#E3F2FD; border-radius:12px; padding:10px 12px;">
+                        <div style="font-size:11px; color:#666;">🩺 Huyết áp</div>
+                        <div style="font-size:20px; font-weight:800; color:#1565C0;" id="swLiveBp">122/80 <span style="font-size:11px; font-weight:500;">mmHg</span></div>
+                    </div>
+                    <div style="background:#FFF3E0; border-radius:12px; padding:10px 12px;">
+                        <div style="font-size:11px; color:#666;">🌡️ Thân nhiệt</div>
+                        <div style="font-size:20px; font-weight:800; color:#E65100;" id="swLiveTemp">36.8 <span style="font-size:11px; font-weight:500;">°C</span></div>
+                    </div>
+                    <div style="background:#E0F2F1; border-radius:12px; padding:10px 12px;">
+                        <div style="font-size:11px; color:#666;">💧 Oxy máu SpO2</div>
+                        <div style="font-size:20px; font-weight:800; color:#00695C;" id="swLiveSpo2">98 <span style="font-size:11px; font-weight:500;">%</span></div>
+                    </div>
+                </div>
+
+                <button class="btn-action-full" style="background:#1976D2; color:#fff; height:44px; margin-bottom:10px;" onclick="syncSmartwatchData()">
+                    🔄 ĐỒNG BỘ NGAY VÀO APP
+                </button>
+                <div id="swSyncStatus" style="font-size:11px; color:#2E7D32; text-align:center; margin-bottom:14px; font-weight:600;">
+                    Tự động đồng bộ mỗi 15 giây qua Bluetooth Low Energy
+                </div>
+
+                <!-- Danh sách thiết bị BLE xung quanh -->
+                <div style="font-size:13px; font-weight:800; color:#333; margin-bottom:8px;">Thiết bị Bluetooth ở gần</div>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div style="background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-weight:700; font-size:13px;">Apple Watch Ultra 2</div>
+                            <div style="font-size:11px; color:#888;">E4:5F:01:99:A2:BC • -58 dBm</div>
+                        </div>
+                        <span style="color:#2E7D32; font-weight:800; font-size:12px;">Đang kết nối</span>
+                    </div>
+                    <div style="background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-weight:700; font-size:13px;">Garmin Forerunner 965</div>
+                            <div style="font-size:11px; color:#888;">C8:3D:D4:82:11:05 • -64 dBm</div>
+                        </div>
+                        <button style="background:#1976D2; color:#fff; border:none; border-radius:8px; padding:5px 10px; font-size:11px; font-weight:700; cursor:pointer;" onclick="connectWatch('Garmin Forerunner 965')">Kết nối</button>
+                    </div>
+                    <div style="background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-weight:700; font-size:13px;">Xiaomi Mi Smart Band 8</div>
+                            <div style="font-size:11px; color:#888;">F2:A1:09:44:8B:31 • -70 dBm</div>
+                        </div>
+                        <button style="background:#1976D2; color:#fff; border:none; border-radius:8px; padding:5px 10px; font-size:11px; font-weight:700; cursor:pointer;" onclick="connectWatch('Xiaomi Mi Smart Band 8')">Kết nối</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================================================== -->
             <!-- NÚT NỔI AI TRỢ LÝ Ở GÓC TRÁI (CHỈ CÒN LOGO)               -->
             <!-- ======================================================== -->
             <div id="aiFloatingBtn" class="ai-fab-btn" onclick="openAiChat()" title="Trợ lý AI FamilyCare">
@@ -933,7 +1028,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
         const fab = document.getElementById('aiFloatingBtn');
-        if (tab === 'chat' || tab === 'sos') {
+        if (tab === 'chat' || tab === 'sos' || tab === 'smartwatch') {
             if (fab) fab.style.display = 'none';
         } else {
             if (fab) fab.style.display = 'flex';
@@ -956,7 +1051,33 @@
             document.getElementById('btnTabProf').classList.add('active');
         } else if (tab === 'sos') {
             document.getElementById('screen-sos').classList.add('active');
+        } else if (tab === 'smartwatch') {
+            document.getElementById('screen-smartwatch').classList.add('active');
         }
+    }
+
+    function syncSmartwatchData() {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString();
+        const hr = Math.floor(74 + Math.random() * 8);
+        const sys = Math.floor(118 + Math.random() * 8);
+        const dia = Math.floor(78 + Math.random() * 6);
+        const temp = (36.6 + Math.random() * 0.4).toFixed(1);
+        const spo2 = Math.floor(97 + Math.random() * 3);
+
+        document.getElementById('swLiveHr').innerHTML = `${hr} <span style="font-size:11px; font-weight:500;">BPM</span>`;
+        document.getElementById('swLiveBp').innerHTML = `${sys}/${dia} <span style="font-size:11px; font-weight:500;">mmHg</span>`;
+        document.getElementById('swLiveTemp').innerHTML = `${temp} <span style="font-size:11px; font-weight:500;">°C</span>`;
+        document.getElementById('swLiveSpo2').innerHTML = `${spo2} <span style="font-size:11px; font-weight:500;">%</span>`;
+
+        document.getElementById('swSyncStatus').innerText = `✅ Đã lưu trực tiếp vào CSDL lúc ${timeStr}!`;
+        alert(`Đã đồng bộ thành công:\n• Nhịp tim: ${hr} BPM\n• Huyết áp: ${sys}/${dia} mmHg\n• Thân nhiệt: ${temp}°C\n• SpO2: ${spo2}%\nVào hệ thống FamilyCare qua Bluetooth BLE!`);
+    }
+
+    function connectWatch(name) {
+        document.getElementById('swDeviceName').innerText = name;
+        alert(`Đã kết nối Bluetooth Low Energy thành công tới: ${name}`);
+        syncSmartwatchData();
     }
 
     function startSos() {
