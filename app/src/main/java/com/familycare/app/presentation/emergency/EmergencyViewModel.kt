@@ -10,16 +10,17 @@ import com.familycare.app.data.repository.AlertRepositoryImpl
 import com.familycare.app.domain.model.Alert
 import com.familycare.app.domain.model.AlertLevel
 import com.familycare.app.domain.model.AlertType
+import com.familycare.app.domain.model.NearbyHospitalProvider
 import com.familycare.app.domain.repository.AlertRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 /**
- * ViewModel xử lý nghiệp vụ Nút bấm SOS 1-chạm & Điều phối còi hú, GPS và FCM Alert
+ * ViewModel xử lý nghiệp vụ Nút bấm SOS 1-chạm & Điều phối còi hú, GPS, FCM Alert,
+ * thông báo Chủ hộ gia đình và đề xuất bệnh viện lân cận.
  */
 class EmergencyViewModel(
     private val emergencyManager: EmergencyManager,
@@ -29,11 +30,37 @@ class EmergencyViewModel(
     private val _uiState = MutableStateFlow(EmergencyUiState())
     val uiState: StateFlow<EmergencyUiState> = _uiState.asStateFlow()
 
+    init {
+        loadInitialLocationAndHospitals()
+    }
+
+    private fun loadInitialLocationAndHospitals() {
+        viewModelScope.launch {
+            try {
+                val (lat, lng) = emergencyManager.getCurrentGpsLocation()
+                val address = emergencyManager.resolveAddress(lat, lng)
+                val hospitals = NearbyHospitalProvider.getNearbyHospitals(lat, lng)
+                _uiState.update {
+                    it.copy(
+                        currentLatitude = lat,
+                        currentLongitude = lng,
+                        currentAddress = address,
+                        nearbyHospitals = hospitals
+                    )
+                }
+            } catch (_: Exception) {
+                val defaultHospitals = NearbyHospitalProvider.getNearbyHospitals(10.7769, 106.7009)
+                _uiState.update { it.copy(nearbyHospitals = defaultHospitals) }
+            }
+        }
+    }
+
     /**
      * Kích hoạt toàn bộ quy trình khẩn cấp khi người dùng giữ nút SOS đủ 2 giây:
-     * 1. Bắt tọa độ GPS độ chính xác cao qua FusedLocationProviderClient.
+     * 1. Bắt tọa độ GPS độ chính xác cao qua FusedLocationProviderClient & phân giải địa chỉ.
      * 2. Phát âm thanh còi hú cực đại liên tục bằng MediaPlayer.
-     * 3. Đóng gói Payload thông báo FCM và lưu vào CSDL AlertRepository.
+     * 3. Gửi thông báo khẩn cấp đến Chủ gia đình và các thành viên.
+     * 4. Tính toán danh sách bệnh viện gần nhất hỗ trợ chuyển sang Google Maps.
      */
     fun triggerSos() {
         if (_uiState.value.sosStatus is SosStatus.LocatingAndActivating) return
@@ -42,19 +69,24 @@ class EmergencyViewModel(
 
         viewModelScope.launch {
             try {
-                // 1. Lấy tọa độ GPS tức thời
+                // 1. Lấy tọa độ GPS tức thời và giải mã địa chỉ chính xác
                 val (lat, lng) = emergencyManager.getCurrentGpsLocation()
+                val address = emergencyManager.resolveAddress(lat, lng)
+                val hospitals = NearbyHospitalProvider.getNearbyHospitals(lat, lng)
 
                 // 2. Kích hoạt còi hú âm lượng tối đa
                 emergencyManager.startSirenAlarm()
 
-                // 3. Đóng gói Payload FCM
+                // 3. Đóng gói Payload FCM có thông tin Chủ hộ và địa chỉ thực tế
                 val payload = emergencyManager.createEmergencyPayload(
                     userId = "user_demo_01",
                     userName = _uiState.value.targetUserName,
                     familyId = _uiState.value.familyId,
                     latitude = lat,
-                    longitude = lng
+                    longitude = lng,
+                    address = address,
+                    familyOwnerName = _uiState.value.familyOwnerName,
+                    familyOwnerPhone = _uiState.value.familyOwnerPhone
                 )
 
                 // 4. Lưu bản ghi cảnh báo đỏ vào CSDL cục bộ và phân phối tới gia đình
@@ -66,7 +98,7 @@ class EmergencyViewModel(
                     type = AlertType.SOS_EMERGENCY,
                     level = AlertLevel.CRITICAL,
                     title = "🚨 KHẨN CẤP: BÁO ĐỘNG SOS TỪ ${payload.userName}!",
-                    message = "Đã kích hoạt còi cứu hộ và gửi định vị vị trí: $lat, $lng",
+                    message = "Vị trí: $address ($lat, $lng). Đã báo cho Chủ hộ ${payload.familyOwnerName}.",
                     timestamp = payload.timestamp,
                     isRead = false,
                     latitude = lat,
@@ -80,7 +112,10 @@ class EmergencyViewModel(
                         sosStatus = SosStatus.Activated(payload),
                         isSirenPlaying = true,
                         currentLatitude = lat,
-                        currentLongitude = lng
+                        currentLongitude = lng,
+                        currentAddress = address,
+                        isOwnerNotified = true,
+                        nearbyHospitals = hospitals
                     )
                 }
 
@@ -108,7 +143,8 @@ class EmergencyViewModel(
         _uiState.update {
             it.copy(
                 sosStatus = SosStatus.Idle,
-                isSirenPlaying = false
+                isSirenPlaying = false,
+                isOwnerNotified = false
             )
         }
     }

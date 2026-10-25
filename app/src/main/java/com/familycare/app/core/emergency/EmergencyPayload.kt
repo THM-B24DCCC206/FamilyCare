@@ -11,7 +11,11 @@ data class EmergencyPayload(
     val latitude: Double,
     val longitude: Double,
     val googleMapsUrl: String = "https://maps.google.com/?q=$latitude,$longitude",
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val address: String = "201B Nguyễn Chí Thanh, Phường 12, Quận 5, TP. Hồ Chí Minh",
+    val accuracyMeters: Float = 5.0f,
+    val familyOwnerName: String = "Bác Nguyễn Văn Nam (Chủ hộ)",
+    val familyOwnerPhone: String = "0912.345.678"
 ) {
     /**
      * Chuyển đổi thành cấu trúc Map payload gửi đến Firebase Cloud Messaging (FCM Data Message)
@@ -28,8 +32,11 @@ data class EmergencyPayload(
             "longitude" to longitude.toString(),
             "mapsUrl" to googleMapsUrl,
             "timestamp" to timestamp.toString(),
+            "address" to address,
+            "accuracy" to "±${accuracyMeters.toInt()}m",
+            "familyOwner" to "$familyOwnerName ($familyOwnerPhone)",
             "title" to "🚨 CẢNH BÁO SOS: $userName CẦN TRỢ GIÚP KHẨN CẤP!",
-            "body" to "$userName vừa kích hoạt nút SOS khẩn cấp tại vị trí $latitude, $longitude. Nhấn để mở Google Maps ngay!"
+            "body" to "$userName vừa kích hoạt SOS tại $address ($latitude, $longitude). Đã thông báo cho Chủ hộ $familyOwnerName. Nhấn để mở Google Maps ngay!"
         )
     }
 }

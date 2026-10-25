@@ -518,18 +518,19 @@
         }
         .sos-circle:active { transform: scale(0.96); }
 
-        /* Nút nổi AI Chatbot ở góc phải ứng dụng */
+        /* Nút nổi AI Chatbot chỉ có Logo ở góc trái ứng dụng */
         .ai-fab-btn {
             position: absolute;
             bottom: 76px;
-            right: 14px;
+            left: 14px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
             background: linear-gradient(135deg, #1976D2 0%, #7B1FA2 100%);
             color: #fff;
-            padding: 8px 14px;
-            border-radius: 28px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            justify-content: center;
             box-shadow: 0 6px 18px rgba(25, 118, 210, 0.45);
             cursor: pointer;
             z-index: 100;
@@ -834,23 +835,55 @@
                     </div>
                 </div>
 
-                <div id="sosAlert" style="display:none;background:#FFDAD6;color:#410002;padding:14px;border-radius:16px;text-align:left;width:100%;">
-                    <strong>🚨 ĐÃ BÁO ĐỘNG KHẨN CẤP!</strong><br>
-                    • Tọa độ GPS: 10.7769, 106.7009<br>
-                    • Đang phát còi hú âm lượng tối đa<br>
-                    <button class="btn-action-full" style="background:#D32F2F;color:#fff;margin-top:10px;height:42px;" onclick="stopSos()">TẮT CÒI HÚ</button>
+                <div id="sosAlert" style="display:none;background:#FFDAD6;color:#410002;padding:14px;border-radius:16px;text-align:left;width:100%;margin-bottom:20px;">
+                    <strong style="color:#B71C1C;font-size:14px;">🚨 ĐÃ BÁO CHO CHỦ GIA ĐÌNH & CỨU HỘ!</strong><br>
+                    <div style="font-size:12px;margin:6px 0 10px 0;line-height:1.4;">
+                        <strong>• Chủ gia đình:</strong> Bác Nguyễn Văn Nam (Chủ hộ - 0912.345.678)<br>
+                        <strong>• Vị trí chính xác:</strong> 201B Nguyễn Chí Thanh, P.12, Q.5, TP.HCM (Tọa độ: 10.7769, 106.7009)<br>
+                        <strong>• Trạng thái:</strong> Đang phát còi hú âm lượng tối đa & đã gửi định vị GPS khẩn cấp.
+                    </div>
+
+                    <div style="display:flex;gap:8px;margin-bottom:12px;">
+                        <a href="https://maps.google.com/?q=10.7769,106.7009" target="_blank" style="flex:1;background:#1E88E5;color:#fff;padding:8px;border-radius:10px;text-align:center;text-decoration:none;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;gap:4px;">
+                            🗺️ Xem Google Maps
+                        </a>
+                        <a href="https://www.google.com/maps/search/?api=1&query=bệnh+viện+cấp+cứu+gần+nhất" target="_blank" style="flex:1;background:#fff;border:1px solid #1E88E5;color:#1E88E5;padding:8px;border-radius:10px;text-align:center;text-decoration:none;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;gap:4px;">
+                            🏥 Tìm BV gần nhất
+                        </a>
+                    </div>
+
+                    <strong style="font-size:13px;display:block;margin-bottom:6px;">🏥 Đề xuất bệnh viện ở gần:</strong>
+                    <div style="background:#fff;border-radius:10px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <div style="font-weight:800;font-size:12px;color:#111;">Bệnh viện Chợ Rẫy (Cấp cứu A9)</div>
+                            <div style="font-size:11px;color:#666;">201B Nguyễn Chí Thanh • Hotline: 028 3855 4137</div>
+                        </div>
+                        <a href="https://www.google.com/maps/dir/?api=1&destination=10.7578,106.6598" target="_blank" style="background:#E8F5E9;color:#2E7D32;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:800;text-decoration:none;">1.1 km ↗</a>
+                    </div>
+                    <div style="background:#fff;border-radius:10px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <div style="font-weight:800;font-size:12px;color:#111;">Bệnh viện ĐH Y Dược TP.HCM</div>
+                            <div style="font-size:11px;color:#666;">215 Hồng Bàng, Q.5 • Hotline: 028 3855 4269</div>
+                        </div>
+                        <a href="https://www.google.com/maps/dir/?api=1&destination=10.7554,106.6582" target="_blank" style="background:#E8F5E9;color:#2E7D32;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:800;text-decoration:none;">1.6 km ↗</a>
+                    </div>
+                    <div style="background:#fff;border-radius:10px;padding:8px 10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <div style="font-weight:800;font-size:12px;color:#111;">Bệnh viện Nhân dân 115</div>
+                            <div style="font-size:11px;color:#666;">527 Sư Vạn Hạnh, Q.10 • Hotline: 028 3865 2368</div>
+                        </div>
+                        <a href="https://www.google.com/maps/dir/?api=1&destination=10.7725,106.6667" target="_blank" style="background:#E8F5E9;color:#2E7D32;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:800;text-decoration:none;">2.3 km ↗</a>
+                    </div>
+
+                    <button class="btn-action-full" style="background:#D32F2F;color:#fff;height:40px;" onclick="stopSos()">TẮT CÒI HÚ CỨU HỘ</button>
                 </div>
             </div>
 
             <!-- ======================================================== -->
-            <!-- NÚT NỔI AI CHATBOT Ở GÓC PHẢI (FLOATING ACTION BUTTON)    -->
+            <!-- NÚT NỔI AI TRỢ LÝ Ở GÓC TRÁI (CHỈ CÒN LOGO)               -->
             <!-- ======================================================== -->
-            <div id="aiFloatingBtn" class="ai-fab-btn" onclick="openAiChat()">
+            <div id="aiFloatingBtn" class="ai-fab-btn" onclick="openAiChat()" title="Trợ lý AI FamilyCare">
                 <div class="ai-fab-icon">✨</div>
-                <div class="ai-fab-text">
-                    <span class="ai-fab-title">AI Chatbot</span>
-                    <span class="ai-fab-sub">Hỏi bác sĩ AI</span>
-                </div>
             </div>
 
             <!-- ======================================================== -->

@@ -79,48 +79,23 @@ fun AppNavHost() {
     Scaffold(
         floatingActionButton = {
             if (showAiFab) {
-                ExtendedFloatingActionButton(
+                FloatingActionButton(
                     onClick = { navController.navigate(Screen.AiAssistant.route) },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White,
                     elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    icon = {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = "AI Chatbot",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    },
-                    text = {
-                        Column {
-                            Text(
-                                text = "AI Chatbot",
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "Hỏi bác sĩ AI",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                )
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "Trợ lý AI",
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
             }
         },
-        floatingActionButtonPosition = FabPosition.End,
+        floatingActionButtonPosition = FabPosition.Start,
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {

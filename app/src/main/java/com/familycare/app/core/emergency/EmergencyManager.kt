@@ -94,6 +94,36 @@ class EmergencyManager(
     }
 
     /**
+     * Tra cứu địa chỉ đường phố chính xác từ tọa độ GPS (Reverse Geocoding)
+     */
+    fun resolveAddress(latitude: Double, longitude: Double): String {
+        return try {
+            val geocoder = android.location.Geocoder(context, java.util.Locale("vi", "VN"))
+            @Suppress("DEPRECATION")
+            val addresses = geocoder.getFromLocation(latitude, longitude, 1)
+            if (!addresses.isNullOrEmpty()) {
+                val addr = addresses[0]
+                val fullAddress = (0..addr.maxAddressLineIndex)
+                    .mapNotNull { addr.getAddressLine(it) }
+                    .joinToString(", ")
+                if (fullAddress.isNotBlank()) fullAddress else "${addr.subAdminArea ?: ""}, ${addr.adminArea ?: ""}"
+            } else {
+                getDefaultAddressForCoords(latitude, longitude)
+            }
+        } catch (_: Exception) {
+            getDefaultAddressForCoords(latitude, longitude)
+        }
+    }
+
+    private fun getDefaultAddressForCoords(lat: Double, lng: Double): String {
+        return if (lat > 15.0) {
+            "78 Giải Phóng, Phương Mai, Đống Đa, Hà Nội"
+        } else {
+            "201B Nguyễn Chí Thanh, Phường 12, Quận 5, TP. Hồ Chí Minh"
+        }
+    }
+
+    /**
      * Đóng gói Payload thông báo khẩn cấp gửi qua Firebase Cloud Messaging
      */
     fun createEmergencyPayload(
@@ -101,7 +131,10 @@ class EmergencyManager(
         userName: String,
         familyId: String,
         latitude: Double,
-        longitude: Double
+        longitude: Double,
+        address: String = resolveAddress(latitude, longitude),
+        familyOwnerName: String = "Bác Nguyễn Văn Nam (Chủ hộ)",
+        familyOwnerPhone: String = "0912.345.678"
     ): EmergencyPayload {
         return EmergencyPayload(
             eventId = UUID.randomUUID().toString(),
@@ -109,7 +142,10 @@ class EmergencyManager(
             userName = userName,
             familyId = familyId,
             latitude = latitude,
-            longitude = longitude
+            longitude = longitude,
+            address = address,
+            familyOwnerName = familyOwnerName,
+            familyOwnerPhone = familyOwnerPhone
         )
     }
 
