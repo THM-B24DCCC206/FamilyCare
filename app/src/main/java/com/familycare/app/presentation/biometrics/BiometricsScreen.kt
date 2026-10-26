@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -204,7 +205,7 @@ fun BiometricsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. Banner Đo Nhịp Tim Quang Học (PPG) dạng ngang gọn gàng (cao ~78dp)
+            // 1. Banner Đo Nhịp Tim Quang Học (PPG) dạng ngang gọn gàng (cao ~80dp)
             item {
                 Card(
                     colors = CardDefaults.cardColors(
@@ -213,7 +214,7 @@ fun BiometricsScreen(
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(78.dp)
+                        .height(80.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -224,11 +225,11 @@ fun BiometricsScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f, fill = false)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(42.dp)
                                     .clip(CircleShape)
                                     .background(Color(0xFFFFE4E6)),
                                 contentAlignment = Alignment.Center
@@ -241,13 +242,29 @@ fun BiometricsScreen(
                                 )
                             }
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "Đo nhịp tim (PPG)",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                            Column(
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "Đo nhịp tim (PPG)",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Đo nhanh qua Camera",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF64748B)
+                                )
+                            }
                         }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         Button(
                             onClick = onNavigateToCameraPpg,
                             shape = RoundedCornerShape(12.dp),
@@ -279,12 +296,12 @@ fun BiometricsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    // Nút Micro tròn to nổi bật màu xanh/tím với nhãn "🎙️ Nói để nhập"
+                    // Nút Micro tròn to nổi bật màu xanh dương với nhãn "🎙️ Nói để nhập"
                     Surface(
                         onClick = { startVoiceInput() },
                         shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFEEF2FF),
-                        border = BorderStroke(1.5.dp, Color(0xFF818CF8)),
+                        color = Color(0xFFEFF6FF), // Nền xanh dương siêu nhạt
+                        border = BorderStroke(1.dp, Color(0xFFBFDBFE)), // Viền mảnh
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -297,7 +314,7 @@ fun BiometricsScreen(
                                 modifier = Modifier
                                     .size(46.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF4F46E5)),
+                                    .background(Color(0xFF2563EB)), // Xanh dương chủ đạo
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -313,19 +330,21 @@ fun BiometricsScreen(
                                     text = "🎙️ Nói để nhập",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF312E81)
+                                    color = Color(0xFF1E40AF) // Tiêu đề xanh đậm
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "Đọc ví dụ: \"Huyết áp 120 trên 80 nhịp tim 75\"",
+                                    text = "Đọc: \"Huyết áp 120 trên 80, tim 75\"",
                                     fontSize = 12.sp,
-                                    color = Color(0xFF4338CA)
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = Color(0xFF2563EB)
                                 )
                             }
                             Icon(
                                 imageVector = Icons.Default.ChevronRight,
                                 contentDescription = null,
-                                tint = Color(0xFF6366F1)
+                                tint = Color(0xFF3B82F6)
                             )
                         }
                     }
@@ -417,10 +436,11 @@ fun BiometricsScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     // Thanh lọc danh sách lịch sử
-                    Row(
+                    LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
+                            .padding(horizontal = (-16).dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val filterList = listOf(
@@ -430,7 +450,7 @@ fun BiometricsScreen(
                             MetricType.BLOOD_SUGAR.name to "🩸 Đường huyết",
                             MetricType.TEMPERATURE.name to "🌡️ Nhiệt độ"
                         )
-                        filterList.forEach { (typeKey, label) ->
+                        items(filterList, key = { it.first }) { (typeKey, label) ->
                             val isSelected = historyFilter == typeKey
                             FilterChip(
                                 selected = isSelected,
