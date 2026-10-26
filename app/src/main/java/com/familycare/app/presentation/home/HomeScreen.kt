@@ -72,8 +72,9 @@ fun HomeScreen(
                         )
                         Text(
                             text = if (sessionManager.hasFamily) "Tổ ấm: ${sessionManager.familyName}" else "Không gian gia đình thông minh",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569)
                         )
                     }
                 },
@@ -337,13 +338,13 @@ fun HomeScreen(
                                         modifier = Modifier
                                             .size(36.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFFFFE4E6)),
+                                            .background(Color(0xFFFEE2E2)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Favorite,
-                                            contentDescription = null,
-                                            tint = Color(0xFFE11D48),
+                                            imageVector = Icons.Default.WaterDrop,
+                                            contentDescription = "Huyết áp",
+                                            tint = Color(0xFFDC2626),
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -394,7 +395,7 @@ fun HomeScreen(
                                     )
                                 } else {
                                     Text(
-                                        text = "0/0",
+                                        text = "--/--",
                                         style = MaterialTheme.typography.titleLarge,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -427,13 +428,13 @@ fun HomeScreen(
                                         modifier = Modifier
                                             .size(36.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFFE0F2FE)),
+                                            .background(Color(0xFFFFE4E6)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Timeline,
-                                            contentDescription = null,
-                                            tint = Color(0xFF0284C7),
+                                            imageVector = Icons.Default.Favorite,
+                                            contentDescription = "Nhịp tim",
+                                            tint = Color(0xFFE11D48),
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -483,7 +484,7 @@ fun HomeScreen(
                                     )
                                 } else {
                                     Text(
-                                        text = "0",
+                                        text = "--",
                                         style = MaterialTheme.typography.titleLarge,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)

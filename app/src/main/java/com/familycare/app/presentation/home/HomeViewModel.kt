@@ -187,7 +187,7 @@ class HomeViewModel(
             heartRateBpm = hr,
             bloodPressureSystolic = systolic,
             bloodPressureDiastolic = diastolic,
-            isHeartRateWarning = isBpWarning,
+            isHeartRateWarning = isHrWarning,
             isBloodPressureWarning = isBpWarning,
             bloodSugar = sugarEntity?.valuePrimary,
             temperature = tempEntity?.valuePrimary,

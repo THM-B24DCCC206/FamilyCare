@@ -26,7 +26,7 @@ data class VitalSummary(
     val temperature: Double? = null,
     val lastUpdated: Long = System.currentTimeMillis()
 ) {
-    val hasMeasuredBp: Boolean get() = (bloodPressureSystolic ?: 0) > 0
+    val hasMeasuredBp: Boolean get() = (bloodPressureSystolic ?: 0) > 0 && (bloodPressureDiastolic ?: 0) > 0
     val hasMeasuredHr: Boolean get() = (heartRateBpm ?: 0) > 0
 }
 
