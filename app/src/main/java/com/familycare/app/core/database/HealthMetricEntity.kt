@@ -32,6 +32,8 @@ data class HealthMetricEntity(
         )
     }
 
+    fun toDomainModel(): HealthMetric = toDomain()
+
     companion object {
         fun fromDomain(model: HealthMetric): HealthMetricEntity {
             return HealthMetricEntity(
@@ -46,5 +48,7 @@ data class HealthMetricEntity(
                 isFromCameraPpg = model.isFromCameraPpg
             )
         }
+
+        fun fromDomainModel(domain: HealthMetric): HealthMetricEntity = fromDomain(domain)
     }
 }

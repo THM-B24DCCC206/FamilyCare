@@ -18,7 +18,7 @@ data class AlertEntity(
     val title: String,
     val message: String,
     val timestamp: Long,
-    val isRead: Boolean,
+    val isRead: Boolean = false,
     val latitude: Double? = null,
     val longitude: Double? = null
 ) {
@@ -39,6 +39,8 @@ data class AlertEntity(
         )
     }
 
+    fun toDomainModel(): Alert = toDomain()
+
     companion object {
         fun fromDomain(model: Alert): AlertEntity {
             return AlertEntity(
@@ -56,5 +58,7 @@ data class AlertEntity(
                 longitude = model.longitude
             )
         }
+
+        fun fromDomainModel(alert: Alert): AlertEntity = fromDomain(alert)
     }
 }

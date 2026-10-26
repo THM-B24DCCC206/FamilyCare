@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -47,6 +48,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
@@ -61,8 +64,9 @@ dependencies {
     implementation(libs.google.generativeai)
     implementation(libs.play.services.mlkit.text.recognition)
 
-    // Location
+    // Location & Auth
     implementation(libs.play.services.location)
+    implementation(libs.play.services.auth)
 
     // JSON
     implementation(libs.gson)

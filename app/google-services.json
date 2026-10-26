@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "129696848056",
+    "project_id": "familycare-b1d6d",
+    "storage_bucket": "familycare-b1d6d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:129696848056:android:87ed75344369fd51123c4d",
+        "android_client_info": {
+          "package_name": "com.familycare.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "129696848056-osam35nlgiipdigeemdvovg2jsnrnf85.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.familycare.app",
+            "certificate_hash": "8e03873ccd46d7a6516c92322b93f7fe433c6ee1"
+          }
+        },
+        {
+          "client_id": "129696848056-jvhpo503nh309tuivpr7nlj5r4e37ng8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDxaSPuaU7ro0LYkBI9_rQ5DjwMKuTVAeg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "129696848056-jvhpo503nh309tuivpr7nlj5r4e37ng8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

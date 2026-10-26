@@ -148,37 +148,52 @@ Dự án tuân thủ nghiêm ngặt 3 tầng độc lập:
   * `feature/auth`
   * `feature/family`
   * `feature/biometrics` (Bao gồm camera PPG analyzer)
-* **Kịch bản trả lời khi bảo vệ:**
+* **Kịch bản trả lời khi bảo vệ trước Hội đồng:**
   * Trình bày kiến trúc Clean Architecture, cách DI hoạt động với Hilt.
   * Giải thích chi tiết nguyên lý quang học PPG và cách xử lý luồng ảnh thời gian thực 30 FPS không gây lag giao diện bằng Coroutines.
 
 ---
 
 ### 👤 THÀNH VIÊN 2: AI Generative, Hệ thống & Cảnh báo (AI & Emergency Specialist)
-* **Vai trò:** Chịu trách nhiệm về giao diện tổng quan, quản lý hồ sơ, tích hợp Trợ lý AI Gemini, thuật toán cảnh báo dữ liệu và hệ thống phản ứng nhanh SOS.
+* **Vai trò:** Chịu trách nhiệm về giao diện tổng quan, quản lý hồ sơ bệnh án, tích hợp Trợ lý AI Gemini, thuật toán cảnh báo dữ liệu thông minh và hệ thống phản ứng nhanh SOS.
+* **Tình trạng hoàn thiện:** ✅ **100% ĐÃ HOÀN TẤT & ĐÃ QUA TOÀN BỘ UNIT TEST**
 * **Các màn hình & thành phần phụ trách:**
-  1. **Home Dashboard Screen:** Màn hình Trang chủ tổng quan (Thanh avatar chọn thành viên, thẻ tóm tắt sức khỏe, danh sách cảnh báo).
-  2. **Profile Screen:** Màn hình xem và chỉnh sửa hồ sơ y tế thành viên (nhóm máu, tiền sử bệnh nền, danh mục dị ứng).
+  1. **Home Dashboard Screen (`presentation/dashboard`):** Màn hình Trang chủ tổng quan chuẩn Material Design 3 (Nền sáng `#F8F9FA`, Medical Blue `#1976D2`, nút to $\ge 56$dp); gồm thanh Member Switcher chuyển đổi thành viên, thẻ cảnh báo đỏ vượt ngưỡng, thẻ tóm tắt huyết áp/nhịp tim và lịch thuốc trong ngày. (`DashboardScreen.kt`, `DashboardViewModel.kt`).
+  2. **Profile Screen (`presentation/profile`):** Màn hình xem và **chỉnh sửa trực tiếp** hồ sơ y tế bệnh nhân (nhóm máu, ngày sinh, tiền sử bệnh nền, danh mục dị ứng thuốc); tích hợp lưu trữ Room Database (`UserDao`) và tự động đồng bộ sang Context Injection của AI Copilot. (`ProfileScreen.kt`, `ProfileViewModel.kt`).
   3. ⭐ **Module đinh 1 (Trí tuệ nhân tạo Generative AI): Trợ lý Ảo Sức khỏe (AI Health Copilot):**
      * Thiết kế màn hình Chatbot tư vấn sức khỏe bằng Jetpack Compose.
      * Tích hợp **Google AI Client SDK (Gemini 1.5 Flash)**.
      * Viết kỹ thuật Prompt Engineering với Context Injection: Tự động đính kèm thông tin bệnh nền và chỉ số đo gần nhất vào prompt để Gemini giải thích chỉ số và tư vấn cách dùng thuốc an toàn.
+     * Tích hợp nút Micro thu âm giọng nói tự nhiên (**Voice-to-Text**) qua `SpeechRecognizer` (`vi-VN`) và StateFlow quản lý 4 trạng thái (`Idle`, `Loading`, `Success`, `Error`).
+     * Tệp mã nguồn: `AiAssistantScreen.kt`, `AiAssistantViewModel.kt`, `HealthAiRepositoryImpl.kt`, `UserHealthContext.kt`, `SendChatMessageUseCase.kt`, `GetHealthContextUseCase.kt`.
   4. ⭐ **Module đinh 2 (Thuật toán): Smart Alert Rule Engine:**
-     * Xây dựng UseCase phân tích lịch sử đo: Phát hiện ngưỡng nguy hiểm theo độ tuổi.
-     * Thuật toán phát hiện chuỗi **3 lần đo liên tiếp vượt ngưỡng** trong 48 giờ; sinh cảnh báo đỏ và ngăn chặn spam cảnh báo trùng lặp.
+     * Xây dựng `AnalyzeThresholdUseCase` phân tích lịch sử đo sinh tồn trong cửa sổ 48 giờ gần nhất theo ngưỡng an toàn cá nhân hóa (`HealthThreshold`).
+     * Thuật toán phát hiện chuỗi **3 lần đo liên tiếp vượt ngưỡng** trong 48 giờ; sinh cảnh báo đỏ và cơ chế Debounce 6 giờ chống spam lặp (`DEFAULT_DEBOUNCE_WINDOW_MS`).
+     * Màn hình Trung Tâm Cảnh Báo (`AlertListScreen.kt`, `AlertViewModel.kt`): Quản lý danh sách cảnh báo, bộ lọc theo mức độ (`CRITICAL`, `WARNING`), đánh dấu đã xem, xem định vị Google Maps.
+     * Tệp mã nguồn: `AnalyzeThresholdUseCase.kt`, `HealthThreshold.kt`, `ThresholdAnalysisResult.kt`, `Alert.kt`, `AlertDao.kt`, `AlertRepositoryImpl.kt`, `AlertListScreen.kt`, `AlertViewModel.kt`.
   5. ⭐ **Module đinh 3 (Hệ thống): SOS Panic System & Real-time Notification:**
-     * Thiết kế nút bấm SOS chống bấm nhầm (Hold to activate).
+     * Thiết kế nút bấm SOS chống bấm nhầm (`SosButton.kt`): Cơ chế nhấn giữ liên tục trong **2 giây** với vòng tiến trình tròn SVG; nhả tay trước 2s sẽ tự hủy tiến trình về 0.
      * Tích hợp `FusedLocationProviderClient` bắt tọa độ GPS tức thời.
-     * Tích hợp Firebase Cloud Messaging (FCM) gửi thông báo đẩy khẩn cấp kèm âm thanh còi hú đến thiết bị của người giám sát.
+     * Tích hợp hệ thống còi hú cứu hộ cực đại bằng `MediaPlayer` & `AudioManager.STREAM_ALARM`, kết hợp rung khẩn cấp và `EmergencyNotificationHelper` phát Heads-up Notification khẩn cấp kèm link Google Maps.
+     * Tệp mã nguồn: `SosButton.kt`, `EmergencyManager.kt`, `EmergencyViewModel.kt`, `EmergencyScreen.kt`, `EmergencyPayload.kt`, `EmergencyNotificationHelper.kt`.
 * **Package sở hữu chính:**
-  * `feature/dashboard`
-  * `feature/profile`
-  * `feature/ai_assistant` (Bao gồm Gemini SDK Client & Chat UI)
-  * `feature/alert`
-  * `feature/emergency` (Bao gồm GPS client & FCM Service)
-* **Kịch bản trả lời khi bảo vệ:**
-  * Giải thích cách tích hợp Google AI Client SDK, cách thiết kế prompt truyền context hồ sơ bệnh nhân để AI trả lời cá nhân hóa.
-  * Phân tích cơ chế định vị GPS nền, xử lý push notification khẩn cấp qua FCM và thuật toán phát hiện chuỗi đo vượt ngưỡng.
+  * `presentation/dashboard` (Bao gồm Member Switcher & Dashboard UI)
+  * `presentation/profile` (Bao gồm Profile View & Edit Room DB)
+  * `presentation/ai_assistant` (Bao gồm Gemini 1.5 Flash SDK & Voice-to-Text)
+  * `presentation/alert` (Bao gồm AlertListScreen & AlertViewModel)
+  * `presentation/emergency` & `core/emergency` (Bao gồm SosButton, EmergencyManager, GPS & Siren)
+  * `core/network` (EmergencyNotificationHelper)
+  * `domain/usecase` (`AnalyzeThresholdUseCase`, `SendChatMessageUseCase`, `GetHealthContextUseCase`)
+* **Kịch bản trả lời khi bảo vệ trước Hội đồng:**
+  * *Câu hỏi 1:* "Tại sao chọn Gemini 1.5 Flash mà không phải model khác?"  
+    $\rightarrow$ *Trả lời:* Gemini 1.5 Flash có tốc độ phản hồi cực nhanh (low latency), chi phí tối ưu, cửa sổ ngữ cảnh lớn và hỗ trợ tiếng Việt rất tự nhiên; đặt `temperature = 0.3f` để phản hồi y tế chuẩn xác, không bị bịa thông tin.
+  * *Câu hỏi 2:* "Cơ chế Context Injection hoạt động thế nào để tránh lộ lọt dữ liệu?"  
+    $\rightarrow$ *Trả lời:* Dữ liệu bệnh án (tuổi, tiền sử, dị ứng, huyết áp đo gần nhất) được truy vấn on-device từ Room Database ngay trước khi gửi tin nhắn, tiêm trực tiếp vào `systemInstruction` của session đó chứ không lưu trữ trên máy chủ công cộng nào khác.
+  * *Câu hỏi 3:* "Thuật toán phát hiện chuỗi đo vượt ngưỡng xử lý thế nào khi người dùng đo nhiều lần?"  
+    $\rightarrow$ *Trả lời:* Sử dụng cửa sổ trượt 48 giờ (`TIME_WINDOW_48_HOURS_MS`), kiểm tra tính liên tiếp từ lần đo gần nhất; nếu có một lần đo an toàn xen vào thì chuỗi lập tức bị ngắt. Đồng thời có cơ chế Debounce 6 giờ (`DEFAULT_DEBOUNCE_WINDOW_MS`) để không gửi cảnh báo trùng lặp gây phiền toái.
+  * *Câu hỏi 4:* "Làm sao đảm bảo nút SOS không bị bấm nhầm khi người già bỏ máy trong túi quần?"  
+    $\rightarrow$ *Trả lời:* Sử dụng cử chỉ `detectTapGestures(onPress = ...)` kết hợp `Animatable` yêu cầu nhấn giữ liên tục trọn vẹn 2000ms; chỉ cần ngón tay rời màn hình ở mốc 1.9s thì tiến trình bị hủy và reset về 0 ngay lập tức. Còi hú sử dụng stream `STREAM_ALARM` để phát được âm lượng tối đa kể cả khi máy đang để chế độ im lặng.
+
 
 ---
 
@@ -201,7 +216,7 @@ Dự án tuân thủ nghiêm ngặt 3 tầng độc lập:
   * `feature/alarm` (Bao gồm AlarmReceiver & Fullscreen Alert Activity)
   * `feature/appointments`
   * `feature/report` (Bao gồm PDF Generator)
-* **Kịch bản trả lời khi bảo vệ:**
+* **Kịch bản trả lời khi bảo vệ trước Hội đồng:**
   * Trình bày cách tích hợp Google ML Kit và xử lý trích xuất văn bản trên thiết bị.
   * Giải thích cơ chế hoạt động của `AlarmManager` trên Android 13/14 và cách bypass chế độ tiết kiệm pin Doze Mode để báo thức nổ đúng giờ.
   * Trình bày cách vẽ giao diện văn bản và đồ thị trên trang PDF Canvas.
