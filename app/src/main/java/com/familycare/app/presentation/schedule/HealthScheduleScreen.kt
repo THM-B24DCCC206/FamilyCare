@@ -259,7 +259,9 @@ fun MemberSwitcherRow(
 }
 
 /**
- * Thanh tab gạt kép (Sub-tabs / Segmented Bar)
+ * Thanh tab gạt pill-tab bo tròn liền khối có nền xám nhạt #F1F5F9.
+ * Tab được chọn nổi nền trắng rõ ràng với bóng đổ nhẹ 3dp và text/icon xanh #2563EB,
+ * tách biệt hoàn toàn với 2 nút bấm hành động bên dưới.
  */
 @Composable
 fun DualSegmentedBar(
@@ -269,27 +271,30 @@ fun DualSegmentedBar(
     onTabSelect: (HealthScheduleTab) -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(24.dp),
         color = Color(0xFFF1F5F9),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(46.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp),
+                .padding(3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Tab 1: [ 💊 Lịch Thuốc (X) ]
             val isMedication = selectedTab == HealthScheduleTab.MEDICATION
             Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = if (isMedication) Color(0xFF2563EB) else Color.Transparent,
-                shadowElevation = if (isMedication) 2.dp else 0.dp,
+                shape = RoundedCornerShape(20.dp),
+                color = if (isMedication) Color.White else Color.Transparent,
+                shadowElevation = if (isMedication) 3.dp else 0.dp,
+                border = if (isMedication) BorderStroke(0.5.dp, Color(0xFFE2E8F0)) else null,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .clip(RoundedCornerShape(20.dp))
                     .clickable { onTabSelect(HealthScheduleTab.MEDICATION) }
             ) {
                 Row(
@@ -300,7 +305,7 @@ fun DualSegmentedBar(
                     Icon(
                         imageVector = Icons.Default.Medication,
                         contentDescription = null,
-                        tint = if (isMedication) Color.White else Color(0xFF64748B),
+                        tint = if (isMedication) Color(0xFF2563EB) else Color(0xFF64748B),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -308,7 +313,7 @@ fun DualSegmentedBar(
                         text = "Lịch Thuốc ($medicineCount)",
                         fontSize = 13.sp,
                         fontWeight = if (isMedication) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isMedication) Color.White else Color(0xFF475569)
+                        color = if (isMedication) Color(0xFF2563EB) else Color(0xFF64748B)
                     )
                 }
             }
@@ -318,12 +323,14 @@ fun DualSegmentedBar(
             // Tab 2: [ 🩺 Lịch Khám Bệnh (Y) ]
             val isAppointment = selectedTab == HealthScheduleTab.APPOINTMENT
             Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = if (isAppointment) Color(0xFF2563EB) else Color.Transparent,
-                shadowElevation = if (isAppointment) 2.dp else 0.dp,
+                shape = RoundedCornerShape(20.dp),
+                color = if (isAppointment) Color.White else Color.Transparent,
+                shadowElevation = if (isAppointment) 3.dp else 0.dp,
+                border = if (isAppointment) BorderStroke(0.5.dp, Color(0xFFE2E8F0)) else null,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .clip(RoundedCornerShape(20.dp))
                     .clickable { onTabSelect(HealthScheduleTab.APPOINTMENT) }
             ) {
                 Row(
@@ -334,7 +341,7 @@ fun DualSegmentedBar(
                     Icon(
                         imageVector = Icons.Default.EventNote,
                         contentDescription = null,
-                        tint = if (isAppointment) Color.White else Color(0xFF64748B),
+                        tint = if (isAppointment) Color(0xFF2563EB) else Color(0xFF64748B),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -342,7 +349,7 @@ fun DualSegmentedBar(
                         text = "Lịch Khám ($appointmentCount)",
                         fontSize = 13.sp,
                         fontWeight = if (isAppointment) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isAppointment) Color.White else Color(0xFF475569)
+                        color = if (isAppointment) Color(0xFF2563EB) else Color(0xFF64748B)
                     )
                 }
             }

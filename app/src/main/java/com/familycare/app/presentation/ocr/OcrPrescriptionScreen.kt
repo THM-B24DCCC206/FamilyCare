@@ -1,10 +1,7 @@
 package com.familycare.app.presentation.ocr
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
@@ -12,16 +9,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -31,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -39,81 +37,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.familycare.app.core.common.SessionManager
-import com.familycare.app.core.database.AppDatabase
-import com.familycare.app.core.database.MedicationLogEntity
-import com.familycare.app.core.database.MedicineEntity
-import com.familycare.app.data.repository.HealthAiRepositoryImpl
-import com.familycare.app.presentation.medication.MedicationAlarmScheduler
-import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.generationConfig
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
-import java.text.Normalizer
-import java.text.SimpleDateFormat
-import java.util.*
 
-private const val TAG = "ScanPrescriptionAI"
-
-/**
- * Model biểu diễn thuốc sau khi được AI bóc tách & chuẩn hóa
- */
-data class ScannedMedicineItem(
-    val id: String = UUID.randomUUID().toString(),
-    var isSelected: Boolean = true,
-    var medicineName: String = "",
-    var dosage: String = "",
-    var unit: String = "viên",
-    val times: MutableList<String> = mutableListOf("08:00"),
-    var note: String = ""
-)
+private const val TAG = "ScanPrescriptionScreen"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OcrPrescriptionScreen(
     memberId: String = "",
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: ScanPrescriptionViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val sessionManager = remember { SessionManager(context) }
-    val database = remember { AppDatabase.getInstance(context) }
-    val alarmScheduler = remember { MedicationAlarmScheduler(context) }
-
     val targetMemberId = memberId.ifBlank { sessionManager.userId.ifBlank { "user_me" } }
 
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    val uiState by viewModel.uiState.collectAsState()
+
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
-
-    val previewBitmap: Bitmap? = remember(selectedImageUri) {
-        selectedImageUri?.let { uri ->
-            try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)
-                }
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
-
-    var isAnalyzing by remember { mutableStateOf(false) }
-    var analysisStepText by remember { mutableStateOf("") }
-    var errorMessage by remember { mutableStateOf("") }
-
-    val scannedItems = remember { mutableStateListOf<ScannedMedicineItem>() }
     var showManualAddDialog by remember { mutableStateOf(false) }
 
-    // Xử lý tạo Uri tạm cho Camera
     fun createTempCameraUri(): Uri {
         val cacheFile = File.createTempFile("rx_${System.currentTimeMillis()}", ".jpg", context.cacheDir)
         return FileProvider.getUriForFile(
@@ -123,63 +68,12 @@ fun OcrPrescriptionScreen(
         )
     }
 
-    // Tiến hành OCR và phân tích bằng Gemini AI (kèm fallback từ điển dược phẩm)
-    fun processImageUri(uri: Uri) {
-        selectedImageUri = uri
-        isAnalyzing = true
-        errorMessage = ""
-        analysisStepText = "Đang quét văn bản OCR từ hình ảnh..."
-
-        coroutineScope.launch {
-            try {
-                // 1. Quét văn bản bằng Google ML Kit
-                val inputImage = InputImage.fromFilePath(context, uri)
-                val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-
-                recognizer.process(inputImage)
-                    .addOnSuccessListener { visionText ->
-                        val rawText = visionText.text
-                        if (rawText.isBlank()) {
-                            isAnalyzing = false
-                            errorMessage = "Không tìm thấy văn bản trong ảnh. Vui lòng chụp rõ nét hơn hoặc chọn ảnh khác."
-                            return@addOnSuccessListener
-                        }
-
-                        // 2. Chuyển sang bước Gemini AI bóc tách & chuẩn hóa
-                        analysisStepText = "AI đang đọc và chuẩn hóa tên đơn thuốc..."
-                        coroutineScope.launch {
-                            val items = parsePrescriptionWithAiOrFallback(rawText)
-                            isAnalyzing = false
-                            if (items.isEmpty()) {
-                                errorMessage = "Chưa tách được danh mục thuốc tự động. Bạn có thể thêm thủ công bên dưới."
-                            } else {
-                                scannedItems.clear()
-                                scannedItems.addAll(items)
-                            }
-                        }
-                    }
-                    .addOnFailureListener { e ->
-                        isAnalyzing = false
-                        Log.e(TAG, "Lỗi nhận diện văn bản OCR", e)
-                        errorMessage = "Không thể nhận diện hình ảnh: ${e.localizedMessage ?: "Lỗi không xác định"}"
-                    }
-                    .addOnCompleteListener {
-                        recognizer.close()
-                    }
-            } catch (e: Exception) {
-                isAnalyzing = false
-                Log.e(TAG, "Lỗi mở file ảnh", e)
-                errorMessage = "Không thể đọc tệp ảnh: ${e.localizedMessage ?: "Vui lòng thử lại"}"
-            }
-        }
-    }
-
     // Launcher chụp ảnh từ Camera
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && tempCameraUri != null) {
-            processImageUri(tempCameraUri!!)
+            viewModel.processImage(context, tempCameraUri!!)
         } else {
             Log.d(TAG, "Hủy chụp ảnh bằng camera")
         }
@@ -203,7 +97,7 @@ fun OcrPrescriptionScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            processImageUri(uri)
+            viewModel.processImage(context, uri)
         }
     }
 
@@ -234,7 +128,7 @@ fun OcrPrescriptionScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // 2 NGUỒN NHẬP ẢNH TRỰC QUAN
             Row(
@@ -264,13 +158,13 @@ fun OcrPrescriptionScreen(
                     ),
                     modifier = Modifier
                         .weight(1f)
-                        .height(50.dp),
-                    enabled = !isAnalyzing
+                        .height(48.dp),
+                    enabled = !uiState.isAnalyzing && !uiState.isSaving
                 ) {
                     Icon(
                         imageVector = Icons.Default.CameraAlt,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(text = "Chụp ảnh", fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -278,9 +172,7 @@ fun OcrPrescriptionScreen(
 
                 // 2. Chọn ảnh từ Thư viện
                 FilledTonalButton(
-                    onClick = {
-                        pickGalleryLauncher.launch("image/*")
-                    },
+                    onClick = { pickGalleryLauncher.launch("image/*") },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = Color(0xFFEFF6FF),
@@ -288,49 +180,49 @@ fun OcrPrescriptionScreen(
                     ),
                     modifier = Modifier
                         .weight(1f)
-                        .height(50.dp),
-                    enabled = !isAnalyzing
+                        .height(48.dp),
+                    enabled = !uiState.isAnalyzing && !uiState.isSaving
                 ) {
                     Icon(
                         imageVector = Icons.Default.PhotoLibrary,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "Chọn từ thư viện", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(text = "Thư viện", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
             // Thumbnail xem trước ảnh đã chụp/chọn
-            if (selectedImageUri != null) {
+            if (uiState.selectedImageUri != null) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = Color(0xFFF8FAFC),
                     border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(72.dp)
+                        .height(68.dp)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (previewBitmap != null) {
+                        if (uiState.previewBitmap != null) {
                             Image(
-                                bitmap = previewBitmap.asImageBitmap(),
+                                bitmap = uiState.previewBitmap!!.asImageBitmap(),
                                 contentDescription = "Ảnh đơn thuốc",
                                 modifier = Modifier
-                                    .size(56.dp)
+                                    .size(54.dp)
                                     .clip(RoundedCornerShape(8.dp)),
                                 contentScale = ContentScale.Crop
                             )
                         } else {
                             Box(
                                 modifier = Modifier
-                                    .size(56.dp)
+                                    .size(54.dp)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(Color(0xFFE2E8F0)),
                                 contentAlignment = Alignment.Center
@@ -338,20 +230,23 @@ fun OcrPrescriptionScreen(
                                 Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF64748B))
                             }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Đã tải ảnh đơn thuốc",
+                                text = "Ảnh đơn thuốc đã tải",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF1E293B)
                             )
                             Text(
-                                text = "Chạm nút phía trên để chụp hoặc chọn lại",
+                                text = "Chạm nút trên để chụp lại nếu ảnh mờ",
                                 fontSize = 11.sp,
                                 color = Color(0xFF64748B)
                             )
                         }
+
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
@@ -362,9 +257,9 @@ fun OcrPrescriptionScreen(
                 }
             }
 
-            // MÀN HÌNH / KHỐI LOADING
-            if (isAnalyzing) {
-                Spacer(modifier = Modifier.height(20.dp))
+            // KHỐI LOADING KHI AI ĐANG ĐỌC & CHUẨN HÓA
+            if (uiState.isAnalyzing) {
+                Spacer(modifier = Modifier.height(18.dp))
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
@@ -380,7 +275,7 @@ fun OcrPrescriptionScreen(
                         CircularProgressIndicator(
                             color = Color(0xFF2563EB),
                             strokeWidth = 3.dp,
-                            modifier = Modifier.size(42.dp)
+                            modifier = Modifier.size(40.dp)
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
@@ -391,7 +286,7 @@ fun OcrPrescriptionScreen(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = analysisStepText,
+                            text = uiState.analysisStepText,
                             fontSize = 12.sp,
                             color = Color(0xFF3B82F6)
                         )
@@ -399,8 +294,8 @@ fun OcrPrescriptionScreen(
                 }
             }
 
-            // Thông báo lỗi nếu có
-            if (errorMessage.isNotBlank() && !isAnalyzing) {
+            // KHỐI THÔNG BÁO LỖI NẾU CÓ
+            if (uiState.errorMessage != null && !uiState.isAnalyzing) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -420,7 +315,7 @@ fun OcrPrescriptionScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = errorMessage,
+                            text = uiState.errorMessage ?: "",
                             color = Color(0xFFB91C1C),
                             fontSize = 12.sp,
                             modifier = Modifier.weight(1f)
@@ -429,45 +324,58 @@ fun OcrPrescriptionScreen(
                 }
             }
 
-            // GIAO DIỆN XEM LẠI & XÁC NHẬN (REVIEW SCREEN)
-            if (scannedItems.isNotEmpty() && !isAnalyzing) {
+            // GIAO DIỆN XEM LẠI & CHỈNH SỬA (REVIEW SCREEN)
+            if (uiState.scannedItems.isNotEmpty() && !uiState.isAnalyzing) {
                 Spacer(modifier = Modifier.height(14.dp))
+
+                // Sửa lỗi layout: Hàng tiêu đề + Bỏ chọn + Thêm trên 1 dòng duy nhất, maxLines = 1 không rớt chữ
+                val selectedCount = uiState.scannedItems.count { it.isSelected }
+                val allSelected = uiState.scannedItems.all { it.isSelected }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    val selectedCount = scannedItems.count { it.isSelected }
                     Text(
-                        text = "Danh sách thuốc bóc tách ($selectedCount/${scannedItems.size})",
+                        text = "Thuốc bóc tách ($selectedCount/${uiState.scannedItems.size})",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
-                    Row {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         TextButton(
-                            onClick = {
-                                val allSelected = scannedItems.all { it.isSelected }
-                                scannedItems.forEach { it.isSelected = !allSelected }
-                            },
-                            contentPadding = PaddingValues(horizontal = 6.dp)
+                            onClick = { viewModel.selectAll(!allSelected) },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = if (scannedItems.all { it.isSelected }) "Bỏ chọn tất cả" else "Chọn tất cả",
+                                text = if (allSelected) "Bỏ chọn" else "Chọn tất cả",
                                 fontSize = 12.sp,
-                                color = Color(0xFF2563EB)
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF2563EB),
+                                maxLines = 1
                             )
                         }
 
                         TextButton(
                             onClick = { showManualAddDialog = true },
-                            contentPadding = PaddingValues(horizontal = 6.dp)
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(2.dp))
-                            Text(text = "Thêm", fontSize = 12.sp, color = Color(0xFF2563EB))
+                            Text(
+                                text = "+ Thêm",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2563EB),
+                                maxLines = 1
+                            )
                         }
                     }
                 }
@@ -481,87 +389,28 @@ fun OcrPrescriptionScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 12.dp)
                 ) {
-                    itemsIndexed(scannedItems, key = { _, item -> item.id }) { index, item ->
+                    items(uiState.scannedItems, key = { it.id }) { item ->
                         ScannedMedicineReviewCard(
                             item = item,
                             onToggleSelect = { isChecked ->
-                                scannedItems[index] = item.copy(isSelected = isChecked)
+                                viewModel.toggleSelectItem(item.id, isChecked)
                             },
                             onUpdate = { updated ->
-                                scannedItems[index] = updated
+                                viewModel.updateItem(updated)
                             },
                             onDelete = {
-                                scannedItems.removeAt(index)
+                                viewModel.removeItem(item.id)
                             }
                         )
                     }
                 }
 
-                // NÚT LƯU CÁC THUỐC ĐÃ CHỌN VÀO LỊCH UỐNG
-                val selectedCount = scannedItems.count { it.isSelected }
+                // NÚT LƯU THUỐC ĐÃ CHỌN VÀO LỊCH UỐNG
                 Button(
                     onClick = {
-                        val toSave = scannedItems.filter { it.isSelected && it.medicineName.isNotBlank() }
-                        if (toSave.isEmpty()) {
-                            Toast.makeText(context, "Vui lòng chọn ít nhất 1 mục thuốc để lưu", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        coroutineScope.launch(Dispatchers.IO) {
-                            val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
-                            for (item in toSave) {
-                                val dosageWithUnit = if (item.unit.isNotBlank() && !item.dosage.contains(item.unit)) {
-                                    "${item.dosage} ${item.unit}".trim()
-                                } else {
-                                    item.dosage
-                                }
-
-                                val medicineEntity = MedicineEntity(
-                                    id = UUID.randomUUID().toString(),
-                                    userId = targetMemberId,
-                                    name = item.medicineName.trim(),
-                                    dosage = dosageWithUnit.ifBlank { "Theo chỉ định" },
-                                    instruction = item.note.trim(),
-                                    reminderTimes = item.times.distinct().sorted(),
-                                    startDate = System.currentTimeMillis(),
-                                    scannedViaOcr = true
-                                )
-
-                                database.medicineDao.insertMedicine(medicineEntity)
-
-                                // Tạo MedicationLog cho ngày hôm nay
-                                for (time in medicineEntity.reminderTimes) {
-                                    database.medicationLogDao.insertIfAbsent(
-                                        MedicationLogEntity(
-                                            id = UUID.randomUUID().toString(),
-                                            medicineId = medicineEntity.id,
-                                            medicineName = medicineEntity.name,
-                                            userId = targetMemberId,
-                                            scheduledDate = todayDate,
-                                            scheduledTime = time,
-                                            isTaken = false,
-                                            isSkipped = false
-                                        )
-                                    )
-                                }
-
-                                // Đặt lịch nhắc báo thức
-                                alarmScheduler.schedule(
-                                    medicineEntity.id,
-                                    medicineEntity.name,
-                                    medicineEntity.dosage,
-                                    medicineEntity.reminderTimes
-                                )
-                            }
-
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(
-                                    context,
-                                    "Đã lưu thành công ${toSave.size} thuốc vào lịch uống!",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                onBack()
-                            }
+                        viewModel.saveSelectedMedicines(targetMemberId) {
+                            Toast.makeText(context, "Đã lưu thành công vào lịch uống!", Toast.LENGTH_SHORT).show()
+                            onBack()
                         }
                     },
                     shape = RoundedCornerShape(12.dp),
@@ -573,18 +422,28 @@ fun OcrPrescriptionScreen(
                         .fillMaxWidth()
                         .height(48.dp)
                         .padding(bottom = 4.dp),
-                    enabled = selectedCount > 0
+                    enabled = selectedCount > 0 && !uiState.isSaving
                 ) {
-                    Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Lưu $selectedCount thuốc đã chọn vào Lịch uống",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (uiState.isSaving) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "Đang lưu...", fontSize = 14.sp)
+                    } else {
+                        Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Lưu $selectedCount thuốc đã chọn vào Lịch uống",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
-            } else if (!isAnalyzing && scannedItems.isEmpty() && selectedImageUri == null) {
-                // Hướng dẫn ban đầu khi chưa chụp/chọn ảnh
+            } else if (!uiState.isAnalyzing && uiState.scannedItems.isEmpty() && uiState.selectedImageUri == null) {
+                // Hướng dẫn mở đầu
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -611,14 +470,14 @@ fun OcrPrescriptionScreen(
                         }
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "Quét đơn thuốc bằng AI",
+                            text = "Quét đơn thuốc & thực phẩm chức năng",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF1E293B)
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Chụp ảnh đơn thuốc của bác sĩ hoặc tải ảnh từ thư viện. Trợ lý AI sẽ tự động đọc, sửa lỗi chính tả tên thuốc và lên lịch uống từng cữ chuẩn y tế.",
+                            text = "Chụp ảnh bao bì hộp thuốc, trà thảo dược hoặc đơn của bác sĩ. AI sẽ tự động đọc, sửa lỗi chính tả tên thuốc và bóc tách liều lượng chuẩn xác.",
                             fontSize = 13.sp,
                             color = Color(0xFF64748B),
                             lineHeight = 18.sp,
@@ -634,7 +493,7 @@ fun OcrPrescriptionScreen(
     if (showManualAddDialog) {
         var addName by remember { mutableStateOf("") }
         var addDosage by remember { mutableStateOf("") }
-        var addUnit by remember { mutableStateOf("viên") }
+        var addUnit by remember { mutableStateOf("gói") }
         var addNote by remember { mutableStateOf("") }
 
         AlertDialog(
@@ -645,7 +504,8 @@ fun OcrPrescriptionScreen(
                     OutlinedTextField(
                         value = addName,
                         onValueChange = { addName = it },
-                        label = { Text("Tên thuốc") },
+                        label = { Text("Tên thuốc / sản phẩm") },
+                        placeholder = { Text("Ví dụ: Bột sủi thanh nhiệt Livecool") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -654,7 +514,7 @@ fun OcrPrescriptionScreen(
                             value = addDosage,
                             onValueChange = { addDosage = it },
                             label = { Text("Hàm lượng") },
-                            placeholder = { Text("5mg...") },
+                            placeholder = { Text("42.9g...") },
                             modifier = Modifier.weight(1f)
                         )
                         OutlinedTextField(
@@ -668,7 +528,7 @@ fun OcrPrescriptionScreen(
                         value = addNote,
                         onValueChange = { addNote = it },
                         label = { Text("Lời dặn") },
-                        placeholder = { Text("Sau ăn...") },
+                        placeholder = { Text("Hòa vào nước uống...") },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -677,12 +537,12 @@ fun OcrPrescriptionScreen(
                 Button(
                     onClick = {
                         if (addName.isNotBlank()) {
-                            scannedItems.add(
+                            viewModel.addItem(
                                 ScannedMedicineItem(
                                     medicineName = addName.trim(),
                                     dosage = addDosage.trim(),
                                     unit = addUnit.trim(),
-                                    times = mutableListOf("08:00"),
+                                    times = emptyList(), // Để rỗng nếu không nhập
                                     note = addNote.trim(),
                                     isSelected = true
                                 )
@@ -704,7 +564,13 @@ fun OcrPrescriptionScreen(
 }
 
 /**
- * Thẻ xem lại thuốc bóc tách: Checkbox + chỉnh sửa nhanh tên / hàm lượng / giờ / ghi chú + nút xóa
+ * Thẻ xem lại thuốc bóc tách:
+ * - Checkbox + Tiêu đề
+ * - Ô Tên thuốc chuẩn hóa
+ * - Ô Hàm lượng (ví dụ 42.9g)
+ * - Ô Đơn vị dạng DropdownMenu chọn nhanh [gói], [viên], [ống], [chai], [ml]
+ * - Trường Cữ giờ uống: nếu rỗng hiển thị "Chạm để thêm giờ uống"
+ * - Trường Lời dặn
  */
 @Composable
 fun ScannedMedicineReviewCard(
@@ -715,16 +581,21 @@ fun ScannedMedicineReviewCard(
 ) {
     var name by remember(item.id) { mutableStateOf(item.medicineName) }
     var dosage by remember(item.id) { mutableStateOf(item.dosage) }
+    var unit by remember(item.id) { mutableStateOf(item.unit) }
     var note by remember(item.id) { mutableStateOf(item.note) }
     val timesList = remember(item.id) { mutableStateListOf<String>().apply { addAll(item.times) } }
+
+    var unitMenuExpanded by remember { mutableStateOf(false) }
+    val unitOptions = listOf("gói", "viên", "ống", "chai", "ml", "hộp", "tuýp")
 
     fun notifyChange() {
         onUpdate(
             item.copy(
                 medicineName = name,
                 dosage = dosage,
+                unit = unit,
                 note = note,
-                times = timesList.toMutableList()
+                times = timesList.toList()
             )
         )
     }
@@ -742,7 +613,7 @@ fun ScannedMedicineReviewCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Hàng Checkbox + Tiêu đề mục + Nút Xóa
+            // Hàng Checkbox + Tên mục + Nút Xóa
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -758,7 +629,7 @@ fun ScannedMedicineReviewCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Thuốc: ${name.ifBlank { "Chưa đặt tên" }}",
+                        text = name.ifBlank { "Mục thuốc chưa đặt tên" },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (item.isSelected) Color(0xFF1E40AF) else Color(0xFF64748B),
@@ -773,7 +644,7 @@ fun ScannedMedicineReviewCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.DeleteOutline,
-                        contentDescription = "Xóa thuốc này",
+                        contentDescription = "Xóa",
                         tint = Color(0xFFEF4444),
                         modifier = Modifier.size(18.dp)
                     )
@@ -782,7 +653,7 @@ fun ScannedMedicineReviewCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Ô nhập chỉnh sửa Tên thuốc
+            // Ô Tên thuốc chuẩn hóa
             OutlinedTextField(
                 value = name,
                 onValueChange = {
@@ -790,13 +661,14 @@ fun ScannedMedicineReviewCard(
                     notifyChange()
                 },
                 label = { Text("Tên thuốc chuẩn hóa *") },
+                placeholder = { Text("Ví dụ: Bột sủi thanh nhiệt Livecool") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Ô nhập Hàm lượng & Đơn vị
+            // Ô Hàm lượng & Đơn vị (Dropdown chọn nhanh)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -808,26 +680,51 @@ fun ScannedMedicineReviewCard(
                         notifyChange()
                     },
                     label = { Text("Hàm lượng") },
-                    placeholder = { Text("5mg, 500mg...") },
+                    placeholder = { Text("42.9g, 500mg...") },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
 
-                OutlinedTextField(
-                    value = item.unit,
-                    onValueChange = {
-                        item.unit = it
-                        notifyChange()
-                    },
-                    label = { Text("Đơn vị") },
-                    singleLine = true,
-                    modifier = Modifier.width(90.dp)
-                )
+                // Dropdown chọn nhanh Đơn vị
+                Box(modifier = Modifier.width(105.dp)) {
+                    OutlinedTextField(
+                        value = unit,
+                        onValueChange = { },
+                        readOnly = true,
+                        label = { Text("Đơn vị") },
+                        trailingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Chọn đơn vị",
+                                modifier = Modifier.clickable { unitMenuExpanded = true }
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { unitMenuExpanded = true }
+                    )
+
+                    DropdownMenu(
+                        expanded = unitMenuExpanded,
+                        onDismissRequest = { unitMenuExpanded = false }
+                    ) {
+                        unitOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option, fontSize = 13.sp) },
+                                onClick = {
+                                    unit = option
+                                    unitMenuExpanded = false
+                                    notifyChange()
+                                }
+                            )
+                        }
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Giờ uống (Dạng Chip)
+            // Trường Giờ uống (Times): Nếu rỗng thì hiển thị placeholder rõ ràng "Chạm để thêm giờ uống"
             Text(
                 text = "Giờ uống trong ngày:",
                 fontSize = 12.sp,
@@ -836,41 +733,83 @@ fun ScannedMedicineReviewCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
 
+            if (timesList.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFF1F5F9),
+                    border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AccessTime,
+                            contentDescription = null,
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Chưa có giờ uống • Chạm gợi ý bên dưới để thêm",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B),
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    timesList.forEach { time ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFEFF6FF),
+                            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = time,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF1E40AF)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Xóa giờ",
+                                    tint = Color(0xFF64748B),
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .clickable {
+                                            timesList.remove(time)
+                                            notifyChange()
+                                        }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Các gợi ý thêm cữ giờ nhanh
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                timesList.forEach { time ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFEFF6FF),
-                        border = BorderStroke(1.dp, Color(0xFFBFDBFE))
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(text = time, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1E40AF))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Xóa giờ",
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clickable {
-                                        timesList.remove(time)
-                                        notifyChange()
-                                    }
-                            )
-                        }
-                    }
-                }
-
-                // Nút thêm giờ uống nhanh
                 val quickTimes = listOf("08:00", "12:00", "18:00", "20:00")
                 quickTimes.forEach { qTime ->
                     if (!timesList.contains(qTime)) {
@@ -887,7 +826,7 @@ fun ScannedMedicineReviewCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Ô nhập Lời dặn
+            // Ô Lời dặn (để trống nếu không có, không tự bịa)
             OutlinedTextField(
                 value = note,
                 onValueChange = {
@@ -895,228 +834,10 @@ fun ScannedMedicineReviewCard(
                     notifyChange()
                 },
                 label = { Text("Lời dặn / Cách dùng") },
-                placeholder = { Text("Ví dụ: Uống sau khi ăn no") },
+                placeholder = { Text("Ví dụ: Hòa 1 gói vào 150ml nước (để trống nếu không có)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
         }
     }
-}
-
-/**
- * Xử lý bóc tách đơn thuốc bằng Google Gemini AI hoặc Fallback Dược thư Offline
- */
-private suspend fun parsePrescriptionWithAiOrFallback(rawOcrText: String): List<ScannedMedicineItem> =
-    withContext(Dispatchers.IO) {
-        val apiKey = HealthAiRepositoryImpl.DEFAULT_API_KEY
-
-        // Nếu có API key hợp lệ, gọi Gemini AI
-        if (apiKey.isNotBlank() && apiKey != "YOUR_GEMINI_API_KEY") {
-            try {
-                val generativeModel = GenerativeModel(
-                    modelName = "gemini-1.5-flash",
-                    apiKey = apiKey,
-                    generationConfig = generationConfig {
-                        temperature = 0.2f
-                        topK = 30
-                        topP = 0.9f
-                    }
-                )
-
-                val prompt = """
-                    Bạn là Dược sĩ AI chuyên gia về đơn thuốc và y tế tại Việt Nam.
-                    Nhiệm vụ: Phân tích nội dung văn bản OCR từ đơn thuốc bác sĩ sau:
-                    ---
-                    $rawOcrText
-                    ---
-                    Yêu cầu:
-                    1. Chuẩn hóa tên thuốc về đúng tên biệt dược hoặc hoạt chất chuẩn y tế (Ví dụ: "Arnlodipine" -> "Amlodipine", "Paracetamon" -> "Paracetamol", "Panadol extra" -> "Panadol Extra", "Sucrate gel" -> "Sucrate Gel", "Glucophage xr" -> "Glucophage XR",...).
-                    2. Tách chính xác hàm lượng (ví dụ: 5mg, 500mg, 10mg, 1g,...).
-                    3. Xác định đơn vị (viên, gói, ống, lọ, tuýp, v.v.).
-                    4. Bóc tách các cữ giờ uống trong ngày ở định dạng ["08:00", "12:00", "18:00", "20:00"] tương ứng với sáng, trưa, chiều, tối hoặc theo chỉ định bác sĩ.
-                    5. Trích xuất lời dặn / hướng dẫn sử dụng (ví dụ: "Uống sau khi ăn no", "Uống trước ăn sáng 30 phút",...).
-                    6. Xuất kết quả DUY NHẤT dưới dạng chuỗi JSON Array hợp lệ, KHÔNG viết bất kỳ văn bản nào khác:
-                    [
-                      {
-                        "medicineName": "Amlodipine",
-                        "dosage": "5mg",
-                        "unit": "viên",
-                        "times": ["08:00"],
-                        "note": "Uống sau ăn sáng"
-                      }
-                    ]
-                """.trimIndent()
-
-                val response = generativeModel.generateContent(prompt)
-                val reply = response.text?.trim().orEmpty()
-
-                val jsonStart = reply.indexOf("[")
-                val jsonEnd = reply.lastIndexOf("]")
-
-                if (jsonStart != -1 && jsonEnd != -1 && jsonEnd > jsonStart) {
-                    val jsonStr = reply.substring(jsonStart, jsonEnd + 1)
-                    val jsonArray = JSONArray(jsonStr)
-                    val list = mutableListOf<ScannedMedicineItem>()
-
-                    for (i in 0 until jsonArray.length()) {
-                        val obj = jsonArray.getJSONObject(i)
-                        val medName = obj.optString("medicineName", "").trim()
-                        val dosage = obj.optString("dosage", "").trim()
-                        val unit = obj.optString("unit", "viên").trim()
-                        val note = obj.optString("note", "").trim()
-
-                        val times = mutableListOf<String>()
-                        val timesArray = obj.optJSONArray("times")
-                        if (timesArray != null) {
-                            for (j in 0 until timesArray.length()) {
-                                val t = timesArray.optString(j, "").trim()
-                                if (t.isNotBlank()) times.add(t)
-                            }
-                        }
-                        if (times.isEmpty()) times.add("08:00")
-
-                        if (medName.isNotBlank()) {
-                            list.add(
-                                ScannedMedicineItem(
-                                    medicineName = medName,
-                                    dosage = dosage,
-                                    unit = unit.ifBlank { "viên" },
-                                    times = times,
-                                    note = note,
-                                    isSelected = true
-                                )
-                            )
-                        }
-                    }
-
-                    if (list.isNotEmpty()) {
-                        return@withContext list
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Lỗi khi gọi Gemini AI, chuyển sang Fallback Offline", e)
-            }
-        }
-
-        // SMART FALLBACK OFFLINE: Sử dụng Từ điển Dược phẩm Việt Nam phong phú
-        fallbackParseMedicineOffline(rawOcrText)
-    }
-
-/**
- * Danh mục thuốc chuẩn offline cho Smart Fallback
- */
-private data class LocalMedicineEntry(
-    val standardName: String,
-    val defaultDosage: String,
-    val defaultUnit: String,
-    val aliases: List<String>
-)
-
-private val localMedicineCatalog = listOf(
-    LocalMedicineEntry("Amlodipine", "5mg", "viên", listOf("AMLODIPINE", "ARNLODIPINE", "AMLO", "AMORLODIPIN")),
-    LocalMedicineEntry("Paracetamol", "500mg", "viên", listOf("PARACETAMOL", "PARACETAMON", "PARA", "EFFERALGAN", "PANADOL", "HAPACOL")),
-    LocalMedicineEntry("Metformin", "500mg", "viên", listOf("METFORMIN", "GLUCOPHAGE", "DIAPHAGE")),
-    LocalMedicineEntry("Losartan", "50mg", "viên", listOf("LOSARTAN", "COZAAR", "LOSATEC")),
-    LocalMedicineEntry("Atorvastatin", "10mg", "viên", listOf("ATORVASTATIN", "LIPITOR", "ATOR")),
-    LocalMedicineEntry("Esomeprazole", "40mg", "viên", listOf("ESOMEPRAZOLE", "ESOMEPRAZOL", "YESOM", "NEXIUM")),
-    LocalMedicineEntry("Sucralfate", "1g", "gói", listOf("SUCRALFATE", "SUCRATE GEL", "SUCRATE")),
-    LocalMedicineEntry("Trimebutine", "100mg", "viên", listOf("TRIMEBUTINE", "ARTHUR", "DEBRIDAT")),
-    LocalMedicineEntry("Berberin", "100mg", "viên", listOf("BERBERIN", "BERBERINE")),
-    LocalMedicineEntry("Amoxicillin", "500mg", "viên", listOf("AMOXICILLIN", "AMOX", "CLAMOCIL", "AUGMENTIN", "KLAMENTIN")),
-    LocalMedicineEntry("Cefalexin", "500mg", "viên", listOf("CEFALEXIN", "CEPHALEXIN", "CEFALEX")),
-    LocalMedicineEntry("Aspirin", "81mg", "viên", listOf("ASPIRIN", "ASPIRIN CARDIO", "ASPEC")),
-    LocalMedicineEntry("Omeprazole", "20mg", "viên", listOf("OMEPRAZOLE", "OMEPRAZOL", "LOSEC"))
-)
-
-/**
- * Smart Fallback: Phân tích OCR bằng regex và so khớp danh mục thuốc
- */
-private fun fallbackParseMedicineOffline(text: String): List<ScannedMedicineItem> {
-    val result = mutableListOf<ScannedMedicineItem>()
-    val lines = text.lines().map { it.trim() }.filter { it.isNotBlank() }
-
-    val dosageRegex = Regex("""(?i)\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml|iu|ui|%)\b""")
-
-    fun removeDiacritics(str: String): String {
-        return Normalizer.normalize(str.uppercase(), Normalizer.Form.NFD)
-            .replace(Regex("\\p{Mn}+"), "")
-            .replace('Đ', 'D')
-            .replace(Regex("[^A-Z0-9]+"), " ")
-            .trim()
-    }
-
-    var i = 0
-    while (i < lines.size) {
-        val line = lines[i]
-        val cleanLine = removeDiacritics(line)
-
-        // Kiểm tra xem dòng này có chứa tên thuốc trong catalog không
-        var matchedEntry: LocalMedicineEntry? = null
-        for (entry in localMedicineCatalog) {
-            for (alias in entry.aliases) {
-                val cleanAlias = removeDiacritics(alias)
-                if (cleanLine.contains(cleanAlias)) {
-                    matchedEntry = entry
-                    break
-                }
-            }
-            if (matchedEntry != null) break
-        }
-
-        // Hoặc kiểm tra xem dòng có định dạng tên thuốc (ví dụ "1. Panadol 500mg" hoặc có dosage)
-        val hasDosage = dosageRegex.containsMatchIn(line)
-
-        if (matchedEntry != null || hasDosage) {
-            val name = matchedEntry?.standardName ?: run {
-                // Tách tên trước hàm lượng
-                val before = if (hasDosage) line.substringBefore(dosageRegex.find(line)?.value ?: "").trim() else line
-                before.replace(Regex("""^\d+[\s.)-]+"""), "").trim()
-            }
-
-            val dosage = dosageRegex.find(line)?.value ?: (matchedEntry?.defaultDosage ?: "1 viên")
-            val unit = matchedEntry?.defaultUnit ?: "viên"
-
-            // Đọc thêm 1-2 dòng tiếp theo để tìm giờ uống & lời dặn
-            val times = mutableListOf<String>()
-            val noteBuilder = StringBuilder()
-
-            var lookAhead = 1
-            while (i + lookAhead < lines.size && lookAhead <= 2) {
-                val nextLine = lines[i + lookAhead]
-                val nextClean = removeDiacritics(nextLine)
-
-                if (nextClean.contains("SANG") || nextClean.contains("TRUA") || nextClean.contains("CHIEU") || nextClean.contains("TOI") || nextClean.contains("UONG")) {
-                    if (nextClean.contains("SANG")) times.add("08:00")
-                    if (nextClean.contains("TRUA")) times.add("12:00")
-                    if (nextClean.contains("CHIEU") || nextClean.contains("TOI")) times.add("18:00")
-                    if (noteBuilder.isNotEmpty()) noteBuilder.append(". ")
-                    noteBuilder.append(nextLine)
-                    i += lookAhead
-                    break
-                } else {
-                    lookAhead++
-                }
-            }
-
-            if (times.isEmpty()) {
-                times.add("08:00")
-            }
-
-            if (name.length >= 3 && !name.contains("BỆNH", ignoreCase = true) && !name.contains("BÁC SĨ", ignoreCase = true)) {
-                result.add(
-                    ScannedMedicineItem(
-                        medicineName = name,
-                        dosage = dosage,
-                        unit = unit,
-                        times = times.distinct().toMutableList(),
-                        note = noteBuilder.toString().ifBlank { "Uống sau khi ăn no" },
-                        isSelected = true
-                    )
-                )
-            }
-        }
-        i++
-    }
-
-    return result.distinctBy { it.medicineName }
 }
