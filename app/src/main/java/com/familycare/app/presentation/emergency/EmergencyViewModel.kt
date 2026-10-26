@@ -31,33 +31,58 @@ class EmergencyViewModel(
     val uiState: StateFlow<EmergencyUiState> = _uiState.asStateFlow()
 
     init {
-        loadInitialLocationAndHospitals()
+        refreshLocation()
     }
 
-    private fun loadInitialLocationAndHospitals() {
+    /**
+     * Cập nhật lại tọa độ GPS và truy vấn danh sách bệnh viện lân cận
+     */
+    fun refreshLocation() {
         viewModelScope.launch {
+            val hasPermission = emergencyManager.hasLocationPermission()
+            _uiState.update {
+                it.copy(
+                    hasLocationPermission = hasPermission,
+                    isLocating = true,
+                    currentAddress = if (hasPermission) "Đang dò tìm tọa độ GPS thực tế..." else "Chưa cấp quyền vị trí GPS"
+                )
+            }
+
             try {
                 val (lat, lng) = emergencyManager.getCurrentGpsLocation()
                 val address = emergencyManager.resolveAddress(lat, lng)
                 val hospitals = NearbyHospitalProvider.getNearbyHospitals(lat, lng)
+
                 _uiState.update {
                     it.copy(
+                        hasLocationPermission = hasPermission,
                         currentLatitude = lat,
                         currentLongitude = lng,
                         currentAddress = address,
-                        nearbyHospitals = hospitals
+                        nearbyHospitals = hospitals,
+                        isLocating = false
                     )
                 }
             } catch (_: Exception) {
-                val defaultHospitals = NearbyHospitalProvider.getNearbyHospitals(10.7769, 106.7009)
-                _uiState.update { it.copy(nearbyHospitals = defaultHospitals) }
+                val fallbackLat = 21.0285
+                val fallbackLng = 105.8542
+                val defaultHospitals = NearbyHospitalProvider.getNearbyHospitals(fallbackLat, fallbackLng)
+                _uiState.update {
+                    it.copy(
+                        isLocating = false,
+                        currentLatitude = it.currentLatitude ?: fallbackLat,
+                        currentLongitude = it.currentLongitude ?: fallbackLng,
+                        currentAddress = if (it.currentLatitude != null) it.currentAddress else "Vị trí GPS ($fallbackLat, $fallbackLng)",
+                        nearbyHospitals = if (it.nearbyHospitals.isNotEmpty()) it.nearbyHospitals else defaultHospitals
+                    )
+                }
             }
         }
     }
 
     /**
      * Kích hoạt toàn bộ quy trình khẩn cấp khi người dùng giữ nút SOS đủ 2 giây:
-     * 1. Bắt tọa độ GPS độ chính xác cao qua FusedLocationProviderClient & phân giải địa chỉ.
+     * 1. Bắt tọa độ GPS độ chính xác cao qua FusedLocationProviderClient & phân giải địa chỉ thực tế.
      * 2. Phát âm thanh còi hú cực đại liên tục bằng MediaPlayer.
      * 3. Gửi thông báo khẩn cấp đến Chủ gia đình và các thành viên.
      * 4. Tính toán danh sách bệnh viện gần nhất hỗ trợ chuyển sang Google Maps.

@@ -86,11 +86,11 @@ class AlertViewModel(
                 type = AlertType.SOS_EMERGENCY,
                 level = AlertLevel.CRITICAL,
                 title = "🚨 BÁO ĐỘNG SOS KHẨN CẤP",
-                message = "Người thân đã kích hoạt còi cứu hộ tại tọa độ 10.7769, 106.7009",
+                message = "Người thân đã kích hoạt còi cứu hộ tại tọa độ 21.0285, 105.8542 (Hà Nội)",
                 timestamp = now - 2 * 3600 * 1000L,
                 isRead = true,
-                latitude = 10.7769,
-                longitude = 106.7009
+                latitude = 21.0285,
+                longitude = 105.8542
             ),
             Alert(
                 id = "alert_03",

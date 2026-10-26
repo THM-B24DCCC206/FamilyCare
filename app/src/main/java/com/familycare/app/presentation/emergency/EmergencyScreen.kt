@@ -1,9 +1,13 @@
 package com.familycare.app.presentation.emergency
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,8 +32,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.familycare.app.domain.model.NearbyHospital
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +49,36 @@ fun EmergencyScreen(
     val context = LocalContext.current
     val isActivated = uiState.sosStatus is SosStatus.Activated
     val payload = (uiState.sosStatus as? SosStatus.Activated)?.payload
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fineGranted || coarseGranted) {
+            viewModel.refreshLocation()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val fine = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!fine && !coarse) {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        } else {
+            viewModel.refreshLocation()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -176,8 +212,8 @@ fun EmergencyScreen(
 
                         OutlinedButton(
                             onClick = {
-                                val lat = uiState.currentLatitude ?: 10.7769
-                                val lng = uiState.currentLongitude ?: 106.7009
+                                val lat = uiState.currentLatitude ?: 21.0285
+                                val lng = uiState.currentLongitude ?: 105.8542
                                 val message = "🚨 KHẨN CẤP! ${uiState.targetUserName} cần trợ giúp tại: ${uiState.currentAddress}. Bản đồ: https://maps.google.com/?q=$lat,$lng"
                                 sendSmsCoordinates(context, uiState.familyOwnerPhone.replace(".", ""), message)
                             },
@@ -201,19 +237,97 @@ fun EmergencyScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = Color(0xFFD32F2F),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Vị trí chính xác hiện tại",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleSmall
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = Color(0xFFD32F2F),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Vị trí chính xác hiện tại",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                if (!uiState.hasLocationPermission) {
+                                    permissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                } else {
+                                    viewModel.refreshLocation()
+                                }
+                            },
+                            enabled = !uiState.isLocating
+                        ) {
+                            if (uiState.isLocating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = "Cập nhật vị trí",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+
+                    if (!uiState.hasLocationPermission) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Chưa cấp quyền GPS. Nhấn để cấp quyền định vị thực tế.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(
+                                    onClick = {
+                                        permissionLauncher.launch(
+                                            arrayOf(
+                                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                                Manifest.permission.ACCESS_COARSE_LOCATION
+                                            )
+                                        )
+                                    }
+                                ) {
+                                    Text("Cấp quyền", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -225,13 +339,21 @@ fun EmergencyScreen(
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
-                    val lat = uiState.currentLatitude ?: 10.7769
-                    val lng = uiState.currentLongitude ?: 106.7009
-                    Text(
-                        text = "Vĩ độ: $lat° N  •  Kinh độ: $lng° E (Độ chính xác ±5m)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    val lat = uiState.currentLatitude ?: 21.0285
+                    val lng = uiState.currentLongitude ?: 105.8542
+                    if (uiState.currentLatitude != null && uiState.currentLongitude != null) {
+                        Text(
+                            text = "Vĩ độ: ${"%.5f".format(Locale.US, lat)}° N  •  Kinh độ: ${"%.5f".format(Locale.US, lng)}° E (Độ chính xác GPS)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            text = if (uiState.isLocating) "Đang kết nối vệ tinh GPS..." else "Chưa có tọa độ (Đang dùng vị trí ước tính)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
                     Row(
@@ -317,8 +439,8 @@ fun EmergencyScreen(
                     }
 
                     TextButton(onClick = {
-                        val lat = uiState.currentLatitude ?: 10.7769
-                        val lng = uiState.currentLongitude ?: 106.7009
+                        val lat = uiState.currentLatitude ?: 21.0285
+                        val lng = uiState.currentLongitude ?: 105.8542
                         searchNearbyHospitalsOnMaps(context, lat, lng)
                     }) {
                         Text("Mở bản đồ", fontSize = 12.sp)
@@ -522,7 +644,7 @@ fun searchNearbyHospitalsOnMaps(context: Context, latitude: Double, longitude: D
     try {
         context.startActivity(mapIntent)
     } catch (_: Exception) {
-        val webUri = Uri.parse("https://www.google.com/maps/search/?api=1&query=bệnh+viện+cấp+cứu+gần+nhất")
+        val webUri = Uri.parse("https://www.google.com/maps/search/bệnh+viện+cấp+cứu/@$latitude,$longitude,14z")
         context.startActivity(Intent(Intent.ACTION_VIEW, webUri))
     }
 }

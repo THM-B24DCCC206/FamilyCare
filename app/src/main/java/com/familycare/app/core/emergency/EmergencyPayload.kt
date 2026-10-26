@@ -12,7 +12,7 @@ data class EmergencyPayload(
     val longitude: Double,
     val googleMapsUrl: String = "https://maps.google.com/?q=$latitude,$longitude",
     val timestamp: Long = System.currentTimeMillis(),
-    val address: String = "201B Nguyễn Chí Thanh, Phường 12, Quận 5, TP. Hồ Chí Minh",
+    val address: String = "Tọa độ GPS ($latitude, $longitude)",
     val accuracyMeters: Float = 5.0f,
     val familyOwnerName: String = "Bác Nguyễn Văn Nam (Chủ hộ)",
     val familyOwnerPhone: String = "0912.345.678"
