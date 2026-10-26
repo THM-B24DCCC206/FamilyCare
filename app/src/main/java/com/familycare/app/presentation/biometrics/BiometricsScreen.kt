@@ -437,9 +437,7 @@ fun BiometricsScreen(
 
                     // Thanh lọc danh sách lịch sử
                     LazyRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = (-16).dp),
+                        modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
