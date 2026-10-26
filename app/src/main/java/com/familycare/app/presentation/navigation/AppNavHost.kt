@@ -1,23 +1,39 @@
 package com.familycare.app.presentation.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import com.familycare.app.core.common.SessionManager
 import com.familycare.app.presentation.ai_assistant.AiAssistantScreen
+import com.familycare.app.presentation.alert.AlertListScreen
+import com.familycare.app.presentation.appointment.AppointmentScreen
 import com.familycare.app.presentation.auth.FamilySetupScreen
 import com.familycare.app.presentation.auth.LoginScreen
 import com.familycare.app.presentation.biometrics.BiometricsScreen
 import com.familycare.app.presentation.biometrics.ppg.CameraPpgScreen
 import com.familycare.app.presentation.dashboard.DashboardScreen
+import com.familycare.app.presentation.emergency.EmergencyScreen
 import com.familycare.app.presentation.medication.MedicationScreen
+import com.familycare.app.presentation.ocr.OcrPrescriptionScreen
 import com.familycare.app.presentation.profile.ProfileScreen
 
 data class BottomNavItem(
@@ -47,13 +63,39 @@ fun AppNavHost() {
         BottomNavItem("Trang chủ", Screen.Dashboard.route, Icons.Default.Home),
         BottomNavItem("Chỉ số", Screen.Biometrics.route, Icons.Default.Favorite),
         BottomNavItem("Thuốc", Screen.Medication.route, Icons.Default.Medication),
-        BottomNavItem("Trợ lý AI", Screen.AiAssistant.route, Icons.Default.AutoAwesome),
+        BottomNavItem("Lịch khám", Screen.Appointments.route, Icons.Default.CalendarMonth),
         BottomNavItem("Hồ sơ", Screen.Profile.route, Icons.Default.Person)
     )
 
     val showBottomBar = bottomNavItems.any { it.route == currentRoute }
+    val showAiFab = currentRoute in listOf(
+        Screen.Dashboard.route,
+        Screen.Biometrics.route,
+        Screen.Medication.route,
+        Screen.Appointments.route,
+        Screen.Profile.route
+    )
 
     Scaffold(
+        floatingActionButton = {
+            if (showAiFab) {
+                FloatingActionButton(
+                    onClick = { navController.navigate(Screen.AiAssistant.route) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "Trợ lý AI",
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+        },
+        floatingActionButtonPosition = FabPosition.Start,
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -120,14 +162,17 @@ fun AppNavHost() {
                 DashboardScreen(
                     onNavigateToPpg = { navController.navigate(Screen.CameraPpg.route) },
                     onNavigateToAi = { navController.navigate(Screen.AiAssistant.route) },
-                    onNavigateToOcr = { navController.navigate(Screen.Medication.route) },
-                    onNavigateToEmergency = { /* Navigate to SOS */ }
+                    onNavigateToOcr = { navController.navigate(Screen.OcrPrescription.route) },
+                    onNavigateToEmergency = { navController.navigate(Screen.EmergencyAlerts.route) },
+                    onNavigateToSos = { navController.navigate(Screen.SosPanic.route) },
+                    onNavigateToSmartwatch = { navController.navigate(Screen.Smartwatch.route) }
                 )
             }
 
             composable(Screen.Biometrics.route) {
                 BiometricsScreen(
-                    onNavigateToCameraPpg = { navController.navigate(Screen.CameraPpg.route) }
+                    onNavigateToCameraPpg = { navController.navigate(Screen.CameraPpg.route) },
+                    onNavigateToSmartwatch = { navController.navigate(Screen.Smartwatch.route) }
                 )
             }
 
@@ -139,22 +184,52 @@ fun AppNavHost() {
 
             composable(Screen.Medication.route) {
                 MedicationScreen(
-                    onNavigateToOcr = { /* Handled in feature_medication */ }
+                    onNavigateToOcr = { navController.navigate(Screen.OcrPrescription.route) }
                 )
             }
 
+            composable(Screen.OcrPrescription.route) {
+                OcrPrescriptionScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.Appointments.route) {
+                AppointmentScreen()
+            }
+
             composable(Screen.AiAssistant.route) {
-                AiAssistantScreen()
+                AiAssistantScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
 
             composable(Screen.Profile.route) {
                 ProfileScreen(
-                    onNavigateToPdfReport = { /* Handled in feature_report */ },
                     onLogout = {
                         navController.navigate(Screen.Login.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     }
+                )
+            }
+
+            composable(Screen.EmergencyAlerts.route) {
+                AlertListScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToSos = { navController.navigate(Screen.SosPanic.route) }
+                )
+            }
+
+            composable(Screen.SosPanic.route) {
+                EmergencyScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.Smartwatch.route) {
+                com.familycare.app.presentation.smartwatch.SmartwatchScreen(
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
         }
