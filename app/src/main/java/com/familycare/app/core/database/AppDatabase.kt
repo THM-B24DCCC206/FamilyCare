@@ -32,7 +32,11 @@ class AppDatabase private constructor(context: Context) {
     val appointmentDao: AppointmentDao = AppointmentDaoImpl(dbHelper)
     fun appointmentDao(): AppointmentDao = appointmentDao
 
+    val medicationLogDao: MedicationLogDao = MedicationLogDaoImpl(dbHelper)
+    fun medicationLogDao(): MedicationLogDao = medicationLogDao
+
     companion object {
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -41,6 +45,52 @@ class AppDatabase private constructor(context: Context) {
                 val instance = AppDatabase(context.applicationContext)
                 INSTANCE = instance
                 instance
+            }
+        }
+    }
+}
+
+    companion object {
+
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+class AppDatabase private constructor(context: Context) {
+
+    private val dbHelper = DatabaseHelper(context.applicationContext)
+
+    val healthMetricDao: HealthMetricDao = HealthMetricDaoImpl(dbHelper)
+    fun healthMetricDao(): HealthMetricDao = healthMetricDao
+
+    val medicineDao: MedicineDao = MedicineDaoImpl(dbHelper)
+    fun medicineDao(): MedicineDao = medicineDao
+
+    val alertDao: AlertDao = AlertDaoImpl(dbHelper)
+    fun alertDao(): AlertDao = alertDao
+
+    val userDao: UserDao = UserDaoImpl(dbHelper)
+    fun userDao(): UserDao = userDao
+
+    val appointmentDao: AppointmentDao = AppointmentDaoImpl(dbHelper)
+    fun appointmentDao(): AppointmentDao = appointmentDao
+
+    val medicationLogDao: MedicationLogDao = MedicationLogDaoImpl(dbHelper)
+    fun medicationLogDao(): MedicationLogDao = medicationLogDao
+
+    companion object {
+
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        fun getInstance(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = AppDatabase(context.applicationContext)
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
+}
             }
         }
     }
@@ -134,6 +184,36 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
             )
             """.trimIndent()
         )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS medication_logs (
+                id TEXT PRIMARY KEY NOT NULL,
+                medicineId TEXT NOT NULL,
+                medicineName TEXT NOT NULL,
+                userId TEXT NOT NULL,
+                scheduledDate TEXT NOT NULL,
+                scheduledTime TEXT NOT NULL,
+                actualTakenTime INTEGER,
+                isTaken INTEGER NOT NULL,
+                isSkipped INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS index_medication_logs_medicineId_scheduledDate_scheduledTime
+            ON medication_logs (medicineId, scheduledDate, scheduledTime)
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS index_medication_logs_userId_scheduledDate
+            ON medication_logs (userId, scheduledDate)
+            """.trimIndent()
+        )
     }
 
     override fun onOpen(db: SQLiteDatabase) {
@@ -173,6 +253,22 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
             )
             """.trimIndent()
         )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS medication_logs (
+                id TEXT PRIMARY KEY NOT NULL,
+                medicineId TEXT NOT NULL,
+                medicineName TEXT NOT NULL,
+                userId TEXT NOT NULL,
+                scheduledDate TEXT NOT NULL,
+                scheduledTime TEXT NOT NULL,
+                actualTakenTime INTEGER,
+                isTaken INTEGER NOT NULL,
+                isSkipped INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -181,6 +277,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         db.execSQL("DROP TABLE IF EXISTS alerts")
         db.execSQL("DROP TABLE IF EXISTS users")
         db.execSQL("DROP TABLE IF EXISTS appointments")
+        db.execSQL("DROP TABLE IF EXISTS medication_logs")
         onCreate(db)
     }
 }
@@ -807,5 +904,167 @@ class AppointmentDaoImpl(private val dbHelper: DatabaseHelper) : AppointmentDao 
         val db = dbHelper.writableDatabase
         db.delete("appointments", "id = ?", arrayOf(appointmentId))
         _signal.value = System.currentTimeMillis()
+    }
+}
+
+
+class MedicationLogDaoImpl(private val dbHelper: DatabaseHelper) : MedicationLogDao {
+    private val _signal = MutableStateFlow(System.currentTimeMillis())
+
+    override fun getLogsForDate(userId: String, date: String): Flow<List<MedicationLogEntity>> {
+        return _signal.map {
+            withContext(Dispatchers.IO) {
+                val db = dbHelper.readableDatabase
+                val cursor = db.query(
+                    "medication_logs",
+                    null,
+                    "userId = ? AND scheduledDate = ?",
+                    arrayOf(userId, date),
+                    null,
+                    null,
+                    "scheduledTime ASC"
+                )
+                val list = mutableListOf<MedicationLogEntity>()
+                cursor.use { c ->
+                    val idCol = c.getColumnIndexOrThrow("id")
+                    val medIdCol = c.getColumnIndexOrThrow("medicineId")
+                    val nameCol = c.getColumnIndexOrThrow("medicineName")
+                    val userCol = c.getColumnIndexOrThrow("userId")
+                    val dateCol = c.getColumnIndexOrThrow("scheduledDate")
+                    val timeCol = c.getColumnIndexOrThrow("scheduledTime")
+                    val actualCol = c.getColumnIndexOrThrow("actualTakenTime")
+                    val takenCol = c.getColumnIndexOrThrow("isTaken")
+                    val skipCol = c.getColumnIndexOrThrow("isSkipped")
+
+                    while (c.moveToNext()) {
+                        list.add(
+                            MedicationLogEntity(
+                                id = c.getString(idCol),
+                                medicineId = c.getString(medIdCol),
+                                medicineName = c.getString(nameCol),
+                                userId = c.getString(userCol),
+                                scheduledDate = c.getString(dateCol),
+                                scheduledTime = c.getString(timeCol),
+                                actualTakenTime = if (!c.isNull(actualCol)) c.getLong(actualCol) else null,
+                                isTaken = c.getInt(takenCol) == 1,
+                                isSkipped = c.getInt(skipCol) == 1
+                            )
+                        )
+                    }
+                }
+                list
+            }
+        }
+    }
+
+    override suspend fun getLog(medicineId: String, date: String, time: String): MedicationLogEntity? {
+        return withContext(Dispatchers.IO) {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query(
+                "medication_logs",
+                null,
+                "medicineId = ? AND scheduledDate = ? AND scheduledTime = ?",
+                arrayOf(medicineId, date, time),
+                null,
+                null,
+                null,
+                "1"
+            )
+            cursor.use { c ->
+                if (c.moveToFirst()) {
+                    val idCol = c.getColumnIndexOrThrow("id")
+                    val medIdCol = c.getColumnIndexOrThrow("medicineId")
+                    val nameCol = c.getColumnIndexOrThrow("medicineName")
+                    val userCol = c.getColumnIndexOrThrow("userId")
+                    val dateCol = c.getColumnIndexOrThrow("scheduledDate")
+                    val timeCol = c.getColumnIndexOrThrow("scheduledTime")
+                    val actualCol = c.getColumnIndexOrThrow("actualTakenTime")
+                    val takenCol = c.getColumnIndexOrThrow("isTaken")
+                    val skipCol = c.getColumnIndexOrThrow("isSkipped")
+
+                    MedicationLogEntity(
+                        id = c.getString(idCol),
+                        medicineId = c.getString(medIdCol),
+                        medicineName = c.getString(nameCol),
+                        userId = c.getString(userCol),
+                        scheduledDate = c.getString(dateCol),
+                        scheduledTime = c.getString(timeCol),
+                        actualTakenTime = if (!c.isNull(actualCol)) c.getLong(actualCol) else null,
+                        isTaken = c.getInt(takenCol) == 1,
+                        isSkipped = c.getInt(skipCol) == 1
+                    )
+                } else null
+            }
+        }
+    }
+
+    override suspend fun insertIfAbsent(log: MedicationLogEntity): Long = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("id", log.id)
+            put("medicineId", log.medicineId)
+            put("medicineName", log.medicineName)
+            put("userId", log.userId)
+            put("scheduledDate", log.scheduledDate)
+            put("scheduledTime", log.scheduledTime)
+            log.actualTakenTime?.let { put("actualTakenTime", it) }
+            put("isTaken", if (log.isTaken) 1 else 0)
+            put("isSkipped", if (log.isSkipped) 1 else 0)
+        }
+        val result = db.insertWithOnConflict("medication_logs", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+        if (result != -1L) {
+            _signal.value = System.currentTimeMillis()
+        }
+        result
+    }
+
+    override suspend fun markAsTaken(logId: String, takenAt: Long) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("isTaken", 1)
+            put("isSkipped", 0)
+            put("actualTakenTime", takenAt)
+        }
+        db.update("medication_logs", values, "id = ?", arrayOf(logId))
+        _signal.value = System.currentTimeMillis()
+    }
+
+    override suspend fun getLogById(logId: String): MedicationLogEntity? = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.query(
+            "medication_logs",
+            null,
+            "id = ?",
+            arrayOf(logId),
+            null,
+            null,
+            null,
+            "1"
+        )
+        cursor.use { c ->
+            if (c.moveToFirst()) {
+                val idCol = c.getColumnIndexOrThrow("id")
+                val medIdCol = c.getColumnIndexOrThrow("medicineId")
+                val nameCol = c.getColumnIndexOrThrow("medicineName")
+                val userCol = c.getColumnIndexOrThrow("userId")
+                val dateCol = c.getColumnIndexOrThrow("scheduledDate")
+                val timeCol = c.getColumnIndexOrThrow("scheduledTime")
+                val actualCol = c.getColumnIndexOrThrow("actualTakenTime")
+                val takenCol = c.getColumnIndexOrThrow("isTaken")
+                val skipCol = c.getColumnIndexOrThrow("isSkipped")
+
+                MedicationLogEntity(
+                    id = c.getString(idCol),
+                    medicineId = c.getString(medIdCol),
+                    medicineName = c.getString(nameCol),
+                    userId = c.getString(userCol),
+                    scheduledDate = c.getString(dateCol),
+                    scheduledTime = c.getString(timeCol),
+                    actualTakenTime = if (!c.isNull(actualCol)) c.getLong(actualCol) else null,
+                    isTaken = c.getInt(takenCol) == 1,
+                    isSkipped = c.getInt(skipCol) == 1
+                )
+            } else null
+        }
     }
 }
