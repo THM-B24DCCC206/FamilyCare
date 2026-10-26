@@ -1,9 +1,12 @@
 package com.familycare.app.presentation.biometrics.chart
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -72,14 +75,18 @@ fun BiometricsLineChart(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Color(0xFFECEFF1)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
 
             // 1. Tab chuyển loại chỉ số biểu đồ (Nhịp tim / Huyết áp / Đường huyết)
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterChip(
                     selected = selectedMetricType == MetricType.HEART_RATE,
@@ -87,8 +94,7 @@ fun BiometricsLineChart(
                         selectedMetricType = MetricType.HEART_RATE
                         selectedPointIndex = null
                     },
-                    label = { Text("❤️ Nhịp tim", fontSize = 12.sp) },
-                    modifier = Modifier.weight(1f)
+                    label = { Text("❤️ Nhịp tim", fontSize = 12.sp, maxLines = 1, softWrap = false) }
                 )
                 FilterChip(
                     selected = selectedMetricType == MetricType.BLOOD_PRESSURE,
@@ -96,8 +102,7 @@ fun BiometricsLineChart(
                         selectedMetricType = MetricType.BLOOD_PRESSURE
                         selectedPointIndex = null
                     },
-                    label = { Text("🩺 Huyết áp", fontSize = 12.sp) },
-                    modifier = Modifier.weight(1f)
+                    label = { Text("🩺 Huyết áp", fontSize = 12.sp, maxLines = 1, softWrap = false) }
                 )
                 FilterChip(
                     selected = selectedMetricType == MetricType.BLOOD_SUGAR,
@@ -105,8 +110,7 @@ fun BiometricsLineChart(
                         selectedMetricType = MetricType.BLOOD_SUGAR
                         selectedPointIndex = null
                     },
-                    label = { Text("🩸 Đường huyết", fontSize = 12.sp) },
-                    modifier = Modifier.weight(1.1f)
+                    label = { Text("🩸 Đường huyết", fontSize = 12.sp, maxLines = 1, softWrap = false) }
                 )
             }
 

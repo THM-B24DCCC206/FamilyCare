@@ -106,6 +106,11 @@ fun AppNavHost() {
                         navController.navigate(Screen.Dashboard.route) {
                             popUpTo(0) { inclusive = true }
                         }
+                    },
+                    onBackToLogin = {
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 )
             }

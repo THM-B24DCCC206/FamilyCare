@@ -36,6 +36,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.familycare.app.core.common.SessionManager
 import java.util.concurrent.Executors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -354,7 +355,8 @@ fun CameraPpgScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.saveResult()
+                        val sessionManager = SessionManager(context)
+                        viewModel.saveResult(sessionManager.userId.ifEmpty { "user_me" })
                         onBack()
                     }
                 ) {

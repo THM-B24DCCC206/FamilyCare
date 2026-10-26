@@ -19,6 +19,7 @@ class AppDatabase private constructor(context: Context) {
     val healthMetricDao: HealthMetricDao = HealthMetricDaoImpl(dbHelper)
     val medicineDao: MedicineDao = MedicineDaoImpl(dbHelper)
     val alertDao: AlertDao = AlertDaoImpl(dbHelper)
+    val userDao: UserDao = UserDaoImpl(dbHelper)
 
     companion object {
         @Volatile
@@ -83,6 +84,41 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
                 isRead INTEGER NOT NULL,
                 latitude REAL,
                 longitude REAL
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                fullName TEXT NOT NULL,
+                role TEXT NOT NULL,
+                familyId TEXT,
+                familyName TEXT,
+                inviteCode TEXT,
+                createdAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+
+    override fun onOpen(db: SQLiteDatabase) {
+        super.onOpen(db)
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                fullName TEXT NOT NULL,
+                role TEXT NOT NULL,
+                familyId TEXT,
+                familyName TEXT,
+                inviteCode TEXT,
+                createdAt INTEGER NOT NULL
             )
             """.trimIndent()
         )
@@ -328,5 +364,111 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         val values = ContentValues().apply { put("isRead", 1) }
         db.update("alerts", values, "id = ?", arrayOf(alertId))
         _signal.value = System.currentTimeMillis()
+    }
+}
+
+
+data class UserAccountEntity(
+    val id: String,
+    val email: String,
+    val password: String,
+    val fullName: String,
+    val role: String,
+    val familyId: String? = null,
+    val familyName: String? = null,
+    val inviteCode: String? = null,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+interface UserDao {
+    suspend fun register(user: UserAccountEntity): Boolean
+    suspend fun getUserByEmail(email: String): UserAccountEntity?
+    suspend fun getUserById(userId: String): UserAccountEntity?
+    suspend fun updateFamily(userId: String, familyId: String, familyName: String, inviteCode: String, role: String? = null)
+}
+
+class UserDaoImpl(private val dbHelper: DatabaseHelper) : UserDao {
+    override suspend fun register(user: UserAccountEntity): Boolean = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val existing = queryUserByEmail(user.email)
+        if (existing != null) return@withContext false
+
+        val values = ContentValues().apply {
+            put("id", user.id)
+            put("email", user.email.trim().lowercase())
+            put("password", user.password)
+            put("fullName", user.fullName.trim())
+            put("role", user.role)
+            user.familyId?.let { put("familyId", it) }
+            user.familyName?.let { put("familyName", it) }
+            user.inviteCode?.let { put("inviteCode", it) }
+            put("createdAt", user.createdAt)
+        }
+        val res = db.insertWithOnConflict("users", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+        res != -1L
+    }
+
+    override suspend fun getUserByEmail(email: String): UserAccountEntity? = withContext(Dispatchers.IO) {
+        queryUserByEmail(email)
+    }
+
+    override suspend fun getUserById(userId: String): UserAccountEntity? = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.query("users", null, "id = ?", arrayOf(userId), null, null, null)
+        cursor.use { c ->
+            if (c.moveToFirst()) parseUser(c) else null
+        }
+    }
+
+    override suspend fun updateFamily(userId: String, familyId: String, familyName: String, inviteCode: String, role: String?) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("familyId", familyId)
+            put("familyName", familyName)
+            put("inviteCode", inviteCode)
+            role?.let { put("role", it) }
+        }
+        db.update("users", values, "id = ?", arrayOf(userId))
+        Unit
+    }
+
+    private fun queryUserByEmail(email: String): UserAccountEntity? {
+        val db = dbHelper.readableDatabase
+        val cursor = db.query(
+            "users",
+            null,
+            "LOWER(email) = ?",
+            arrayOf(email.trim().lowercase()),
+            null,
+            null,
+            null
+        )
+        return cursor.use { c ->
+            if (c.moveToFirst()) parseUser(c) else null
+        }
+    }
+
+    private fun parseUser(c: android.database.Cursor): UserAccountEntity {
+        val idCol = c.getColumnIndexOrThrow("id")
+        val emailCol = c.getColumnIndexOrThrow("email")
+        val passCol = c.getColumnIndexOrThrow("password")
+        val nameCol = c.getColumnIndexOrThrow("fullName")
+        val roleCol = c.getColumnIndexOrThrow("role")
+        val famIdCol = c.getColumnIndexOrThrow("familyId")
+        val famNameCol = c.getColumnIndexOrThrow("familyName")
+        val inviteCol = c.getColumnIndexOrThrow("inviteCode")
+        val createdCol = c.getColumnIndexOrThrow("createdAt")
+
+        return UserAccountEntity(
+            id = c.getString(idCol),
+            email = c.getString(emailCol),
+            password = c.getString(passCol),
+            fullName = c.getString(nameCol),
+            role = c.getString(roleCol),
+            familyId = if (!c.isNull(famIdCol)) c.getString(famIdCol) else null,
+            familyName = if (!c.isNull(famNameCol)) c.getString(famNameCol) else null,
+            inviteCode = if (!c.isNull(inviteCol)) c.getString(inviteCol) else null,
+            createdAt = c.getLong(createdCol)
+        )
     }
 }

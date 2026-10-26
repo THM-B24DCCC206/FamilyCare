@@ -24,7 +24,10 @@ class SessionManager(context: Context) {
         userId: String,
         name: String,
         email: String,
-        role: String = "ADMIN"
+        role: String = "ADMIN",
+        familyId: String? = null,
+        familyName: String? = null,
+        inviteCode: String? = null
     ) {
         prefs.edit().apply {
             putBoolean(KEY_IS_LOGGED_IN, true)
@@ -32,6 +35,15 @@ class SessionManager(context: Context) {
             putString(KEY_USER_NAME, name)
             putString(KEY_USER_EMAIL, email)
             putString(KEY_USER_ROLE, role)
+            if (!familyId.isNullOrEmpty()) {
+                putString(KEY_FAMILY_ID, familyId)
+                putString(KEY_FAMILY_NAME, familyName ?: "Tổ Ấm Gia Đình")
+                putString(KEY_INVITE_CODE, inviteCode ?: "")
+            } else {
+                remove(KEY_FAMILY_ID)
+                remove(KEY_FAMILY_NAME)
+                remove(KEY_INVITE_CODE)
+            }
             apply()
         }
     }
@@ -50,7 +62,17 @@ class SessionManager(context: Context) {
     }
 
     fun clearSession() {
-        prefs.edit().clear().apply()
+        prefs.edit().apply {
+            putBoolean(KEY_IS_LOGGED_IN, false)
+            remove(KEY_USER_ID)
+            remove(KEY_USER_NAME)
+            remove(KEY_USER_EMAIL)
+            remove(KEY_USER_ROLE)
+            remove(KEY_FAMILY_ID)
+            remove(KEY_FAMILY_NAME)
+            remove(KEY_INVITE_CODE)
+            apply()
+        }
     }
 
     val isLoggedIn: Boolean
@@ -60,20 +82,20 @@ class SessionManager(context: Context) {
         get() = !prefs.getString(KEY_FAMILY_ID, null).isNullOrEmpty()
 
     val userId: String
-        get() = prefs.getString(KEY_USER_ID, "user_me") ?: "user_me"
+        get() = prefs.getString(KEY_USER_ID, "") ?: ""
 
     val userName: String
-        get() = prefs.getString(KEY_USER_NAME, "Nguyễn Văn Nam") ?: "Nguyễn Văn Nam"
+        get() = prefs.getString(KEY_USER_NAME, "Thành viên") ?: "Thành viên"
 
     val userEmail: String
-        get() = prefs.getString(KEY_USER_EMAIL, "nam.nguyen@gmail.com") ?: "nam.nguyen@gmail.com"
+        get() = prefs.getString(KEY_USER_EMAIL, "") ?: ""
 
     val userRole: String
-        get() = prefs.getString(KEY_USER_ROLE, "ADMIN") ?: "ADMIN"
+        get() = prefs.getString(KEY_USER_ROLE, "MEMBER") ?: "MEMBER"
 
     val familyName: String
-        get() = prefs.getString(KEY_FAMILY_NAME, "Gia đình Bác Nam") ?: "Gia đình Bác Nam"
+        get() = prefs.getString(KEY_FAMILY_NAME, "Tổ Ấm Yêu Thương") ?: "Tổ Ấm Yêu Thương"
 
     val inviteCode: String
-        get() = prefs.getString(KEY_INVITE_CODE, "FAM-8921") ?: "FAM-8921"
+        get() = prefs.getString(KEY_INVITE_CODE, "") ?: ""
 }

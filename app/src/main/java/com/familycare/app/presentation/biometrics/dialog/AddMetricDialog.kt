@@ -27,6 +27,7 @@ import java.util.UUID
 
 @Composable
 fun AddMetricDialog(
+    userId: String = "user_me",
     initialType: MetricType = MetricType.BLOOD_PRESSURE,
     onDismiss: () -> Unit,
     onSave: (HealthMetricEntity, HealthMetricEntity?) -> Unit // Trả về metric chính và metric nhịp tim phụ (nếu có)
@@ -201,7 +202,7 @@ fun AddMetricDialog(
 
                                     val bpMetric = HealthMetricEntity(
                                         id = metricId,
-                                        userId = "user_me",
+                                        userId = userId,
                                         type = MetricType.BLOOD_PRESSURE.name,
                                         valuePrimary = sys,
                                         valueSecondary = dia,
@@ -214,7 +215,7 @@ fun AddMetricDialog(
                                     val pulseMetric = if (pulse != null && pulse > 0) {
                                         HealthMetricEntity(
                                             id = UUID.randomUUID().toString(),
-                                            userId = "user_me",
+                                            userId = userId,
                                             type = MetricType.HEART_RATE.name,
                                             valuePrimary = pulse,
                                             valueSecondary = null,
@@ -232,7 +233,7 @@ fun AddMetricDialog(
                                     val fullNotes = if (notesText.isNotBlank()) "$sugarTiming - $notesText" else sugarTiming
                                     val sugarMetric = HealthMetricEntity(
                                         id = metricId,
-                                        userId = "user_me",
+                                        userId = userId,
                                         type = MetricType.BLOOD_SUGAR.name,
                                         valuePrimary = sugar,
                                         valueSecondary = null,
@@ -247,7 +248,7 @@ fun AddMetricDialog(
                                     val temp = tempText.toDoubleOrNull() ?: 36.8
                                     val tempMetric = HealthMetricEntity(
                                         id = metricId,
-                                        userId = "user_me",
+                                        userId = userId,
                                         type = MetricType.TEMPERATURE.name,
                                         valuePrimary = temp,
                                         valueSecondary = null,
@@ -262,7 +263,7 @@ fun AddMetricDialog(
                                     val bpm = manualHeartRateText.toDoubleOrNull() ?: 75.0
                                     val hrMetric = HealthMetricEntity(
                                         id = metricId,
-                                        userId = "user_me",
+                                        userId = userId,
                                         type = MetricType.HEART_RATE.name,
                                         valuePrimary = bpm,
                                         valueSecondary = null,
