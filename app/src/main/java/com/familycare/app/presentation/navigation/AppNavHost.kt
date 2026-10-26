@@ -20,7 +20,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.*
+import androidx.navigation.navArgument
 import com.familycare.app.core.common.SessionManager
 import com.familycare.app.presentation.ai_assistant.AiAssistantScreen
 import com.familycare.app.presentation.alert.AlertListScreen
@@ -34,6 +36,7 @@ import com.familycare.app.presentation.home.HomeScreen
 import com.familycare.app.presentation.medication.MedicationScreen
 import com.familycare.app.presentation.ocr.OcrPrescriptionScreen
 import com.familycare.app.presentation.profile.ProfileScreen
+import com.familycare.app.presentation.schedule.HealthScheduleScreen
 
 @Composable
 fun AppNavHost() {
@@ -151,10 +154,12 @@ fun AppNavHost() {
                 )
             }
 
-            // Tab 4: Quản lý Thuốc
+            // Tab 4: Kế hoạch Điều trị & Lịch khám (HealthScheduleScreen)
             composable(Screen.Medication.route) {
-                MedicationScreen(
-                    onNavigateToOcr = { navController.navigate(Screen.OcrPrescription.route) }
+                HealthScheduleScreen(
+                    onNavigateToOcr = { memberId ->
+                        navController.navigate("${Screen.OcrPrescription.route}?memberId=$memberId")
+                    }
                 )
             }
 
@@ -176,8 +181,18 @@ fun AppNavHost() {
                 )
             }
 
-            composable(Screen.OcrPrescription.route) {
+            composable(
+                route = "${Screen.OcrPrescription.route}?memberId={memberId}",
+                arguments = listOf(
+                    navArgument("memberId") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                )
+            ) { backStackEntry ->
+                val memberId = backStackEntry.arguments?.getString("memberId").orEmpty()
                 OcrPrescriptionScreen(
+                    memberId = memberId,
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -258,10 +273,10 @@ fun FamilyCareBottomBar(
                 // 3. Vị trí trung tâm (dành chỗ cho nút AI nhô cao)
                 Spacer(modifier = Modifier.weight(1f))
 
-                // 4. Thuốc
+                // 4. Kế hoạch
                 BottomTabItem(
-                    title = "Thuốc",
-                    icon = Icons.Default.Medication,
+                    title = "Kế hoạch",
+                    icon = Icons.Default.EventNote,
                     isSelected = currentRoute == Screen.Medication.route,
                     onClick = { onNavigateToTab(Screen.Medication.route) },
                     modifier = Modifier.weight(1f)
