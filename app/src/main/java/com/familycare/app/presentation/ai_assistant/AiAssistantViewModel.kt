@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.familycare.app.core.common.Resource
+import com.familycare.app.core.common.SessionManager
 import com.familycare.app.core.database.AppDatabase
 import com.familycare.app.data.repository.HealthAiRepositoryImpl
 import com.familycare.app.domain.model.ChatMessage
@@ -208,8 +209,10 @@ class AiAssistantViewModel(
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val db = AppDatabase.getInstance(context.applicationContext)
+                val sessionManager = SessionManager(context.applicationContext)
                 val getContextUseCase = GetHealthContextUseCase(db.userDao(), db.healthMetricDao())
-                val aiRepo = HealthAiRepositoryImpl()
+                val apiKey = sessionManager.geminiApiKey.ifBlank { HealthAiRepositoryImpl.DEFAULT_API_KEY }
+                val aiRepo = HealthAiRepositoryImpl { apiKey }
                 val sendChatUseCase = SendChatMessageUseCase(aiRepo, getContextUseCase)
 
                 return AiAssistantViewModel(sendChatUseCase, getContextUseCase) as T

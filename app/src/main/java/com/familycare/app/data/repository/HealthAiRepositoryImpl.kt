@@ -19,8 +19,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
 /**
- * Triển khai HealthAiRepository sử dụng Google AI Client SDK với mô hình Gemini 1.5 Flash.
- * Hỗ trợ Context Injection động vào System Instructions trước mỗi lượt hội thoại.
+ * Triển khai HealthAiRepository sử dụng Google AI Client SDK với mô hình Gemini Flash thế hệ mới.
+ * Hỗ trợ Context Injection động vào System Instructions và cơ chế tự động chuyển đổi model dự phòng.
  */
 class HealthAiRepositoryImpl(
     private val apiKeyProvider: () -> String = { DEFAULT_API_KEY }
@@ -31,27 +31,39 @@ class HealthAiRepositoryImpl(
         context: UserHealthContext,
         history: List<ChatMessage>
     ): Resource<String> = withContext(Dispatchers.IO) {
-        val apiKey = apiKeyProvider()
+        val apiKey = apiKeyProvider().trim()
         if (apiKey.isBlank() || apiKey == "YOUR_GEMINI_API_KEY") {
             return@withContext Resource.Error("Chưa cấu hình API Key của Google Gemini. Vui lòng kiểm tra lại thiết lập.")
         }
 
-        try {
-            val generativeModel = createGenerativeModel(apiKey, context)
-            val chatHistory = convertHistoryToGenerativeAiContent(history)
+        var lastException: Exception? = null
+        val chatHistory = convertHistoryToGenerativeAiContent(history)
 
-            val chat = generativeModel.startChat(chatHistory)
-            val response = chat.sendMessage(userPrompt)
+        for (modelName in CANDIDATE_MODELS) {
+            try {
+                val generativeModel = createGenerativeModel(apiKey, context, modelName)
+                val chat = generativeModel.startChat(chatHistory)
+                val response = chat.sendMessage(userPrompt)
 
-            val replyText = response.text
-            if (!replyText.isNullOrBlank()) {
-                Resource.Success(replyText.trim())
-            } else {
-                Resource.Error("Gemini không trả về nội dung phản hồi. Vui lòng thử lại.")
+                val replyText = response.text
+                if (!replyText.isNullOrBlank()) {
+                    return@withContext Resource.Success(replyText.trim())
+                }
+            } catch (e: Exception) {
+                lastException = e
+                val errorMsg = e.message ?: ""
+                val isRetryable = errorMsg.contains("not found", ignoreCase = true) ||
+                        errorMsg.contains("503", ignoreCase = true) ||
+                        errorMsg.contains("UNAVAILABLE", ignoreCase = true) ||
+                        errorMsg.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                        errorMsg.contains("MissingFieldException", ignoreCase = true)
+                if (!isRetryable) {
+                    break
+                }
             }
-        } catch (e: Exception) {
-            Resource.Error(formatErrorMessage(e))
         }
+
+        Resource.Error(formatErrorMessage(lastException ?: Exception("Không thể kết nối đến mô hình AI")))
     }
 
     override fun sendMessageStream(
@@ -59,49 +71,66 @@ class HealthAiRepositoryImpl(
         context: UserHealthContext,
         history: List<ChatMessage>
     ): Flow<Resource<String>> = flow {
-        val apiKey = apiKeyProvider()
+        val apiKey = apiKeyProvider().trim()
         if (apiKey.isBlank() || apiKey == "YOUR_GEMINI_API_KEY") {
             emit(Resource.Error("Chưa cấu hình API Key của Google Gemini."))
             return@flow
         }
 
-        try {
-            emit(Resource.Loading())
-            val generativeModel = createGenerativeModel(apiKey, context)
-            val chatHistory = convertHistoryToGenerativeAiContent(history)
+        emit(Resource.Loading())
+        val chatHistory = convertHistoryToGenerativeAiContent(history)
+        var streamedSuccess = false
+        var lastException: Exception? = null
 
-            val chat = generativeModel.startChat(chatHistory)
-            val responseStream = chat.sendMessageStream(userPrompt)
+        for (modelName in CANDIDATE_MODELS) {
+            try {
+                val generativeModel = createGenerativeModel(apiKey, context, modelName)
+                val chat = generativeModel.startChat(chatHistory)
+                val responseStream = chat.sendMessageStream(userPrompt)
 
-            val fullResponseBuilder = StringBuilder()
-            responseStream.collect { chunk ->
-                chunk.text?.let { text ->
-                    fullResponseBuilder.append(text)
-                    emit(Resource.Success(fullResponseBuilder.toString()))
+                val fullResponseBuilder = StringBuilder()
+                responseStream.collect { chunk ->
+                    chunk.text?.let { text ->
+                        fullResponseBuilder.append(text)
+                        emit(Resource.Success(fullResponseBuilder.toString()))
+                    }
+                }
+                streamedSuccess = true
+                break
+            } catch (e: Exception) {
+                lastException = e
+                val errorMsg = e.message ?: ""
+                val isRetryable = errorMsg.contains("not found", ignoreCase = true) ||
+                        errorMsg.contains("503", ignoreCase = true) ||
+                        errorMsg.contains("UNAVAILABLE", ignoreCase = true) ||
+                        errorMsg.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                        errorMsg.contains("MissingFieldException", ignoreCase = true)
+                if (!isRetryable) {
+                    break
                 }
             }
-        } catch (e: Exception) {
-            emit(Resource.Error(formatErrorMessage(e)))
+        }
+
+        if (!streamedSuccess) {
+            emit(Resource.Error(formatErrorMessage(lastException ?: Exception("Không thể kết nối đến mô hình AI"))))
         }
     }.flowOn(Dispatchers.IO)
 
     /**
      * Tạo đối tượng GenerativeModel với System Instructions được đính kèm Ngữ cảnh sức khỏe
-     * (CONTEXT INJECTION THEO YÊU CẦU ĐỒ ÁN)
      */
     private fun createGenerativeModel(
         apiKey: String,
-        healthContext: UserHealthContext
+        healthContext: UserHealthContext,
+        modelName: String
     ): GenerativeModel {
-        // Cấu hình sinh văn bản an toàn và thận trọng cho lĩnh vực y tế gia đình
         val config = generationConfig {
-            temperature = 0.3f       // Nhiệt độ thấp giúp phản hồi chính xác, hạn chế ảo giác y khoa
+            temperature = 0.3f
             topK = 40
             topP = 0.9f
-            maxOutputTokens = 1200   // Đủ dung lượng giải thích chi tiết và ân cần
+            maxOutputTokens = 1200
         }
 
-        // Thiết lập bộ lọc an toàn cao để bảo vệ người dùng cao tuổi
         val safetySettings = listOf(
             SafetySetting(HarmCategory.DANGEROUS_CONTENT, BlockThreshold.LOW_AND_ABOVE),
             SafetySetting(HarmCategory.HARASSMENT, BlockThreshold.MEDIUM_AND_ABOVE),
@@ -109,13 +138,12 @@ class HealthAiRepositoryImpl(
             SafetySetting(HarmCategory.SEXUALLY_EXPLICIT, BlockThreshold.LOW_AND_ABOVE)
         )
 
-        // Tiêm ngữ cảnh bệnh án & chỉ số sinh tồn vào System Instruction
         val systemInstructionContent = content {
             text(healthContext.buildSystemInstruction())
         }
 
         return GenerativeModel(
-            modelName = "gemini-1.5-flash",
+            modelName = modelName,
             apiKey = apiKey,
             generationConfig = config,
             safetySettings = safetySettings,
@@ -123,9 +151,6 @@ class HealthAiRepositoryImpl(
         )
     }
 
-    /**
-     * Chuyển đổi lịch sử chat của Domain Model sang đối tượng Content của Google AI Client SDK
-     */
     private fun convertHistoryToGenerativeAiContent(history: List<ChatMessage>): List<Content> {
         return history
             .filter { !it.isError && it.text.isNotBlank() }
@@ -140,9 +165,6 @@ class HealthAiRepositoryImpl(
             }
     }
 
-    /**
-     * Chuyển đổi ngoại lệ thành thông báo lỗi tiếng Việt thân thiện
-     */
     private fun formatErrorMessage(e: Exception): String {
         val msg = e.message ?: ""
         return when {
@@ -154,12 +176,24 @@ class HealthAiRepositoryImpl(
                 "Không có kết nối mạng Internet. Vui lòng bật Wi-Fi hoặc 4G để trò chuyện với Bác sĩ ảo."
             msg.contains("SocketTimeout", ignoreCase = true) ->
                 "Kết nối tới máy chủ Gemini bị gián đoạn do mạng chậm. Vui lòng bấm thử lại."
-            else -> "Đã xảy ra lỗi khi trao đổi với AI: ${e.localizedMessage ?: "Vui lòng thử lại"}"
+            msg.contains("503", ignoreCase = true) || msg.contains("UNAVAILABLE", ignoreCase = true) ->
+                "Hệ thống máy chủ AI đang chịu tải cao, vui lòng bấm 'Thử lại' sau giây lát."
+            msg.contains("MissingFieldException", ignoreCase = true) || msg.contains("not found", ignoreCase = true) ->
+                "Máy chủ Google Gemini đang cập nhật phiên bản model. Vui lòng bấm 'Thử lại'."
+            else -> "Đã xảy ra lỗi khi trao đổi với AI. Vui lòng bấm 'Thử lại'."
         }
     }
 
     companion object {
-        // Khóa Gemini API cấu hình qua biến môi trường hoặc truyền trực tiếp vào constructor
-        val DEFAULT_API_KEY: String = System.getenv("GEMINI_API_KEY") ?: ""
+        val DEFAULT_API_KEY: String = com.familycare.app.BuildConfig.GEMINI_API_KEY.ifBlank {
+            System.getenv("GEMINI_API_KEY") ?: ""
+        }
+
+        val CANDIDATE_MODELS = listOf(
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
+            "gemini-3.8-flash",
+            "gemini-flash-latest"
+        )
     }
 }
