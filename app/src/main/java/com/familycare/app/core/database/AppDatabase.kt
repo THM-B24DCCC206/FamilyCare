@@ -652,6 +652,18 @@ class UserDaoImpl(private val dbHelper: DatabaseHelper) : UserDao {
         }
     }
 
+    override suspend fun getAllUsers(): List<UserEntity> = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.query("users", null, null, null, null, null, "createdAt ASC")
+        val list = mutableListOf<UserEntity>()
+        cursor.use { c ->
+            while (c.moveToNext()) {
+                list.add(cursorToUserEntity(c))
+            }
+        }
+        list
+    }
+
     override fun observeCurrentUser(): Flow<UserEntity?> {
         return _signal.map {
             getCurrentUser()
