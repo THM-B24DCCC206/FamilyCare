@@ -50,52 +50,6 @@ class AppDatabase private constructor(context: Context) {
     }
 }
 
-    companion object {
-
-        @Volatile
-        private var INSTANCE: AppDatabase? = null
-
-class AppDatabase private constructor(context: Context) {
-
-    private val dbHelper = DatabaseHelper(context.applicationContext)
-
-    val healthMetricDao: HealthMetricDao = HealthMetricDaoImpl(dbHelper)
-    fun healthMetricDao(): HealthMetricDao = healthMetricDao
-
-    val medicineDao: MedicineDao = MedicineDaoImpl(dbHelper)
-    fun medicineDao(): MedicineDao = medicineDao
-
-    val alertDao: AlertDao = AlertDaoImpl(dbHelper)
-    fun alertDao(): AlertDao = alertDao
-
-    val userDao: UserDao = UserDaoImpl(dbHelper)
-    fun userDao(): UserDao = userDao
-
-    val appointmentDao: AppointmentDao = AppointmentDaoImpl(dbHelper)
-    fun appointmentDao(): AppointmentDao = appointmentDao
-
-    val medicationLogDao: MedicationLogDao = MedicationLogDaoImpl(dbHelper)
-    fun medicationLogDao(): MedicationLogDao = medicationLogDao
-
-    companion object {
-
-        @Volatile
-        private var INSTANCE: AppDatabase? = null
-
-        fun getInstance(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = AppDatabase(context.applicationContext)
-                INSTANCE = instance
-                instance
-            }
-        }
-    }
-}
-            }
-        }
-    }
-}
-
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_db.db", null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
