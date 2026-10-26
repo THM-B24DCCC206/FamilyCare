@@ -185,7 +185,7 @@ fun HomeScreen(
             item {
                 val alert = uiState.alertStatus
                 if (alert != null) {
-                    // Banner Cảnh báo đỏ khi có chỉ số bất thường
+                    // Banner Cảnh báo đỏ khi có chỉ số bất thường thực tế
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = Color(0xFFFEF2F2)
@@ -278,7 +278,7 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "Chưa ghi nhận bất thường trong 48 giờ qua. Các chỉ số đều trong ngưỡng an toàn.",
+                                    text = "Chưa ghi nhận bất thường nào. Các chỉ số sinh tồn của thành viên đều an toàn.",
                                     color = Color(0xFF15803D),
                                     style = MaterialTheme.typography.bodySmall
                                 )
@@ -288,7 +288,7 @@ fun HomeScreen(
                 }
             }
 
-            // 3. Chỉ Số Sức Khỏe Mới Nhất (Lưới 2 cột: Huyết áp & Nhịp tim)
+            // 3. Chỉ Số Sức Khỏe Gần Nhất (Lưới 2 cột: Huyết áp & Nhịp tim)
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
@@ -311,6 +311,9 @@ fun HomeScreen(
                     }
 
                     val vitals = uiState.latestVitals
+                    val hasMeasuredBp = vitals?.hasMeasuredBp == true
+                    val hasMeasuredHr = vitals?.hasMeasuredHr == true
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -344,18 +347,33 @@ fun HomeScreen(
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
-                                    val isBpWarning = vitals?.isBloodPressureWarning == true
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (isBpWarning) Color(0xFFFEE2E2) else Color(0xFFDCFCE7)
-                                    ) {
-                                        Text(
-                                            text = if (isBpWarning) "Tăng HA" else "Bình thường",
-                                            color = if (isBpWarning) Color(0xFFDC2626) else Color(0xFF16A34A),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
+                                    if (hasMeasuredBp) {
+                                        val isBpWarning = vitals?.isBloodPressureWarning == true
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (isBpWarning) Color(0xFFFEE2E2) else Color(0xFFDCFCE7)
+                                        ) {
+                                            Text(
+                                                text = if (isBpWarning) "Tăng HA" else "Bình thường",
+                                                color = if (isBpWarning) Color(0xFFDC2626) else Color(0xFF16A34A),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFFF1F5F9)
+                                        ) {
+                                            Text(
+                                                text = "Chưa đo",
+                                                color = Color(0xFF64748B),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -365,14 +383,23 @@ fun HomeScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
-                                val sys = vitals?.bloodPressureSystolic ?: 125
-                                val dia = vitals?.bloodPressureDiastolic ?: 82
-                                Text(
-                                    text = "$sys/$dia",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (vitals?.isBloodPressureWarning == true) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurface
-                                )
+                                if (hasMeasuredBp) {
+                                    val sys = vitals?.bloodPressureSystolic ?: 0
+                                    val dia = vitals?.bloodPressureDiastolic ?: 0
+                                    Text(
+                                        text = "$sys/$dia",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (vitals?.isBloodPressureWarning == true) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurface
+                                    )
+                                } else {
+                                    Text(
+                                        text = "0/0",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
                                 Text(
                                     text = "mmHg",
                                     style = MaterialTheme.typography.bodySmall,
@@ -410,18 +437,33 @@ fun HomeScreen(
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
-                                    val isHrWarning = vitals?.isHeartRateWarning == true
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (isHrWarning) Color(0xFFFEE2E2) else Color(0xFFDCFCE7)
-                                    ) {
-                                        Text(
-                                            text = if (isHrWarning) "Bất thường" else "Bình thường",
-                                            color = if (isHrWarning) Color(0xFFDC2626) else Color(0xFF16A34A),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
+                                    if (hasMeasuredHr) {
+                                        val isHrWarning = vitals?.isHeartRateWarning == true
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (isHrWarning) Color(0xFFFEE2E2) else Color(0xFFDCFCE7)
+                                        ) {
+                                            Text(
+                                                text = if (isHrWarning) "Bất thường" else "Bình thường",
+                                                color = if (isHrWarning) Color(0xFFDC2626) else Color(0xFF16A34A),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFFF1F5F9)
+                                        ) {
+                                            Text(
+                                                text = "Chưa đo",
+                                                color = Color(0xFF64748B),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -431,13 +473,22 @@ fun HomeScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
-                                val hr = vitals?.heartRateBpm ?: 72
-                                Text(
-                                    text = "$hr",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (vitals?.isHeartRateWarning == true) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurface
-                                )
+                                if (hasMeasuredHr) {
+                                    val hr = vitals?.heartRateBpm ?: 0
+                                    Text(
+                                        text = "$hr",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (vitals?.isHeartRateWarning == true) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurface
+                                    )
+                                } else {
+                                    Text(
+                                        text = "0",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
                                 Text(
                                     text = "BPM",
                                     style = MaterialTheme.typography.bodySmall,
@@ -544,12 +595,34 @@ fun HomeScreen(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
-                            Text(
-                                text = "Không có lịch uống thuốc trong ngày",
-                                modifier = Modifier.padding(16.dp),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Chưa có lịch uống thuốc hôm nay",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "Thêm thuốc hoặc quét đơn thuốc AI",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = onNavigateToMedication,
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(34.dp)
+                                ) {
+                                    Text("Thêm", fontSize = 12.sp)
+                                }
+                            }
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

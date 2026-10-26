@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.familycare.app.core.ble.SmartwatchBleManager
 import com.familycare.app.core.common.Resource
+import com.familycare.app.core.common.SessionManager
 import com.familycare.app.core.database.*
 import com.familycare.app.domain.model.*
 import com.familycare.app.domain.usecase.AnalyzeThresholdUseCase
@@ -17,6 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class HomeViewModel(
+    private val sessionManager: SessionManager,
     private val userDao: UserDao,
     private val healthMetricDao: HealthMetricDao,
     private val alertDao: AlertDao,
@@ -61,20 +63,28 @@ class HomeViewModel(
             _uiState.update { it.copy(isLoading = true) }
             try {
                 withContext(Dispatchers.IO) {
-                    val dbMembers = getOrSeedMembers()
-                    val defaultMemberId = _uiState.value.selectedMemberId.ifBlank {
-                        dbMembers.firstOrNull()?.id ?: ""
+                    // 1. Đồng bộ và lấy danh sách thành viên thực tế (Luôn ưu tiên tài khoản đăng nhập)
+                    val members = loadRealFamilyMembers()
+
+                    // Thành viên được chọn mặc định luôn là người dùng đang đăng nhập
+                    val currentUserId = sessionManager.userId.ifBlank { members.firstOrNull()?.id ?: "" }
+                    val selectedId = if (_uiState.value.selectedMemberId.isNotBlank() &&
+                        members.any { it.id == _uiState.value.selectedMemberId }
+                    ) {
+                        _uiState.value.selectedMemberId
+                    } else {
+                        currentUserId
                     }
 
                     _uiState.update {
                         it.copy(
-                            familyMembers = dbMembers,
-                            selectedMemberId = defaultMemberId
+                            familyMembers = members,
+                            selectedMemberId = selectedId
                         )
                     }
 
-                    if (defaultMemberId.isNotBlank()) {
-                        fetchMemberDetails(defaultMemberId)
+                    if (selectedId.isNotBlank()) {
+                        fetchMemberDetails(selectedId)
                     } else {
                         _uiState.update { it.copy(isLoading = false) }
                     }
@@ -90,10 +100,52 @@ class HomeViewModel(
         }
     }
 
-    private suspend fun getOrSeedMembers(): List<Member> = withContext(Dispatchers.IO) {
-        val existingUsers = userDao.getAllUsers()
-        if (existingUsers.isNotEmpty()) {
-            return@withContext existingUsers.map { u ->
+    /**
+     * Tải danh sách thành viên thực tế dựa vào tài khoản đang đăng nhập trong SessionManager.
+     * Xóa sạch các tài khoản giả (user_01, user_demo_01) đã bị gán cứng trước đó.
+     */
+    private suspend fun loadRealFamilyMembers(): List<Member> = withContext(Dispatchers.IO) {
+        val currentUserId = sessionManager.userId.ifBlank { "user_me" }
+        val currentUserName = sessionManager.userName.ifBlank { "Tôi" }
+        val currentUserEmail = sessionManager.userEmail
+        val currentRole = sessionManager.userRole
+
+        // Xóa sạch các ID mẫu cứng cũ nếu có
+        runCatching {
+            userDao.deleteUserById("user_01")
+            userDao.deleteUserById("user_demo_01")
+        }
+
+        // Đảm bảo người dùng hiện tại đã có trong bảng users của SQLite
+        val existingCurrentUser = userDao.getUserById(currentUserId)
+        if (existingCurrentUser == null) {
+            userDao.insertUser(
+                UserEntity(
+                    id = currentUserId,
+                    fullName = currentUserName,
+                    email = currentUserEmail,
+                    role = currentRole
+                )
+            )
+        }
+
+        val allDbUsers = userDao.getAllUsers()
+        val membersList = mutableListOf<Member>()
+
+        // 1. Luôn đưa tài khoản đang đăng nhập lên ĐẦU TIÊN
+        val currentDbUser = allDbUsers.firstOrNull { it.id == currentUserId }
+        val currentMember = Member(
+            id = currentUserId,
+            fullName = currentDbUser?.fullName ?: currentUserName,
+            avatarUrl = currentDbUser?.avatarUrl?.takeIf { it.isNotBlank() },
+            initials = (currentDbUser?.fullName ?: currentUserName).trim().take(1).uppercase(),
+            role = if (currentRole == "ADMIN") "Trưởng gia đình" else "Thành viên"
+        )
+        membersList.add(currentMember)
+
+        // 2. Thêm các thành viên gia đình khác (nếu có trong DB và không phải user_01 / user_demo_01)
+        allDbUsers.filter { it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01" }.forEach { u ->
+            membersList.add(
                 Member(
                     id = u.id,
                     fullName = u.fullName,
@@ -101,163 +153,115 @@ class HomeViewModel(
                     initials = u.fullName.trim().take(1).uppercase(),
                     role = if (u.role == "ADMIN") "Trưởng gia đình" else "Thành viên"
                 )
-            }
-        }
-
-        // Seed dữ liệu người dùng thực tế vào SQLite
-        val primaryUser = UserEntity(
-            id = "user_01",
-            fullName = "Bác Nguyễn Văn Nam",
-            email = "nam.nguyen@familycare.vn",
-            familyId = "fam_123",
-            role = "MEMBER",
-            birthDate = "15/04/1958",
-            chronicDiseasesJson = "[\"Cao huyết áp vô căn\"]"
-        )
-        val user2 = UserEntity(
-            id = "user_02",
-            fullName = "Bác Trần Thị Lan",
-            email = "lan.tran@familycare.vn",
-            familyId = "fam_123",
-            role = "MEMBER",
-            birthDate = "10/08/1960",
-            chronicDiseasesJson = "[\"Tiền tiểu đường\"]"
-        )
-        val user3 = UserEntity(
-            id = "user_03",
-            fullName = "Nguyễn Hoàng",
-            email = "hoang.nguyen@familycare.vn",
-            familyId = "fam_123",
-            role = "ADMIN",
-            birthDate = "22/11/1988"
-        )
-
-        userDao.insertUser(primaryUser)
-        userDao.insertUser(user2)
-        userDao.insertUser(user3)
-
-        listOf(primaryUser, user2, user3).map { u ->
-            Member(
-                id = u.id,
-                fullName = u.fullName,
-                avatarUrl = null,
-                initials = u.fullName.trim().take(1).uppercase(),
-                role = if (u.role == "ADMIN") "Trưởng gia đình" else "Thành viên"
             )
         }
+
+        membersList
     }
 
+    /**
+     * Tải dữ liệu thực tế của thành viên:
+     * - Nếu chưa đo lần nào: Để trống (0) và KHÔNG tự bịa cảnh báo đỏ!
+     * - Nếu chưa có thuốc: Để danh sách rỗng!
+     */
     private suspend fun fetchMemberDetails(memberId: String) = withContext(Dispatchers.IO) {
         val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
-        // 1. Chỉ số sinh tồn mới nhất
+        // 1. Chỉ số sinh tồn thực tế (KHÔNG seed số giả nếu chưa đo)
         val bpEntity = healthMetricDao.getLatestMetricByType(memberId, MetricType.BLOOD_PRESSURE.name)
-            ?: seedSampleMetric(memberId, MetricType.BLOOD_PRESSURE.name, 125.0, 82.0, "mmHg")
         val hrEntity = healthMetricDao.getLatestMetricByType(memberId, MetricType.HEART_RATE.name)
-            ?: seedSampleMetric(memberId, MetricType.HEART_RATE.name, 72.0, null, "BPM")
         val sugarEntity = healthMetricDao.getLatestMetricByType(memberId, MetricType.BLOOD_SUGAR.name)
         val tempEntity = healthMetricDao.getLatestMetricByType(memberId, MetricType.TEMPERATURE.name)
 
-        val systolic = bpEntity.valuePrimary.toInt()
-        val diastolic = bpEntity.valueSecondary?.toInt() ?: 80
-        val hr = hrEntity.valuePrimary.toInt()
+        val systolic = bpEntity?.valuePrimary?.toInt() ?: 0
+        val diastolic = bpEntity?.valueSecondary?.toInt() ?: 0
+        val hr = hrEntity?.valuePrimary?.toInt() ?: 0
 
-        val isBpWarning = systolic >= 140 || diastolic >= 90
-        val isHrWarning = hr > 100 || hr < 55
+        val hasBp = bpEntity != null && systolic > 0
+        val hasHr = hrEntity != null && hr > 0
+
+        val isBpWarning = hasBp && (systolic >= 140 || diastolic >= 90)
+        val isHrWarning = hasHr && (hr > 100 || hr < 55)
 
         val vitals = VitalSummary(
             heartRateBpm = hr,
             bloodPressureSystolic = systolic,
             bloodPressureDiastolic = diastolic,
-            isHeartRateWarning = isHrWarning,
+            isHeartRateWarning = isBpWarning,
             isBloodPressureWarning = isBpWarning,
             bloodSugar = sugarEntity?.valuePrimary,
             temperature = tempEntity?.valuePrimary,
-            lastUpdated = bpEntity.timestamp
+            lastUpdated = bpEntity?.timestamp ?: hrEntity?.timestamp ?: System.currentTimeMillis()
         )
 
-        // 2. Phân tích cảnh báo (Threshold Analysis)
+        // 2. Cảnh báo (Chỉ tạo cảnh báo nếu THỰC SỰ có lần đo và vượt ngưỡng an toàn)
         var alert: HealthAlert? = null
-        val recentMetrics = listOf(
-            bpEntity.toDomainModel(),
-            hrEntity.toDomainModel()
-        )
+        if (hasBp || hasHr) {
+            val recentMetrics = listOfNotNull(
+                bpEntity?.toDomainModel(),
+                hrEntity?.toDomainModel()
+            )
 
-        val currentMember = _uiState.value.familyMembers.firstOrNull { it.id == memberId }
-        val memberName = currentMember?.fullName ?: "Thành viên"
+            val currentMember = _uiState.value.familyMembers.firstOrNull { it.id == memberId }
+            val memberName = currentMember?.fullName ?: "Thành viên"
 
-        analyzeThresholdUseCase(
-            userId = memberId,
-            metrics = recentMetrics,
-            userName = memberName,
-            familyId = "fam_123"
-        ).collect { res ->
-            if (res is Resource.Success && res.data != null) {
-                val result = res.data
-                if (result.isCriticalRedAlert) {
-                    alert = HealthAlert(
-                        id = "alert_${memberId}_threshold",
-                        title = "⚠️ CẢNH BÁO: CHỈ SỐ HUYẾT ÁP VƯỢT NGƯỠNG AN TOÀN",
-                        message = "Phát hiện $systolic/$diastolic mmHg. Cần uống thuốc hoặc liên hệ bác sĩ theo dõi.",
-                        level = "CRITICAL",
-                        timestamp = System.currentTimeMillis()
+            analyzeThresholdUseCase(
+                userId = memberId,
+                metrics = recentMetrics,
+                userName = memberName,
+                familyId = sessionManager.familyName
+            ).collect { res ->
+                if (res is Resource.Success && res.data != null) {
+                    val result = res.data
+                    if (result.isCriticalRedAlert) {
+                        alert = HealthAlert(
+                            id = "alert_${memberId}_threshold",
+                            title = "⚠️ CẢNH BÁO: CHỈ SỐ HUYẾT ÁP VƯỢT NGƯỠNG AN TOÀN",
+                            message = "Phát hiện $systolic/$diastolic mmHg. Vui lòng nghỉ ngơi hoặc liên hệ bác sĩ theo dõi.",
+                            level = "CRITICAL",
+                            timestamp = System.currentTimeMillis()
+                        )
+                    }
+                }
+            }
+
+            if (alert == null && isBpWarning) {
+                alert = HealthAlert(
+                    id = "alert_${memberId}_bp",
+                    title = "⚠️ CẢNH BÁO: HUYẾT ÁP TĂNG CAO BẤT THƯỜNG",
+                    message = "Chỉ số gần nhất $systolic/$diastolic mmHg vượt ngưỡng 140/90. Vui lòng nghỉ ngơi và theo dõi sát sao.",
+                    level = "CRITICAL",
+                    timestamp = System.currentTimeMillis()
+                )
+            }
+        }
+
+        // 3. Lịch uống thuốc thực tế (Lấy từ medicineDao của đúng thành viên này)
+        val realSchedules = mutableListOf<MedicationSchedule>()
+        try {
+            // Lấy danh sách thuốc của thành viên
+            val medicinesFlow = medicineDao.getMedicinesByMember(memberId)
+            val medicines = medicinesFlow.firstOrNull() ?: emptyList()
+
+            for (medicine in medicines) {
+                for (time in medicine.reminderTimes) {
+                    val log = medicationLogDao.getLog(medicine.id, todayStr, time)
+                    val isTaken = log?.isTaken ?: false
+                    realSchedules.add(
+                        MedicationSchedule(
+                            id = log?.id ?: "${medicine.id}_${todayStr}_$time",
+                            medicineId = medicine.id,
+                            medicineName = medicine.name,
+                            dosage = medicine.dosage,
+                            instruction = medicine.instruction,
+                            scheduledTime = time,
+                            isTaken = isTaken
+                        )
                     )
                 }
             }
-        }
-
-        // Nếu người này là Bác Nam và có huyết áp cao sẵn, kích hoạt mẫu cảnh báo nguy cơ
-        if (alert == null && isBpWarning) {
-            alert = HealthAlert(
-                id = "alert_${memberId}_bp",
-                title = "⚠️ CẢNH BÁO: HUYẾT ÁP TĂNG CAO BẤT THƯỜNG",
-                message = "Chỉ số hiện tại $systolic/$diastolic mmHg vượt ngưỡng 140/90. Vui lòng nghỉ ngơi và uống thuốc hạ áp theo chỉ định.",
-                level = "CRITICAL",
-                timestamp = System.currentTimeMillis()
-            )
-        }
-
-        // 3. Lịch uống thuốc hôm nay
-        val todaySchedules = mutableListOf<MedicationSchedule>()
-        val defaultMedList = listOf(
-            MedicationSchedule(
-                id = "log_${memberId}_0800",
-                medicineId = "med_01",
-                medicineName = "Amlodipine 5mg",
-                dosage = "1 viên",
-                instruction = "Uống sau ăn sáng kèm nhiều nước ấm",
-                scheduledTime = "08:00",
-                isTaken = true
-            ),
-            MedicationSchedule(
-                id = "log_${memberId}_1800",
-                medicineId = "med_02",
-                medicineName = "Glucophage 500mg",
-                dosage = "1 viên",
-                instruction = "Uống cùng bữa ăn tối để kiểm soát đường huyết",
-                scheduledTime = "18:00",
-                isTaken = false
-            )
-        )
-
-        // Đồng bộ với database medication_logs nếu có
-        for (item in defaultMedList) {
-            val existingLog = medicationLogDao.getLog(item.medicineId, todayStr, item.scheduledTime)
-            if (existingLog != null) {
-                todaySchedules.add(item.copy(id = existingLog.id, isTaken = existingLog.isTaken))
-            } else {
-                val logEntity = MedicationLogEntity(
-                    id = item.id,
-                    medicineId = item.medicineId,
-                    medicineName = item.medicineName,
-                    userId = memberId,
-                    scheduledDate = todayStr,
-                    scheduledTime = item.scheduledTime,
-                    isTaken = item.isTaken
-                )
-                medicationLogDao.insertIfAbsent(logEntity)
-                todaySchedules.add(item)
-            }
+        } catch (_: Exception) {
+            // Giữ danh sách rỗng nếu chưa có dữ liệu thuốc
         }
 
         _uiState.update {
@@ -265,33 +269,11 @@ class HomeViewModel(
                 selectedMemberId = memberId,
                 alertStatus = alert,
                 latestVitals = vitals,
-                todayMedications = todaySchedules,
+                todayMedications = realSchedules,
                 isLoading = false,
                 errorMessage = null
             )
         }
-    }
-
-    private suspend fun seedSampleMetric(
-        userId: String,
-        type: String,
-        val1: Double,
-        val2: Double?,
-        unit: String
-    ): HealthMetricEntity {
-        val entity = HealthMetricEntity(
-            id = "metric_${userId}_${type.lowercase()}",
-            userId = userId,
-            type = type,
-            valuePrimary = val1,
-            valueSecondary = val2,
-            unit = unit,
-            timestamp = System.currentTimeMillis() - 15 * 60 * 1000L,
-            notes = "Đo định kỳ buổi sáng",
-            isFromCameraPpg = false
-        )
-        healthMetricDao.insertMetric(entity)
-        return entity
     }
 
     fun onMemberSelect(memberId: String) {
@@ -338,10 +320,12 @@ class HomeViewModel(
                 val appContext = context.applicationContext
                 val db = AppDatabase.getInstance(appContext)
                 val ble = SmartwatchBleManager(appContext)
+                val sessionManager = SessionManager(appContext)
                 val alertDao = db.alertDao()
                 val analyzeUseCase = AnalyzeThresholdUseCase(alertDao)
 
                 return HomeViewModel(
+                    sessionManager = sessionManager,
                     userDao = db.userDao(),
                     healthMetricDao = db.healthMetricDao(),
                     alertDao = alertDao,

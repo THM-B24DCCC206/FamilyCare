@@ -25,7 +25,10 @@ data class VitalSummary(
     val bloodSugar: Double? = null,
     val temperature: Double? = null,
     val lastUpdated: Long = System.currentTimeMillis()
-)
+) {
+    val hasMeasuredBp: Boolean get() = (bloodPressureSystolic ?: 0) > 0
+    val hasMeasuredHr: Boolean get() = (heartRateBpm ?: 0) > 0
+}
 
 data class MedicationSchedule(
     val id: String,
