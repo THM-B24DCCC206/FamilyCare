@@ -15,7 +15,8 @@ data class MedicineEntity(
     val reminderTimes: List<String>,
     val startDate: Long,
     val endDate: Long? = null,
-    val scannedViaOcr: Boolean = false
+    val scannedViaOcr: Boolean = false,
+    val purpose: String = ""
 ) {
     fun toDomain(): Medicine {
         return Medicine(
@@ -27,7 +28,8 @@ data class MedicineEntity(
             reminderTimes = reminderTimes,
             startDate = startDate,
             endDate = endDate,
-            scannedViaOcr = scannedViaOcr
+            scannedViaOcr = scannedViaOcr,
+            purpose = purpose
         )
     }
 
@@ -42,7 +44,8 @@ data class MedicineEntity(
                 reminderTimes = model.reminderTimes,
                 startDate = model.startDate,
                 endDate = model.endDate,
-                scannedViaOcr = model.scannedViaOcr
+                scannedViaOcr = model.scannedViaOcr,
+                purpose = model.purpose
             )
         }
     }

@@ -147,12 +147,12 @@ fun HealthScheduleScreen(
                 showAddMedicineDialog = false
                 editingMedicine = null
             },
-            onConfirm = { name, dosage, instruction, times ->
+            onConfirm = { name, dosage, purpose, instruction, times ->
                 if (editingMedicine != null) {
-                    viewModel.updateMedicine(editingMedicine!!, name, dosage, instruction, times)
+                    viewModel.updateMedicine(editingMedicine!!, name, dosage, purpose, instruction, times)
                     Toast.makeText(context, "Đã cập nhật thuốc", Toast.LENGTH_SHORT).show()
                 } else {
-                    viewModel.addMedicine(name, dosage, instruction, times)
+                    viewModel.addMedicine(name, dosage, purpose, instruction, times)
                     Toast.makeText(context, "Đã thêm thuốc mới", Toast.LENGTH_SHORT).show()
                 }
                 showAddMedicineDialog = false
@@ -477,7 +477,13 @@ fun MedicationTabContent(
 }
 
 /**
- * Thẻ thuốc tối ưu: Tên + hàm lượng + đơn vị + tách từng cữ uống trong ngày + nút 3 chấm
+ * Thẻ thuốc tối ưu giao diện:
+ * - Nền trắng (#FFFFFF), đổ bóng nhẹ 2dp, bo góc 16dp
+ * - Hàng 1 (Header thẻ): Icon thuốc + Tên thuốc (16sp, bold) + Tag Công dụng [Mát gan, thanh nhiệt] + Nút 3 chấm góc phải
+ * - Hàng 2 (Thông tin liều dùng): "Liều dùng: 1 gói / lần", font 13sp màu #64748B + Lời dặn
+ * - Hàng 3 (Các cữ uống trong ngày):
+ *   Cữ chưa uống: 🕒 08:00 (Sáng) -> [ Uống ngay ]
+ *   Cữ đã uống: 🕒 12:00 (Trưa) -> ✅ Đã uống lúc ...
  */
 @Composable
 fun MedicationCard(
@@ -491,16 +497,16 @@ fun MedicationCard(
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Hàng tiêu đề: Tên thuốc in đậm kèm hàm lượng + nút 3 chấm
+            // Hàng 1 (Header thẻ): Icon thuốc + Tên thuốc + Tag công dụng + Nút 3 chấm góc phải
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 // Icon viên thuốc
                 Box(
@@ -521,46 +527,36 @@ fun MedicationCard(
                 Spacer(modifier = Modifier.width(10.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = medicine.name,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (medicine.dosage.isNotBlank()) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFFF1F5F9),
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = medicine.dosage,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF334155),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
+                    // Tên thuốc in đậm (16sp)
+                    Text(
+                        text = medicine.name,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1E293B),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
-                    if (medicine.instruction.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = medicine.instruction,
-                            fontSize = 12.sp,
-                            color = Color(0xFF64748B),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    // Tag Công dụng: badge nhỏ xinh nền #EFF6FF, viền #BFDBFE, chữ #1D4ED8
+                    if (medicine.purpose.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFEFF6FF),
+                            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                        ) {
+                            Text(
+                                text = medicine.purpose,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF1D4ED8),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                 }
 
-                // Nút ba chấm góc thẻ
+                // Nút ba chấm menu căn ở góc trên bên phải để Sửa/Xóa
                 Box {
                     IconButton(
                         onClick = { showMenu = true },
@@ -606,14 +602,35 @@ fun MedicationCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            // Hàng 2 (Thông tin liều dùng): "Liều dùng: 1 gói / lần" font 13sp màu #64748B
+            Spacer(modifier = Modifier.height(8.dp))
+            val dosageDisplay = if (medicine.dosage.isNotBlank()) medicine.dosage else "1 gói"
+            Text(
+                text = "Liều dùng: $dosageDisplay / lần",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF64748B)
+            )
+
+            if (medicine.instruction.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Lời dặn: ${medicine.instruction}",
+                    fontSize = 12.sp,
+                    color = Color(0xFF475569),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
             HorizontalDivider(color = Color(0xFFF1F5F9))
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Tách từng cữ uống trong ngày: 08:00 (Sáng) -> [ Uống ngay ] / [ ✅ Đã uống lúc ... ]
+            // Hàng 3 (Các cữ uống trong ngày): 08:00 (Sáng) -> [ Uống ngay ] / [ ✅ Đã uống lúc ... ]
             if (medicine.reminderTimes.isEmpty()) {
                 Text(
-                    text = "Chưa thiết lập cữ uống trong ngày",
+                    text = "Chưa đặt cữ giờ (Uống khi cần)",
                     fontSize = 12.sp,
                     color = Color(0xFF94A3B8),
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
@@ -1102,24 +1119,35 @@ fun PastAppointmentCard(
 fun AddEditMedicineDialog(
     initialMedicine: Medicine?,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, dosage: String, instruction: String, times: List<String>) -> Unit
+    onConfirm: (name: String, dosage: String, purpose: String, instruction: String, times: List<String>) -> Unit
 ) {
     var name by remember { mutableStateOf(initialMedicine?.name.orEmpty()) }
-    var dosage by remember { mutableStateOf(initialMedicine?.dosage.orEmpty()) }
-    var unit by remember { mutableStateOf("viên") }
+    var purpose by remember { mutableStateOf(initialMedicine?.purpose.orEmpty()) }
+    var dosage by remember {
+        mutableStateOf(
+            if (initialMedicine != null) {
+                val parts = initialMedicine.dosage.split(" ")
+                parts.firstOrNull().orEmpty().ifBlank { initialMedicine.dosage }
+            } else "1"
+        )
+    }
+    var unit by remember {
+        mutableStateOf(
+            if (initialMedicine != null) {
+                val parts = initialMedicine.dosage.split(" ")
+                if (parts.size > 1) parts.drop(1).joinToString(" ") else "viên"
+            } else "viên"
+        )
+    }
     var instruction by remember { mutableStateOf(initialMedicine?.instruction.orEmpty()) }
     val timesList = remember {
         mutableStateListOf<String>().apply {
             if (initialMedicine != null && initialMedicine.reminderTimes.isNotEmpty()) {
                 addAll(initialMedicine.reminderTimes)
-            } else {
-                add("08:00")
             }
         }
     }
 
-    var customTimeInput by remember { mutableStateOf("") }
-    var showTimePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     AlertDialog(
@@ -1142,7 +1170,16 @@ fun AddEditMedicineDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Tên thuốc *") },
-                    placeholder = { Text("Ví dụ: Amlodipine") },
+                    placeholder = { Text("Ví dụ: Bột sủi thanh nhiệt Livecool") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = purpose,
+                    onValueChange = { purpose = it },
+                    label = { Text("Công dụng (nhãn 2–4 từ)") },
+                    placeholder = { Text("Ví dụ: Mát gan, thanh nhiệt") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1154,8 +1191,8 @@ fun AddEditMedicineDialog(
                     OutlinedTextField(
                         value = dosage,
                         onValueChange = { dosage = it },
-                        label = { Text("Hàm lượng *") },
-                        placeholder = { Text("5mg, 500mg...") },
+                        label = { Text("Liều dùng *") },
+                        placeholder = { Text("1") },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -1164,16 +1201,16 @@ fun AddEditMedicineDialog(
                         value = unit,
                         onValueChange = { unit = it },
                         label = { Text("Đơn vị") },
-                        placeholder = { Text("viên, gói...") },
+                        placeholder = { Text("gói, viên...") },
                         singleLine = true,
-                        modifier = Modifier.width(90.dp)
+                        modifier = Modifier.width(100.dp)
                     )
                 }
 
                 OutlinedTextField(
                     value = instruction,
                     onValueChange = { instruction = it },
-                    label = { Text("Hướng dẫn sử dụng") },
+                    label = { Text("Hướng dẫn sử dụng / Lời dặn") },
                     placeholder = { Text("Ví dụ: Uống sau khi ăn no 30 phút") },
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth()
@@ -1186,42 +1223,88 @@ fun AddEditMedicineDialog(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                // Danh sách giờ đã chọn dạng Chip
+                if (timesList.isEmpty()) {
+                    Text(
+                        text = "Chưa đặt cữ giờ (Uống khi cần)",
+                        fontSize = 12.sp,
+                        color = Color(0xFF94A3B8),
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                } else {
+                    // Danh sách giờ đã chọn dạng Chip
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        timesList.forEach { t ->
+                            InputChip(
+                                selected = true,
+                                onClick = { },
+                                label = { Text(t, fontSize = 12.sp) },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Xóa giờ",
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clickable { timesList.remove(t) }
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Gợi ý các giờ phổ biến + Nút [ ⏰ + Tùy chọn giờ ]
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    timesList.forEach { t ->
-                        InputChip(
-                            selected = true,
-                            onClick = { },
-                            label = { Text(t, fontSize = 12.sp) },
-                            trailingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Xóa giờ",
-                                    modifier = Modifier
-                                        .size(14.dp)
-                                        .clickable { timesList.remove(t) }
-                                )
-                            }
+                    // Nút TimePickerDialog
+                    FilledTonalButton(
+                        onClick = {
+                            val now = Calendar.getInstance()
+                            TimePickerDialog(
+                                context,
+                                { _, hour, minute ->
+                                    val formatted = String.format(Locale.ROOT, "%02d:%02d", hour, minute)
+                                    if (!timesList.contains(formatted)) {
+                                        timesList.add(formatted)
+                                    }
+                                },
+                                now.get(Calendar.HOUR_OF_DAY),
+                                now.get(Calendar.MINUTE),
+                                true
+                            ).show()
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(32.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = Color(0xFFEFF6FF),
+                            contentColor = Color(0xFF1D4ED8)
                         )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "+ Tùy chọn giờ", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
-                }
 
-                // Gợi ý các giờ phổ biến
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
                     val presets = listOf("08:00", "12:00", "18:00", "20:00")
                     presets.forEach { preset ->
                         if (!timesList.contains(preset)) {
                             SuggestionChip(
                                 onClick = { timesList.add(preset) },
-                                label = { Text("+ $preset", fontSize = 11.sp) }
+                                label = { Text("+$preset", fontSize = 11.sp) }
                             )
                         }
                     }
@@ -1231,13 +1314,14 @@ fun AddEditMedicineDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (name.isBlank() || dosage.isBlank()) {
-                        Toast.makeText(context, "Vui lòng nhập tên thuốc và hàm lượng", Toast.LENGTH_SHORT).show()
+                    if (name.isBlank()) {
+                        Toast.makeText(context, "Vui lòng nhập tên thuốc", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-                    val fullDosage = if (unit.isNotBlank() && !dosage.contains(unit)) "$dosage $unit" else dosage
-                    val finalTimes = if (timesList.isEmpty()) listOf("08:00") else timesList.toList()
-                    onConfirm(name, fullDosage, instruction, finalTimes)
+                    val effectiveDosage = dosage.trim().ifBlank { "1" }
+                    val fullDosage = if (unit.isNotBlank() && !effectiveDosage.contains(unit)) "$effectiveDosage $unit" else effectiveDosage
+                    val finalTimes = timesList.toList()
+                    onConfirm(name.trim(), fullDosage.trim(), purpose.trim(), instruction.trim(), finalTimes)
                 }
             ) {
                 Text("Lưu")

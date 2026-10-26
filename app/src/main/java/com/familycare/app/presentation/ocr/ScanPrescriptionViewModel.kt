@@ -39,8 +39,9 @@ data class ScannedMedicineItem(
     val id: String = UUID.randomUUID().toString(),
     var isSelected: Boolean = true,
     var medicineName: String = "",
-    var dosage: String = "",
-    var unit: String = "gói",
+    var dosage: String = "1",              // Mặc định là 1 (liều uống thực tế: 1 gói/viên mỗi lần)
+    var unit: String = "gói",              // gói, viên, ống, chai, ml
+    var purpose: String = "",              // Công dụng ngắn gọn: "Mát gan, thanh nhiệt", "Hạ huyết áp"...
     var times: List<String> = emptyList(), // MẶC ĐỊNH LÀ RỖNG, KHÔNG TỰ BỊA 08:00
     var note: String = ""                  // MẶC ĐỊNH LÀ RỖNG, KHÔNG TỰ BỊA LỜI DẶN
 )
@@ -197,10 +198,10 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
             withContext(Dispatchers.IO) {
                 val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
                 for (item in toSave) {
-                    val dosageWithUnit = if (item.unit.isNotBlank() && !item.dosage.contains(item.unit)) {
-                        "${item.dosage} ${item.unit}".trim()
+                    val dosageFormatted = if (item.unit.isNotBlank()) {
+                        "${item.dosage.ifBlank { "1" }} ${item.unit}".trim()
                     } else {
-                        item.dosage
+                        item.dosage.ifBlank { "1 gói" }
                     }
 
                     val cleanTimes = item.times.filter { it.isNotBlank() }.distinct().sorted()
@@ -209,11 +210,12 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
                         id = UUID.randomUUID().toString(),
                         userId = targetMemberId,
                         name = item.medicineName.trim(),
-                        dosage = dosageWithUnit.ifBlank { "Theo hướng dẫn" },
+                        dosage = dosageFormatted,
                         instruction = item.note.trim(),
                         reminderTimes = cleanTimes,
                         startDate = System.currentTimeMillis(),
-                        scannedViaOcr = true
+                        scannedViaOcr = true,
+                        purpose = item.purpose.trim()
                     )
 
                     medicineDao.insertMedicine(medicineEntity)
@@ -252,7 +254,7 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
 
     /**
      * Bóc tách bằng Gemini API với System Prompt chuyên ngành y tế & thực phẩm chức năng Việt Nam
-     * Tuân thủ tuyệt đối quy tắc: Không tự bịa giờ uống hay lời dặn khi ảnh không có!
+     * Đơn giản hóa dữ liệu (không lấy số gam tổng) và tự động suy luận công dụng (purpose).
      */
     private suspend fun parsePrescriptionWithAiOrFallback(rawOcrText: String): List<ScannedMedicineItem> =
         withContext(Dispatchers.IO) {
@@ -264,7 +266,7 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
                         modelName = "gemini-1.5-flash",
                         apiKey = apiKey,
                         generationConfig = generationConfig {
-                            temperature = 0.1f // Nhiệt độ rất thấp để chính xác, không hallucinate
+                            temperature = 0.1f
                             topK = 20
                             topP = 0.85f
                         }
@@ -277,14 +279,22 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
                         $rawOcrText
                         ---
                         CÁC QUY TẮC BẮT BUỘC:
-                        1. NHẬN DIỆN ĐÚNG CHỮ SỐ VÀ DẤU THẬP PHÂN:
-                        - Tuyệt đối KHÔNG ĐƯỢC BỎ QUA dấu phẩy (,) hoặc dấu chấm (.).
-                        - Ví dụ: "42,9 g" hoặc "42.9 g" phải bóc tách chính xác là "42.9 g" hoặc "42,9 g", TUYỆT ĐỐI KHÔNG được đọc thành "429 g". Tương tự "0,5 mg" không được đọc thành "5 mg".
 
-                        2. KHẮC PHỤC LỖI NHẬN DIỆN TÊN NGHỆ THUẬT / CÁCH ĐIỆU / LỖI CHÍNH TẢ:
+                        1. ĐƠN GIẢN HÓA LIỀU LƯỢNG & BỎ HOÀN TOÀN SỐ GRAM TỔNG:
+                        - TUYỆT ĐỐI KHÔNG lấy các con số gram tổng như 42.9g hay 7.15g làm liều lượng dùng.
+                        - Chuẩn hóa liều dùng thực tế (dosage & unit):
+                          + Nếu thuốc dạng gói bột/sủi/cốm -> Mặc định dosage là "1" và unit là "gói" (người lớn tuổi chỉ cần biết uống 1 gói/lần).
+                          + Nếu dạng viên nén/nang/sủi -> Mặc định dosage là "1" và unit là "viên".
+                          + Nếu dạng ống uống -> Mặc định dosage là "1" và unit là "ống".
+                          + Nếu dạng chai/siro -> Mặc định dosage là "5ml" hoặc "1" và unit là "chai".
+
+                        2. BỔ SUNG TRƯỜNG CÔNG DỤNG THUỐC (purpose):
+                        - Tự động suy luận công dụng chính của thuốc/thực phẩm chức năng dưới dạng nhãn ngắn gọn từ 2–4 từ (ví dụ: "Mát gan, thanh nhiệt", "Hạ huyết áp", "Hạ đường huyết", "Giảm đau, hạ sốt", "Bổ sung Vitamin", "Hỗ trợ tiêu hóa", "Kháng khuẩn").
+
+                        3. KHẮC PHỤC LỖI NHẬN DIỆN TÊN NGHỆ THUẬT / CÁCH ĐIỆU:
                         - Chữ nghệ thuật trên bao bì trà thảo mộc, bột sủi, thực phẩm chức năng thường bị OCR quét sai ký tự (ví dụ: "7hank chcêt", "Thanh nh1et", "Livecoo1", "Sensa coo1s").
                         - Đối chiếu từ điển và suy luận ngữ cảnh để chuẩn hóa thành tên đúng:
-                          + "7hank chcêt" / "Thanh nhejt" -> "Bột sủi thanh nhiệt" hoặc "Trà thanh nhiệt"
+                          + "7hank chcêt" / "Thanh nhejt" -> "Bột sủi thanh nhiệt Livecool" hoặc "Trà thanh nhiệt"
                           + "Livecoo1" -> "Livecool"
                           + "Arnlodipine" -> "Amlodipine"
                           + "Paracetamon" -> "Paracetamol"
@@ -292,27 +302,21 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
                           + "Effe-ralgan" -> "Efferalgan"
                         - TUYỆT ĐỐI KHÔNG để nguyên các từ vô nghĩa như "7hank chcêt".
 
-                        3. NHẬN DIỆN ĐÚNG ĐƠN VỊ TÍNH (unit):
-                        - Nếu là gói cốm, trà hòa tan, bột sủi, hoặc có khối lượng theo gam (g), miligam trên bao -> gán unit là "gói".
-                        - Chỉ gán unit là "viên" khi là viên nén, viên nang, viên sủi.
-                        - Nếu là dung dịch/siro -> gán "chai" hoặc "ml".
-                        - Nếu là ống uống -> gán "ống".
-
-                        4. QUY TẮC SỐNG CÒN: TUYỆT ĐỐI KHÔNG TỰ BỊA ĐẶT DỮ LIỆU THIẾU!
+                        4. QUY TẮC ĐỂ TRỐNG: KHÔNG TỰ BỊA ĐẶT DỮ LIỆU THIẾU!
                         - Nếu ảnh chụp là vỏ hộp thuốc, bao bì hoặc không có đơn thuốc chỉ định cữ uống/lời dặn của bác sĩ:
                           + BẮT BUỘC để times là mảng rỗng: []
                           + BẮT BUỘC để note là chuỗi rỗng: ""
                         - NGHIÊM CẤM TỰ GÁN "08:00" NẾU TRÊN ẢNH KHÔNG CÓ CỮ UỐNG!
                         - NGHIÊM CẤM TỰ VIẾT "Uống sau khi ăn no" NẾU TRÊN ẢNH KHÔNG CÓ!
-                        - Chỉ điền times khi trên ảnh có ghi rõ cữ giờ hoặc số lần uống trong ngày (ví dụ: sáng, trưa, tối).
 
                         5. ĐỊNH DẠNG ĐẦU RA:
                         Xuất DUY NHẤT một mảng JSON Array hợp lệ, KHÔNG viết bất kỳ câu chữ nào khác:
                         [
                           {
-                            "medicineName": "Tên chuẩn hóa",
-                            "dosage": "Hàm lượng (ví dụ: 42.9 g hoặc 500mg)",
-                            "unit": "gói / viên / ống / chai / ml",
+                            "medicineName": "Bột sủi thanh nhiệt Livecool",
+                            "dosage": "1",
+                            "unit": "gói",
+                            "purpose": "Mát gan, thanh nhiệt",
                             "times": [],
                             "note": ""
                           }
@@ -333,8 +337,9 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
                         for (i in 0 until jsonArray.length()) {
                             val obj = jsonArray.getJSONObject(i)
                             val medName = obj.optString("medicineName", "").trim()
-                            val dosage = obj.optString("dosage", "").trim()
+                            val dosage = obj.optString("dosage", "1").trim()
                             val unit = obj.optString("unit", "gói").trim()
+                            val purpose = obj.optString("purpose", "").trim()
                             val note = obj.optString("note", "").trim()
 
                             val times = mutableListOf<String>()
@@ -350,10 +355,11 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
                                 list.add(
                                     ScannedMedicineItem(
                                         medicineName = medName,
-                                        dosage = dosage,
+                                        dosage = dosage.ifBlank { "1" },
                                         unit = unit.ifBlank { "gói" },
-                                        times = times, // Giữ nguyên danh sách (có thể rỗng []), không tự bịa!
-                                        note = note,   // Giữ nguyên chuỗi (có thể rỗng ""), không tự bịa!
+                                        purpose = purpose,
+                                        times = times, // Rỗng nếu không có trên ảnh
+                                        note = note,   // Rỗng nếu không có trên ảnh
                                         isSelected = true
                                     )
                                 )
@@ -375,14 +381,11 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
 
     /**
      * Smart Fallback: Xử lý offline đối chiếu từ điển thảo dược & dược phẩm Việt Nam
-     * Chuẩn hóa dấu thập phân và tuyệt đối không tự bịa giờ uống!
+     * Chuẩn hóa liều dùng đơn giản (1 gói / 1 viên) và bổ sung công dụng (purpose)
      */
     private fun fallbackParseMedicineOffline(text: String): List<ScannedMedicineItem> {
         val result = mutableListOf<ScannedMedicineItem>()
         val lines = text.lines().map { it.trim() }.filter { it.isNotBlank() }
-
-        // Bắt chính xác số thập phân như 42,9 g hoặc 42.9 g hoặc 500 mg
-        val dosageRegex = Regex("""(?i)\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|gam|ml|l|iu|ui|%)\b""")
 
         fun removeDiacritics(str: String): String {
             return Normalizer.normalize(str.uppercase(), Normalizer.Form.NFD)
@@ -410,18 +413,16 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
                 if (matchedEntry != null) break
             }
 
-            val hasDosage = dosageRegex.containsMatchIn(line)
+            val hasPackOrTablet = cleanLine.contains("GOI") || cleanLine.contains("VIEN") || cleanLine.contains("SUI")
 
-            if (matchedEntry != null || hasDosage) {
+            if (matchedEntry != null || hasPackOrTablet) {
                 val name = matchedEntry?.standardName ?: run {
-                    val before = if (hasDosage) line.substringBefore(dosageRegex.find(line)?.value ?: "").trim() else line
-                    before.replace(Regex("""^\d+[\s.)-]+"""), "").trim()
+                    line.replace(Regex("""^\d+[\s.)-]+"""), "").trim()
                 }
 
-                // Lấy đúng số thập phân (ví dụ 42,9 g)
-                val dosageMatch = dosageRegex.find(line)?.value
-                val dosage = dosageMatch ?: (matchedEntry?.defaultDosage ?: "")
-                val unit = matchedEntry?.defaultUnit ?: if (dosage.contains("g", ignoreCase = true) || line.contains("gói", ignoreCase = true)) "gói" else "viên"
+                val unit = matchedEntry?.defaultUnit ?: if (cleanLine.contains("GOI") || cleanLine.contains("BOT")) "gói" else "viên"
+                val dosage = matchedEntry?.defaultDosage ?: "1"
+                val purpose = matchedEntry?.purpose ?: ""
 
                 // Tìm cữ uống & lời dặn CHỈ KHI TRÊN TEXT CÓ
                 val times = mutableListOf<String>()
@@ -445,7 +446,6 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
                     }
                 }
 
-                // KHÔNG TỰ BỊA ĐẶT DỮ LIỆU THIẾU
                 val finalTimes = times.distinct()
                 val finalNote = noteBuilder.toString()
 
@@ -455,6 +455,7 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
                             medicineName = name,
                             dosage = dosage,
                             unit = unit,
+                            purpose = purpose,
                             times = finalTimes, // Rỗng nếu không có trên ảnh
                             note = finalNote,   // Rỗng nếu không có trên ảnh
                             isSelected = true
@@ -470,12 +471,13 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
 }
 
 /**
- * Danh mục đối chiếu thông minh (bao gồm cả các lỗi nghệ thuật OCR thường gặp như '7hank chcêt')
+ * Danh mục đối chiếu thông minh với liều dùng đơn giản hóa (1 gói, 1 viên) và công dụng y tế
  */
 private data class LocalMedicineEntry(
     val standardName: String,
     val defaultDosage: String,
     val defaultUnit: String,
+    val purpose: String,
     val aliases: List<String>
 )
 
@@ -483,41 +485,45 @@ private val localMedicineCatalog = listOf(
     // Bột sủi / trà thanh nhiệt / thực phẩm chức năng thảo mộc
     LocalMedicineEntry(
         "Bột sủi thanh nhiệt Livecool",
-        "42.9 g",
+        "1",
         "gói",
+        "Mát gan, thanh nhiệt",
         listOf("LIVECOOL", "7HANK CHCET", "7HANK", "CHCET", "THANH NHIET", "BOT SUI THANH NHIET", "TRA THANH NHIET", "NAM DUOC")
     ),
     LocalMedicineEntry(
         "Bột sủi Sensa Cools",
-        "1 gói",
+        "1",
         "gói",
+        "Thanh nhiệt, giải độc",
         listOf("SENSA COOLS", "SENSA", "SENSACOOL")
     ),
     LocalMedicineEntry(
         "Trà Atiso",
-        "1 gói",
+        "1",
         "gói",
+        "Mát gan, lợi mật",
         listOf("ATISO", "ARTICHOKE", "LADOPHAR")
     ),
     LocalMedicineEntry(
-        "Bột sủi Vitamin C",
-        "1 viên",
+        "Viên sủi Vitamin C",
+        "1",
         "viên",
+        "Tăng đề kháng",
         listOf("BEROCCA", "SUI C", "VITAMIN C", "C SUI", "PLUSSSZ")
     ),
 
     // Các thuốc tân dược phổ biến
-    LocalMedicineEntry("Amlodipine", "5mg", "viên", listOf("AMLODIPINE", "ARNLODIPINE", "AMLO", "AMORLODIPIN")),
-    LocalMedicineEntry("Paracetamol", "500mg", "viên", listOf("PARACETAMOL", "PARACETAMON", "PARA", "EFFERALGAN", "PANADOL", "HAPACOL")),
-    LocalMedicineEntry("Metformin", "500mg", "viên", listOf("METFORMIN", "GLUCOPHAGE", "DIAPHAGE")),
-    LocalMedicineEntry("Losartan", "50mg", "viên", listOf("LOSARTAN", "COZAAR", "LOSATEC")),
-    LocalMedicineEntry("Atorvastatin", "10mg", "viên", listOf("ATORVASTATIN", "LIPITOR", "ATOR")),
-    LocalMedicineEntry("Esomeprazole", "40mg", "viên", listOf("ESOMEPRAZOLE", "ESOMEPRAZOL", "YESOM", "NEXIUM")),
-    LocalMedicineEntry("Sucralfate", "1g", "gói", listOf("SUCRALFATE", "SUCRATE GEL", "SUCRATE")),
-    LocalMedicineEntry("Trimebutine", "100mg", "viên", listOf("TRIMEBUTINE", "ARTHUR", "DEBRIDAT")),
-    LocalMedicineEntry("Berberin", "100mg", "viên", listOf("BERBERIN", "BERBERINE")),
-    LocalMedicineEntry("Amoxicillin", "500mg", "viên", listOf("AMOXICILLIN", "AMOX", "CLAMOCIL", "AUGMENTIN", "KLAMENTIN")),
-    LocalMedicineEntry("Cefalexin", "500mg", "viên", listOf("CEFALEXIN", "CEPHALEXIN", "CEFALEX")),
-    LocalMedicineEntry("Aspirin", "81mg", "viên", listOf("ASPIRIN", "ASPIRIN CARDIO", "ASPEC")),
-    LocalMedicineEntry("Omeprazole", "20mg", "viên", listOf("OMEPRAZOLE", "OMEPRAZOL", "LOSEC"))
+    LocalMedicineEntry("Amlodipine", "1", "viên", "Hạ huyết áp", listOf("AMLODIPINE", "ARNLODIPINE", "AMLO", "AMORLODIPIN")),
+    LocalMedicineEntry("Paracetamol", "1", "viên", "Giảm đau, hạ sốt", listOf("PARACETAMOL", "PARACETAMON", "PARA", "EFFERALGAN", "PANADOL", "HAPACOL")),
+    LocalMedicineEntry("Metformin", "1", "viên", "Hạ đường huyết", listOf("METFORMIN", "GLUCOPHAGE", "DIAPHAGE")),
+    LocalMedicineEntry("Losartan", "1", "viên", "Hạ huyết áp", listOf("LOSARTAN", "COZAAR", "LOSATEC")),
+    LocalMedicineEntry("Atorvastatin", "1", "viên", "Hạ mỡ máu", listOf("ATORVASTATIN", "LIPITOR", "ATOR")),
+    LocalMedicineEntry("Esomeprazole", "1", "viên", "Giảm axit dạ dày", listOf("ESOMEPRAZOLE", "ESOMEPRAZOL", "YESOM", "NEXIUM")),
+    LocalMedicineEntry("Sucralfate", "1", "gói", "Bảo vệ niêm mạc dạ dày", listOf("SUCRALFATE", "SUCRATE GEL", "SUCRATE")),
+    LocalMedicineEntry("Trimebutine", "1", "viên", "Điều hòa nhu động ruột", listOf("TRIMEBUTINE", "ARTHUR", "DEBRIDAT")),
+    LocalMedicineEntry("Berberin", "1", "viên", "Hỗ trợ tiêu hóa", listOf("BERBERIN", "BERBERINE")),
+    LocalMedicineEntry("Amoxicillin", "1", "viên", "Kháng khuẩn", listOf("AMOXICILLIN", "AMOX", "CLAMOCIL", "AUGMENTIN", "KLAMENTIN")),
+    LocalMedicineEntry("Cefalexin", "1", "viên", "Kháng khuẩn", listOf("CEFALEXIN", "CEPHALEXIN", "CEFALEX")),
+    LocalMedicineEntry("Aspirin", "1", "viên", "Phòng ngừa huyết khối", listOf("ASPIRIN", "ASPIRIN CARDIO", "ASPEC")),
+    LocalMedicineEntry("Omeprazole", "1", "viên", "Giảm axit dạ dày", listOf("OMEPRAZOLE", "OMEPRAZOL", "LOSEC"))
 )

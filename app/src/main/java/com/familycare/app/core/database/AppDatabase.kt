@@ -79,7 +79,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
                 reminderTimes TEXT NOT NULL,
                 startDate INTEGER NOT NULL,
                 endDate INTEGER,
-                scannedViaOcr INTEGER NOT NULL
+                scannedViaOcr INTEGER NOT NULL,
+                purpose TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent()
         )
@@ -155,6 +156,13 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
             """.trimIndent()
         )
 
+        // Đảm bảo cột purpose luôn tồn tại trong medicines
+        try {
+            db.execSQL("ALTER TABLE medicines ADD COLUMN purpose TEXT NOT NULL DEFAULT ''")
+        } catch (_: Exception) {
+            // Cột đã tồn tại
+        }
+
         db.execSQL(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS index_medication_logs_medicineId_scheduledDate_scheduledTime
@@ -223,6 +231,13 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
             )
             """.trimIndent()
         )
+
+        // Đảm bảo cột purpose luôn tồn tại trong medicines
+        try {
+            db.execSQL("ALTER TABLE medicines ADD COLUMN purpose TEXT NOT NULL DEFAULT ''")
+        } catch (_: Exception) {
+            // Cột đã tồn tại
+        }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -426,12 +441,15 @@ class MedicineDaoImpl(private val dbHelper: DatabaseHelper) : MedicineDao {
                     val sCol = c.getColumnIndexOrThrow("startDate")
                     val eCol = c.getColumnIndexOrThrow("endDate")
                     val ocrCol = c.getColumnIndexOrThrow("scannedViaOcr")
+                    val purCol = c.getColumnIndex("purpose")
 
                     while (c.moveToNext()) {
                         val timesType = object : TypeToken<List<String>>() {}.type
                         val times: List<String> = runCatching {
                             gson.fromJson<List<String>>(c.getString(remCol), timesType)
                         }.getOrDefault(emptyList())
+
+                        val purpose = if (purCol != -1 && !c.isNull(purCol)) c.getString(purCol) else ""
 
                         list.add(
                             MedicineEntity(
@@ -443,7 +461,8 @@ class MedicineDaoImpl(private val dbHelper: DatabaseHelper) : MedicineDao {
                                 reminderTimes = times,
                                 startDate = c.getLong(sCol),
                                 endDate = if (!c.isNull(eCol)) c.getLong(eCol) else null,
-                                scannedViaOcr = c.getInt(ocrCol) == 1
+                                scannedViaOcr = c.getInt(ocrCol) == 1,
+                                purpose = purpose
                             )
                         )
                     }
@@ -465,6 +484,7 @@ class MedicineDaoImpl(private val dbHelper: DatabaseHelper) : MedicineDao {
             put("startDate", medicine.startDate)
             medicine.endDate?.let { put("endDate", it) }
             put("scannedViaOcr", if (medicine.scannedViaOcr) 1 else 0)
+            put("purpose", medicine.purpose)
         }
         db.insertWithOnConflict("medicines", null, values, SQLiteDatabase.CONFLICT_REPLACE)
         _signal.value = System.currentTimeMillis()

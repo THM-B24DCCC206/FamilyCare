@@ -1,5 +1,6 @@
 package com.familycare.app.presentation.ocr
 
+import android.app.TimePickerDialog
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -40,6 +41,8 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.familycare.app.core.common.SessionManager
 import java.io.File
+import java.util.Calendar
+import java.util.Locale
 
 private const val TAG = "ScanPrescriptionScreen"
 
@@ -492,8 +495,9 @@ fun OcrPrescriptionScreen(
     // Dialog thêm thuốc thủ công vào danh sách review
     if (showManualAddDialog) {
         var addName by remember { mutableStateOf("") }
-        var addDosage by remember { mutableStateOf("") }
+        var addDosage by remember { mutableStateOf("1") }
         var addUnit by remember { mutableStateOf("gói") }
+        var addPurpose by remember { mutableStateOf("") }
         var addNote by remember { mutableStateOf("") }
 
         AlertDialog(
@@ -504,8 +508,16 @@ fun OcrPrescriptionScreen(
                     OutlinedTextField(
                         value = addName,
                         onValueChange = { addName = it },
-                        label = { Text("Tên thuốc / sản phẩm") },
+                        label = { Text("Tên thuốc / sản phẩm *") },
                         placeholder = { Text("Ví dụ: Bột sủi thanh nhiệt Livecool") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = addPurpose,
+                        onValueChange = { addPurpose = it },
+                        label = { Text("Công dụng (nhãn 2–4 từ)") },
+                        placeholder = { Text("Ví dụ: Mát gan, thanh nhiệt") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -513,8 +525,8 @@ fun OcrPrescriptionScreen(
                         OutlinedTextField(
                             value = addDosage,
                             onValueChange = { addDosage = it },
-                            label = { Text("Hàm lượng") },
-                            placeholder = { Text("42.9g...") },
+                            label = { Text("Liều uống/lần") },
+                            placeholder = { Text("1") },
                             modifier = Modifier.weight(1f)
                         )
                         OutlinedTextField(
@@ -540,8 +552,9 @@ fun OcrPrescriptionScreen(
                             viewModel.addItem(
                                 ScannedMedicineItem(
                                     medicineName = addName.trim(),
-                                    dosage = addDosage.trim(),
-                                    unit = addUnit.trim(),
+                                    dosage = addDosage.trim().ifBlank { "1" },
+                                    unit = addUnit.trim().ifBlank { "gói" },
+                                    purpose = addPurpose.trim(),
                                     times = emptyList(), // Để rỗng nếu không nhập
                                     note = addNote.trim(),
                                     isSelected = true
@@ -582,8 +595,10 @@ fun ScannedMedicineReviewCard(
     var name by remember(item.id) { mutableStateOf(item.medicineName) }
     var dosage by remember(item.id) { mutableStateOf(item.dosage) }
     var unit by remember(item.id) { mutableStateOf(item.unit) }
+    var purpose by remember(item.id) { mutableStateOf(item.purpose) }
     var note by remember(item.id) { mutableStateOf(item.note) }
     val timesList = remember(item.id) { mutableStateListOf<String>().apply { addAll(item.times) } }
+    val context = LocalContext.current
 
     var unitMenuExpanded by remember { mutableStateOf(false) }
     val unitOptions = listOf("gói", "viên", "ống", "chai", "ml", "hộp", "tuýp")
@@ -594,6 +609,7 @@ fun ScannedMedicineReviewCard(
                 medicineName = name,
                 dosage = dosage,
                 unit = unit,
+                purpose = purpose,
                 note = note,
                 times = timesList.toList()
             )
@@ -668,7 +684,22 @@ fun ScannedMedicineReviewCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Ô Hàm lượng & Đơn vị (Dropdown chọn nhanh)
+            // Ô Công dụng ngắn (2-4 từ)
+            OutlinedTextField(
+                value = purpose,
+                onValueChange = {
+                    purpose = it
+                    notifyChange()
+                },
+                label = { Text("Công dụng thuốc (nhãn 2–4 từ)") },
+                placeholder = { Text("Ví dụ: Mát gan, thanh nhiệt") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Ô Liều dùng & Đơn vị (Dropdown chọn nhanh)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -679,8 +710,8 @@ fun ScannedMedicineReviewCard(
                         dosage = it
                         notifyChange()
                     },
-                    label = { Text("Hàm lượng") },
-                    placeholder = { Text("42.9g, 500mg...") },
+                    label = { Text("Liều uống/lần") },
+                    placeholder = { Text("1") },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -803,13 +834,49 @@ fun ScannedMedicineReviewCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Các gợi ý thêm cữ giờ nhanh
+            // Các gợi ý thêm cữ giờ nhanh & Nút Tùy chọn giờ TimePicker
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Nút [ ⏰ + Tùy chọn giờ ]
+                FilledTonalButton(
+                    onClick = {
+                        val now = Calendar.getInstance()
+                        TimePickerDialog(
+                            context,
+                            { _, hour, minute ->
+                                val formatted = String.format(Locale.ROOT, "%02d:%02d", hour, minute)
+                                if (!timesList.contains(formatted)) {
+                                    timesList.add(formatted)
+                                    notifyChange()
+                                }
+                            },
+                            now.get(Calendar.HOUR_OF_DAY),
+                            now.get(Calendar.MINUTE),
+                            true
+                        ).show()
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.height(32.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = Color(0xFFEFF6FF),
+                        contentColor = Color(0xFF1D4ED8)
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "+ Tùy chọn giờ", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+
                 val quickTimes = listOf("08:00", "12:00", "18:00", "20:00")
                 quickTimes.forEach { qTime ->
                     if (!timesList.contains(qTime)) {

@@ -253,6 +253,7 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
     fun addMedicine(
         name: String,
         dosage: String,
+        purpose: String = "",
         instruction: String,
         reminderTimes: List<String>
     ) {
@@ -266,7 +267,8 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
                 name = name.trim(),
                 dosage = dosage.trim(),
                 instruction = instruction.trim(),
-                reminderTimes = reminderTimes.distinct().sorted()
+                reminderTimes = reminderTimes.distinct().sorted(),
+                purpose = purpose.trim()
             )
 
             medicineDao.insertMedicine(MedicineEntity.fromDomain(medicine))
@@ -285,6 +287,7 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
         medicine: Medicine,
         name: String,
         dosage: String,
+        purpose: String = "",
         instruction: String,
         reminderTimes: List<String>
     ) {
@@ -295,7 +298,8 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
                 name = name.trim(),
                 dosage = dosage.trim(),
                 instruction = instruction.trim(),
-                reminderTimes = reminderTimes.distinct().sorted()
+                reminderTimes = reminderTimes.distinct().sorted(),
+                purpose = purpose.trim()
             )
 
             medicationAlarmScheduler.cancel(medicine.id, medicine.reminderTimes)
