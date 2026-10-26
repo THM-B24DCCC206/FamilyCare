@@ -1,5 +1,11 @@
 package com.familycare.app.presentation.biometrics
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -24,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.familycare.app.core.common.SessionManager
 import com.familycare.app.core.database.AppDatabase
 import com.familycare.app.core.database.HealthMetricEntity
@@ -55,6 +62,58 @@ fun BiometricsScreen(
     // Dialog state
     var showAddDialog by remember { mutableStateOf(false) }
     var dialogInitialType by remember { mutableStateOf(MetricType.BLOOD_PRESSURE) }
+
+    // State giọng nói truyền vào AddMetricDialog
+    var voiceSystolic by remember { mutableStateOf<String?>(null) }
+    var voiceDiastolic by remember { mutableStateOf<String?>(null) }
+    var voicePulse by remember { mutableStateOf<String?>(null) }
+    var voiceBloodSugar by remember { mutableStateOf<String?>(null) }
+    var voiceTemp by remember { mutableStateOf<String?>(null) }
+
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull() ?: ""
+            if (spoken.isNotBlank()) {
+                val parsed = parseVoiceMetrics(spoken)
+                voiceSystolic = parsed.systolic
+                voiceDiastolic = parsed.diastolic
+                voicePulse = parsed.pulse
+                voiceBloodSugar = parsed.bloodSugar
+                voiceTemp = parsed.temperature
+                dialogInitialType = parsed.metricType
+                showAddDialog = true
+
+                scope.launch {
+                    snackbarHostState.showSnackbar("Đã nhận diện: \"$spoken\"")
+                }
+            }
+        }
+    }
+
+    fun startVoiceInput() {
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            scope.launch {
+                snackbarHostState.showSnackbar("Thiết bị chưa cài đặt hoặc không hỗ trợ nhận diện giọng nói Google.")
+            }
+            return
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "vi-VN")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Hãy đọc chỉ số (Ví dụ: Huyết áp 120 trên 80 nhịp tim 75)")
+        }
+        try {
+            speechLauncher.launch(intent)
+        } catch (e: Exception) {
+            scope.launch {
+                snackbarHostState.showSnackbar("Không thể mở micro: ${e.localizedMessage}")
+            }
+        }
+    }
 
     // Dialog xem chi tiết và xóa
     var metricDetailToView by remember { mutableStateOf<HealthMetricEntity?>(null) }
@@ -116,7 +175,19 @@ fun BiometricsScreen(
                     titleContentColor = Color(0xFF0F172A)
                 ),
                 actions = {
+                    IconButton(onClick = onNavigateToSmartwatch) {
+                        Icon(
+                            imageVector = Icons.Default.Watch,
+                            contentDescription = "Kết nối BLE Smartwatch",
+                            tint = Color(0xFF0F172A)
+                        )
+                    }
                     IconButton(onClick = {
+                        voiceSystolic = null
+                        voiceDiastolic = null
+                        voicePulse = null
+                        voiceBloodSugar = null
+                        voiceTemp = null
                         dialogInitialType = MetricType.BLOOD_PRESSURE
                         showAddDialog = true
                     }) {
@@ -133,117 +204,133 @@ fun BiometricsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. Card kêu gọi đo PPG bằng Camera (Tính năng độc đáo của TV1)
+            // 1. Banner Đo Nhịp Tim Quang Học (PPG) dạng ngang gọn gàng (cao ~78dp)
             item {
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer
                     ),
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Favorite,
-                                contentDescription = null,
-                                tint = Color(0xFFE91E63),
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Đo Nhịp Tim Quang Học (PPG)",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Áp ngón tay lên camera & flash để đo nhịp tim tự động qua mao mạch",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Button(
-                            onClick = onNavigateToCameraPpg,
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Bắt đầu đo Camera")
-                        }
-                    }
-                }
-            }
-
-            // Card Kết nối Đồng hồ thông minh BLE
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(78.dp)
                 ) {
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.secondary),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Icon(
-                                Icons.Default.Watch,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFFFE4E6)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Favorite,
+                                    contentDescription = null,
+                                    tint = Color(0xFFE11D48),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = "Đồng Hồ Thông Minh (BLE)",
+                                text = "Đo nhịp tim (PPG)",
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            Text(
-                                text = "Lấy chỉ số nhịp tim, huyết áp trực tiếp qua Bluetooth",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                         Button(
-                            onClick = onNavigateToSmartwatch,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            onClick = onNavigateToCameraPpg,
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                         ) {
-                            Text("Kết nối", fontSize = 11.sp)
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Bắt đầu đo",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                 }
             }
 
-            // 2. Thanh phím tắt nhập nhanh các chỉ số y tế lâm sàng
+            // 2. Khu vực nhập chỉ số lâm sàng thủ công & Nhập bằng giọng nói (Voice Input)
             item {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         text = "Nhập Chỉ Số Lâm Sàng Ngoài Máy",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Nút Micro tròn to nổi bật màu xanh/tím với nhãn "🎙️ Nói để nhập"
+                    Surface(
+                        onClick = { startVoiceInput() },
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFFEEF2FF),
+                        border = BorderStroke(1.5.dp, Color(0xFF818CF8)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF4F46E5)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Mic,
+                                    contentDescription = "Nói để nhập",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "🎙️ Nói để nhập",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF312E81)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Đọc ví dụ: \"Huyết áp 120 trên 80 nhịp tim 75\"",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF4338CA)
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = Color(0xFF6366F1)
+                            )
+                        }
+                    }
+
+                    // 3 phím tắt Huyết Áp, Đường Huyết, Thân Nhiệt
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -254,6 +341,11 @@ fun BiometricsScreen(
                             icon = Icons.Default.Speed,
                             iconColor = Color(0xFFE53935),
                             onClick = {
+                                voiceSystolic = null
+                                voiceDiastolic = null
+                                voicePulse = null
+                                voiceBloodSugar = null
+                                voiceTemp = null
                                 dialogInitialType = MetricType.BLOOD_PRESSURE
                                 showAddDialog = true
                             },
@@ -265,6 +357,11 @@ fun BiometricsScreen(
                             icon = Icons.Default.WaterDrop,
                             iconColor = Color(0xFFFB8C00),
                             onClick = {
+                                voiceSystolic = null
+                                voiceDiastolic = null
+                                voicePulse = null
+                                voiceBloodSugar = null
+                                voiceTemp = null
                                 dialogInitialType = MetricType.BLOOD_SUGAR
                                 showAddDialog = true
                             },
@@ -276,6 +373,11 @@ fun BiometricsScreen(
                             icon = Icons.Default.Thermostat,
                             iconColor = Color(0xFF1E88E5),
                             onClick = {
+                                voiceSystolic = null
+                                voiceDiastolic = null
+                                voicePulse = null
+                                voiceBloodSugar = null
+                                voiceTemp = null
                                 dialogInitialType = MetricType.TEMPERATURE
                                 showAddDialog = true
                             },
@@ -504,12 +606,29 @@ fun BiometricsScreen(
         AddMetricDialog(
             userId = currentUserId,
             initialType = dialogInitialType,
-            onDismiss = { showAddDialog = false },
+            initialSystolic = voiceSystolic ?: "",
+            initialDiastolic = voiceDiastolic ?: "",
+            initialPulse = voicePulse ?: "",
+            initialBloodSugar = voiceBloodSugar ?: "",
+            initialTemperature = voiceTemp ?: "",
+            onDismiss = {
+                showAddDialog = false
+                voiceSystolic = null
+                voiceDiastolic = null
+                voicePulse = null
+                voiceBloodSugar = null
+                voiceTemp = null
+            },
             onSave = { mainMetric, secondaryMetric ->
                 scope.launch {
                     database.healthMetricDao.insertMetric(mainMetric)
                     secondaryMetric?.let { database.healthMetricDao.insertMetric(it) }
                     showAddDialog = false
+                    voiceSystolic = null
+                    voiceDiastolic = null
+                    voicePulse = null
+                    voiceBloodSugar = null
+                    voiceTemp = null
                     snackbarHostState.showSnackbar("Đã lưu chỉ số sức khỏe thành công!")
                 }
             }
@@ -1000,3 +1119,95 @@ private fun formatSelectedDateHeader(timestamp: Long): String {
 private data class Tuple7<A, B, C, D, E, F, G>(
     val a: A, val b: B, val c: C, val d: D, val e: E, val f: F, val g: G
 )
+
+/**
+ * Model chứa dữ liệu bóc tách từ giọng nói
+ */
+data class ParsedVoiceData(
+    val metricType: MetricType = MetricType.BLOOD_PRESSURE,
+    val systolic: String? = null,
+    val diastolic: String? = null,
+    val pulse: String? = null,
+    val bloodSugar: String? = null,
+    val temperature: String? = null
+)
+
+/**
+ * Hàm phân tích câu nói tiếng Việt để bóc tách chỉ số sinh tồn
+ * Ví dụ:
+ * - "Huyết áp 120 trên 80 nhịp tim 75" -> SYS=120, DIA=80, PULSE=75
+ * - "130 trên 85" -> SYS=130, DIA=85
+ * - "Đường huyết 110" -> BLOOD_SUGAR=110
+ * - "Thân nhiệt 37 độ 5" -> TEMPERATURE=37.5
+ */
+fun parseVoiceMetrics(spokenText: String): ParsedVoiceData {
+    val lower = spokenText.lowercase().trim()
+
+    // 1. Thân nhiệt / Nhiệt độ
+    if (lower.contains("nhiệt") || lower.contains("thân nhiệt") || lower.contains("sốt")) {
+        val degreePattern = Regex("""(\d{2})\s*(?:độ|\.)\s*(\d)?""")
+        val degreeMatch = degreePattern.find(lower)
+        if (degreeMatch != null) {
+            val main = degreeMatch.groupValues[1]
+            val decimal = degreeMatch.groupValues.getOrNull(2)?.ifBlank { null }
+            val temp = if (decimal != null) "$main.$decimal" else main
+            return ParsedVoiceData(metricType = MetricType.TEMPERATURE, temperature = temp)
+        }
+        val numMatch = Regex("""\d{2}(?:[.,]\d+)?""").find(lower)
+        if (numMatch != null) {
+            return ParsedVoiceData(metricType = MetricType.TEMPERATURE, temperature = numMatch.value.replace(',', '.'))
+        }
+        return ParsedVoiceData(metricType = MetricType.TEMPERATURE)
+    }
+
+    // 2. Đường huyết
+    if (lower.contains("đường") || lower.contains("tiểu đường")) {
+        val numMatch = Regex("""\d+(?:[.,]\d+)?""").find(lower)
+        if (numMatch != null) {
+            return ParsedVoiceData(metricType = MetricType.BLOOD_SUGAR, bloodSugar = numMatch.value.replace(',', '.'))
+        }
+        return ParsedVoiceData(metricType = MetricType.BLOOD_SUGAR)
+    }
+
+    // 3. Huyết áp & Nhịp tim
+    var pulseVal: String? = null
+    val pulseMatch = Regex("""(?:nhịp tim|tim|mạch)\s*[:=]?\s*(\d{2,3})""").find(lower)
+    if (pulseMatch != null) {
+        pulseVal = pulseMatch.groupValues[1]
+    }
+
+    // Tìm dạng "120 trên 80" hoặc "120 / 80"
+    val bpSlashPattern = Regex("""(\d{2,3})\s*(?:trên|\/)\s*(\d{2,3})""")
+    val bpMatch = bpSlashPattern.find(lower)
+    if (bpMatch != null) {
+        val sys = bpMatch.groupValues[1]
+        val dia = bpMatch.groupValues[2]
+        return ParsedVoiceData(
+            metricType = MetricType.BLOOD_PRESSURE,
+            systolic = sys,
+            diastolic = dia,
+            pulse = pulseVal
+        )
+    }
+
+    // Lấy tất cả các số 2-3 chữ số
+    val numbers = Regex("""\b\d{2,3}\b""").findAll(lower).map { it.value }.toList()
+    if (numbers.size >= 2) {
+        val sys = numbers[0]
+        val dia = numbers[1]
+        val pulse = pulseVal ?: numbers.getOrNull(2)
+        return ParsedVoiceData(
+            metricType = MetricType.BLOOD_PRESSURE,
+            systolic = sys,
+            diastolic = dia,
+            pulse = pulse
+        )
+    } else if (numbers.size == 1 && (lower.contains("tim") || lower.contains("nhịp"))) {
+        return ParsedVoiceData(
+            metricType = MetricType.HEART_RATE,
+            pulse = numbers[0]
+        )
+    }
+
+    return ParsedVoiceData(metricType = MetricType.BLOOD_PRESSURE)
+}

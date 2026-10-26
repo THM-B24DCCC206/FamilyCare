@@ -1,5 +1,6 @@
 package com.familycare.app.presentation.biometrics.dialog
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -25,32 +27,226 @@ import com.familycare.app.core.database.HealthMetricEntity
 import com.familycare.app.domain.model.MetricType
 import java.util.UUID
 
+/**
+ * Kết quả đánh giá chỉ số y khoa phục vụ hiển thị trực quan
+ */
+data class HealthEvaluation(
+    val title: String,
+    val containerColor: Color,
+    val borderColor: Color,
+    val contentColor: Color
+)
+
+/**
+ * Đánh giá Huyết áp theo tiêu chuẩn Hội Tim Mạch Việt Nam / AHA
+ */
+fun evaluateBloodPressure(sys: Int, dia: Int): HealthEvaluation {
+    return when {
+        sys < 90 || dia < 60 -> HealthEvaluation(
+            title = "Huyết áp thấp",
+            containerColor = Color(0xFFFFFBEB),
+            borderColor = Color(0xFFFDE68A),
+            contentColor = Color(0xFFB45309)
+        )
+        sys >= 140 || dia >= 90 -> HealthEvaluation(
+            title = "Tăng huyết áp",
+            containerColor = Color(0xFFFEE2E2),
+            borderColor = Color(0xFFFCA5A5),
+            contentColor = Color(0xFFB91C1C)
+        )
+        // Mức 120/80 mmHg tuyệt đối không được báo Tiền tăng huyết áp
+        (sys in 130..139) || (dia in 81..89) -> HealthEvaluation(
+            title = "Tiền tăng huyết áp",
+            containerColor = Color(0xFFFFFBEB),
+            borderColor = Color(0xFFFDE68A),
+            contentColor = Color(0xFFB45309)
+        )
+        sys in 120..129 || (sys <= 120 && dia == 80) -> HealthEvaluation(
+            title = "Huyết áp bình thường",
+            containerColor = Color(0xFFF0FDF4),
+            borderColor = Color(0xFFBBF7D0),
+            contentColor = Color(0xFF2E7D32)
+        )
+        sys < 120 && dia < 80 -> HealthEvaluation(
+            title = "Huyết áp tối ưu",
+            containerColor = Color(0xFFF0FDF4),
+            borderColor = Color(0xFFBBF7D0),
+            contentColor = Color(0xFF2E7D32)
+        )
+        else -> HealthEvaluation(
+            title = "Huyết áp bình thường",
+            containerColor = Color(0xFFF0FDF4),
+            borderColor = Color(0xFFBBF7D0),
+            contentColor = Color(0xFF2E7D32)
+        )
+    }
+}
+
+/**
+ * Đánh giá Đường huyết (Lúc đói / Sau ăn)
+ */
+fun evaluateBloodSugar(sugar: Double, timing: String): HealthEvaluation {
+    return if (timing == "Lúc đói") {
+        when {
+            sugar < 70.0 -> HealthEvaluation(
+                title = "Hạ đường huyết (Nguy hiểm)",
+                containerColor = Color(0xFFFEE2E2),
+                borderColor = Color(0xFFFCA5A5),
+                contentColor = Color(0xFFB91C1C)
+            )
+            sugar in 70.0..99.0 -> HealthEvaluation(
+                title = "Đường huyết bình thường",
+                containerColor = Color(0xFFF0FDF4),
+                borderColor = Color(0xFFBBF7D0),
+                contentColor = Color(0xFF2E7D32)
+            )
+            sugar in 100.0..125.0 -> HealthEvaluation(
+                title = "Tiền tiểu đường (Hơi cao)",
+                containerColor = Color(0xFFFFFBEB),
+                borderColor = Color(0xFFFDE68A),
+                contentColor = Color(0xFFB45309)
+            )
+            else -> HealthEvaluation(
+                title = "Đường huyết cao (Nguy cơ đái tháo đường)",
+                containerColor = Color(0xFFFEE2E2),
+                borderColor = Color(0xFFFCA5A5),
+                contentColor = Color(0xFFB91C1C)
+            )
+        }
+    } else {
+        when {
+            sugar < 70.0 -> HealthEvaluation(
+                title = "Hạ đường huyết",
+                containerColor = Color(0xFFFEE2E2),
+                borderColor = Color(0xFFFCA5A5),
+                contentColor = Color(0xFFB91C1C)
+            )
+            sugar in 70.0..139.0 -> HealthEvaluation(
+                title = "Đường huyết sau ăn bình thường",
+                containerColor = Color(0xFFF0FDF4),
+                borderColor = Color(0xFFBBF7D0),
+                contentColor = Color(0xFF2E7D32)
+            )
+            sugar in 140.0..199.0 -> HealthEvaluation(
+                title = "Tiền tiểu đường (Sau ăn)",
+                containerColor = Color(0xFFFFFBEB),
+                borderColor = Color(0xFFFDE68A),
+                contentColor = Color(0xFFB45309)
+            )
+            else -> HealthEvaluation(
+                title = "Đường huyết sau ăn cao",
+                containerColor = Color(0xFFFEE2E2),
+                borderColor = Color(0xFFFCA5A5),
+                contentColor = Color(0xFFB91C1C)
+            )
+        }
+    }
+}
+
+/**
+ * Đánh giá Thân nhiệt
+ */
+fun evaluateTemperature(temp: Double): HealthEvaluation {
+    return when {
+        temp < 36.0 -> HealthEvaluation(
+            title = "Thân nhiệt thấp",
+            containerColor = Color(0xFFFFFBEB),
+            borderColor = Color(0xFFFDE68A),
+            contentColor = Color(0xFFB45309)
+        )
+        temp in 36.0..37.5 -> HealthEvaluation(
+            title = "Thân nhiệt bình thường",
+            containerColor = Color(0xFFF0FDF4),
+            borderColor = Color(0xFFBBF7D0),
+            contentColor = Color(0xFF2E7D32)
+        )
+        else -> HealthEvaluation(
+            title = "Sốt (Cần theo dõi / Hạ sốt)",
+            containerColor = Color(0xFFFEE2E2),
+            borderColor = Color(0xFFFCA5A5),
+            contentColor = Color(0xFFB91C1C)
+        )
+    }
+}
+
+/**
+ * Đánh giá Nhịp tim
+ */
+fun evaluateHeartRate(bpm: Int): HealthEvaluation {
+    return when {
+        bpm < 60 -> HealthEvaluation(
+            title = "Nhịp tim chậm (< 60 BPM)",
+            containerColor = Color(0xFFFFFBEB),
+            borderColor = Color(0xFFFDE68A),
+            contentColor = Color(0xFFB45309)
+        )
+        bpm in 60..100 -> HealthEvaluation(
+            title = "Nhịp tim bình thường",
+            containerColor = Color(0xFFF0FDF4),
+            borderColor = Color(0xFFBBF7D0),
+            contentColor = Color(0xFF2E7D32)
+        )
+        else -> HealthEvaluation(
+            title = "Nhịp tim nhanh (> 100 BPM)",
+            containerColor = Color(0xFFFEE2E2),
+            borderColor = Color(0xFFFCA5A5),
+            contentColor = Color(0xFFB91C1C)
+        )
+    }
+}
+
 @Composable
 fun AddMetricDialog(
     userId: String = "user_me",
     initialType: MetricType = MetricType.BLOOD_PRESSURE,
+    initialSystolic: String = "",
+    initialDiastolic: String = "",
+    initialPulse: String = "",
+    initialBloodSugar: String = "",
+    initialTemperature: String = "",
     onDismiss: () -> Unit,
-    onSave: (HealthMetricEntity, HealthMetricEntity?) -> Unit // Trả về metric chính và metric nhịp tim phụ (nếu có)
+    onSave: (HealthMetricEntity, HealthMetricEntity?) -> Unit
 ) {
     var selectedType by remember { mutableStateOf(initialType) }
 
-    // State Huyết áp
-    var systolicText by remember { mutableStateOf("120") }
-    var diastolicText by remember { mutableStateOf("80") }
-    var pulseText by remember { mutableStateOf("75") }
+    // State Huyết áp (mặc định để trống "")
+    var systolicText by remember { mutableStateOf(initialSystolic) }
+    var diastolicText by remember { mutableStateOf(initialDiastolic) }
+    var pulseText by remember { mutableStateOf(initialPulse) }
 
     // State Đường huyết
-    var bloodSugarText by remember { mutableStateOf("100") }
-    var sugarTiming by remember { mutableStateOf("Lúc đói") } // "Lúc đói", "Sau ăn 2h", "Bất kỳ"
+    var bloodSugarText by remember { mutableStateOf(initialBloodSugar) }
+    var sugarTiming by remember { mutableStateOf("Lúc đói") }
 
     // State Thân nhiệt
-    var tempText by remember { mutableStateOf("36.8") }
+    var tempText by remember { mutableStateOf(initialTemperature) }
 
     // State Nhịp tim thủ công
-    var manualHeartRateText by remember { mutableStateOf("75") }
+    var manualHeartRateText by remember { mutableStateOf(initialPulse) }
 
     // Ghi chú
     var notesText by remember { mutableStateOf("") }
+
+    // Kiểm tra điều kiện có thể lưu
+    val canSave = when (selectedType) {
+        MetricType.BLOOD_PRESSURE -> {
+            val sys = systolicText.trim().toIntOrNull()
+            val dia = diastolicText.trim().toIntOrNull()
+            sys != null && dia != null && sys > 0 && dia > 0
+        }
+        MetricType.BLOOD_SUGAR -> {
+            val sugar = bloodSugarText.trim().toDoubleOrNull()
+            sugar != null && sugar > 0
+        }
+        MetricType.TEMPERATURE -> {
+            val temp = tempText.trim().toDoubleOrNull()
+            temp != null && temp > 0
+        }
+        MetricType.HEART_RATE -> {
+            val bpm = manualHeartRateText.trim().toIntOrNull()
+            bpm != null && bpm > 0
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -167,7 +363,14 @@ fun AddMetricDialog(
                 OutlinedTextField(
                     value = notesText,
                     onValueChange = { notesText = it },
-                    label = { Text("Ghi chú (Tùy chọn)") },
+                    label = {
+                        Text(
+                            text = "Ghi chú (Tùy chọn)",
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
                     placeholder = { Text("VD: Đo sau ngủ dậy, vừa uống thuốc...") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -191,14 +394,15 @@ fun AddMetricDialog(
 
                     Button(
                         onClick = {
+                            if (!canSave) return@Button
                             val now = System.currentTimeMillis()
                             val metricId = UUID.randomUUID().toString()
 
                             when (selectedType) {
                                 MetricType.BLOOD_PRESSURE -> {
-                                    val sys = systolicText.toDoubleOrNull() ?: 120.0
-                                    val dia = diastolicText.toDoubleOrNull() ?: 80.0
-                                    val pulse = pulseText.toDoubleOrNull()
+                                    val sys = systolicText.trim().toDoubleOrNull() ?: return@Button
+                                    val dia = diastolicText.trim().toDoubleOrNull() ?: return@Button
+                                    val pulse = pulseText.trim().toDoubleOrNull()
 
                                     val bpMetric = HealthMetricEntity(
                                         id = metricId,
@@ -229,7 +433,7 @@ fun AddMetricDialog(
                                     onSave(bpMetric, pulseMetric)
                                 }
                                 MetricType.BLOOD_SUGAR -> {
-                                    val sugar = bloodSugarText.toDoubleOrNull() ?: 100.0
+                                    val sugar = bloodSugarText.trim().toDoubleOrNull() ?: return@Button
                                     val fullNotes = if (notesText.isNotBlank()) "$sugarTiming - $notesText" else sugarTiming
                                     val sugarMetric = HealthMetricEntity(
                                         id = metricId,
@@ -245,7 +449,7 @@ fun AddMetricDialog(
                                     onSave(sugarMetric, null)
                                 }
                                 MetricType.TEMPERATURE -> {
-                                    val temp = tempText.toDoubleOrNull() ?: 36.8
+                                    val temp = tempText.trim().toDoubleOrNull() ?: return@Button
                                     val tempMetric = HealthMetricEntity(
                                         id = metricId,
                                         userId = userId,
@@ -260,7 +464,7 @@ fun AddMetricDialog(
                                     onSave(tempMetric, null)
                                 }
                                 MetricType.HEART_RATE -> {
-                                    val bpm = manualHeartRateText.toDoubleOrNull() ?: 75.0
+                                    val bpm = manualHeartRateText.trim().toDoubleOrNull() ?: return@Button
                                     val hrMetric = HealthMetricEntity(
                                         id = metricId,
                                         userId = userId,
@@ -276,6 +480,7 @@ fun AddMetricDialog(
                                 }
                             }
                         },
+                        enabled = canSave,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -334,18 +539,13 @@ private fun BloodPressureForm(
     pulse: String,
     onPulseChange: (String) -> Unit
 ) {
-    val sysVal = systolic.toIntOrNull() ?: 120
-    val diaVal = diastolic.toIntOrNull() ?: 80
+    val sysVal = systolic.trim().toIntOrNull()
+    val diaVal = diastolic.trim().toIntOrNull()
 
-    // Phân loại y tế theo khuyến cáo Hội Tim Mạch Việt Nam / AHA
-    val (statusText, statusColor) = when {
-        sysVal < 90 || diaVal < 60 -> Pair("Huyết áp thấp", Color(0xFFFB8C00))
-        sysVal < 120 && diaVal < 80 -> Pair("Huyết áp tối ưu (Bình thường)", Color(0xFF2E7D32))
-        sysVal in 120..129 && diaVal < 80 -> Pair("Huyết áp bình thường cao", Color(0xFF43A047))
-        sysVal in 130..139 || diaVal in 80..89 -> Pair("Tiền tăng huyết áp (Độ 1 nhẹ)", Color(0xFFE65100))
-        sysVal in 140..159 || diaVal in 90..99 -> Pair("Tăng huyết áp Độ 1", Color(0xFFD32F2F))
-        else -> Pair("Tăng huyết áp Độ 2 (Cần chú ý!)", Color(0xFFB71C1C))
-    }
+    // Chỉ hiển thị khung đánh giá khi ĐÃ nhập đủ cả 2 thông số hợp lệ
+    val evaluation = if (sysVal != null && diaVal != null && sysVal > 0 && diaVal > 0) {
+        evaluateBloodPressure(sysVal, diaVal)
+    } else null
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -355,8 +555,15 @@ private fun BloodPressureForm(
             OutlinedTextField(
                 value = systolic,
                 onValueChange = { if (it.length <= 3) onSystolicChange(it) },
-                label = { Text("Tâm thu (SYS)") },
-                placeholder = { Text("120") },
+                label = {
+                    Text(
+                        text = "Chỉ số trên (SYS)",
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                placeholder = { Text("--", color = Color(0xFF94A3B8), fontSize = 14.sp) },
                 suffix = { Text("mmHg", fontSize = 12.sp) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f),
@@ -366,8 +573,15 @@ private fun BloodPressureForm(
             OutlinedTextField(
                 value = diastolic,
                 onValueChange = { if (it.length <= 3) onDiastolicChange(it) },
-                label = { Text("Tâm trương (DIA)") },
-                placeholder = { Text("80") },
+                label = {
+                    Text(
+                        text = "Chỉ số dưới (DIA)",
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                placeholder = { Text("--", color = Color(0xFF94A3B8), fontSize = 14.sp) },
                 suffix = { Text("mmHg", fontSize = 12.sp) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f),
@@ -378,37 +592,47 @@ private fun BloodPressureForm(
         OutlinedTextField(
             value = pulse,
             onValueChange = { if (it.length <= 3) onPulseChange(it) },
-            label = { Text("Nhịp tim hiển thị trên máy (PULSE)") },
-            placeholder = { Text("75") },
+            label = {
+                Text(
+                    text = "Nhịp tim (BPM)",
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            placeholder = { Text("--", color = Color(0xFF94A3B8), fontSize = 14.sp) },
             suffix = { Text("BPM", fontSize = 12.sp) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
 
-        // Đánh giá trực quan
-        Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = statusColor.copy(alpha = 0.12f),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+        // Khung đánh giá trực quan theo chuẩn y khoa (chỉ hiển thị khi có dữ liệu)
+        if (evaluation != null) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = evaluation.containerColor,
+                border = BorderStroke(1.dp, evaluation.borderColor),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = statusColor,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Đánh giá: $statusText",
-                    color = statusColor,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp
-                )
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = evaluation.contentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Đánh giá: ${evaluation.title}",
+                        color = evaluation.contentColor,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                }
             }
         }
     }
@@ -422,28 +646,26 @@ private fun BloodSugarForm(
     timing: String,
     onTimingChange: (String) -> Unit
 ) {
-    val sugarVal = value.toDoubleOrNull() ?: 100.0
+    val sugarVal = value.trim().toDoubleOrNull()
 
-    val (statusText, statusColor) = when (timing) {
-        "Lúc đói" -> when {
-            sugarVal < 70 -> Pair("Hạ đường huyết (Nguy hiểm)", Color(0xFFD32F2F))
-            sugarVal in 70.0..99.0 -> Pair("Đường huyết lúc đói bình thường", Color(0xFF2E7D32))
-            sugarVal in 100.0..125.0 -> Pair("Tiền tiểu đường (Cần ăn uống kiêng)", Color(0xFFE65100))
-            else -> Pair("Đường huyết cao (Nguy cơ đái tháo đường)", Color(0xFFD32F2F))
-        }
-        else -> when {
-            sugarVal < 140.0 -> Pair("Đường huyết sau ăn bình thường", Color(0xFF2E7D32))
-            sugarVal in 140.0..199.0 -> Pair("Tiền tiểu đường (Hơi cao)", Color(0xFFE65100))
-            else -> Pair("Đường huyết sau ăn cao", Color(0xFFD32F2F))
-        }
-    }
+    // Chỉ hiển thị khung đánh giá khi người dùng đã nhập số hợp lệ
+    val evaluation = if (sugarVal != null && sugarVal > 0) {
+        evaluateBloodSugar(sugarVal, timing)
+    } else null
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(
             value = value,
             onValueChange = { onValueChange(it) },
-            label = { Text("Chỉ số đường huyết") },
-            placeholder = { Text("100") },
+            label = {
+                Text(
+                    text = "Chỉ số đường huyết",
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            placeholder = { Text("--", color = Color(0xFF94A3B8), fontSize = 14.sp) },
             suffix = { Text("mg/dL", fontSize = 12.sp) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
@@ -465,29 +687,32 @@ private fun BloodSugarForm(
             }
         }
 
-        // Đánh giá trực quan
-        Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = statusColor.copy(alpha = 0.12f),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+        // Khung đánh giá trực quan (chỉ hiển thị khi có dữ liệu)
+        if (evaluation != null) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = evaluation.containerColor,
+                border = BorderStroke(1.dp, evaluation.borderColor),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = statusColor,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Đánh giá: $statusText",
-                    color = statusColor,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp
-                )
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = evaluation.contentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Đánh giá: ${evaluation.title}",
+                        color = evaluation.contentColor,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                }
             }
         }
     }
@@ -499,49 +724,57 @@ private fun TemperatureForm(
     temp: String,
     onTempChange: (String) -> Unit
 ) {
-    val tempVal = temp.toDoubleOrNull() ?: 36.8
+    val tempVal = temp.trim().toDoubleOrNull()
 
-    val (statusText, statusColor) = when {
-        tempVal < 36.0 -> Pair("Thân nhiệt thấp", Color(0xFF1976D2))
-        tempVal in 36.0..37.5 -> Pair("Thân nhiệt bình thường", Color(0xFF2E7D32))
-        tempVal in 37.6..38.5 -> Pair("Sốt nhẹ (Theo dõi thêm)", Color(0xFFFB8C00))
-        else -> Pair("Sốt cao (Cần uống thuốc hạ sốt)", Color(0xFFD32F2F))
-    }
+    // Chỉ hiển thị khung đánh giá khi có dữ liệu
+    val evaluation = if (tempVal != null && tempVal > 0) {
+        evaluateTemperature(tempVal)
+    } else null
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(
             value = temp,
             onValueChange = { onTempChange(it) },
-            label = { Text("Nhiệt độ cơ thể") },
-            placeholder = { Text("36.8") },
+            label = {
+                Text(
+                    text = "Nhiệt độ cơ thể",
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            placeholder = { Text("--", color = Color(0xFF94A3B8), fontSize = 14.sp) },
             suffix = { Text("°C", fontSize = 12.sp) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
 
-        Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = statusColor.copy(alpha = 0.12f),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+        if (evaluation != null) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = evaluation.containerColor,
+                border = BorderStroke(1.dp, evaluation.borderColor),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = statusColor,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Đánh giá: $statusText",
-                    color = statusColor,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp
-                )
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = evaluation.contentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Đánh giá: ${evaluation.title}",
+                        color = evaluation.contentColor,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                }
             }
         }
     }
@@ -553,48 +786,57 @@ private fun ManualHeartRateForm(
     bpm: String,
     onBpmChange: (String) -> Unit
 ) {
-    val bpmVal = bpm.toIntOrNull() ?: 75
+    val bpmVal = bpm.trim().toIntOrNull()
 
-    val (statusText, statusColor) = when {
-        bpmVal < 60 -> Pair("Nhịp tim chậm (< 60 BPM)", Color(0xFF1976D2))
-        bpmVal in 60..100 -> Pair("Nhịp tim bình thường (60 - 100 BPM)", Color(0xFF2E7D32))
-        else -> Pair("Nhịp tim nhanh (> 100 BPM)", Color(0xFFD32F2F))
-    }
+    // Chỉ hiển thị khung đánh giá khi có dữ liệu
+    val evaluation = if (bpmVal != null && bpmVal > 0) {
+        evaluateHeartRate(bpmVal)
+    } else null
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(
             value = bpm,
             onValueChange = { if (it.length <= 3) onBpmChange(it) },
-            label = { Text("Nhịp tim đo bằng thiết bị ngoài") },
-            placeholder = { Text("75") },
+            label = {
+                Text(
+                    text = "Nhịp tim máy đo (BPM)",
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            placeholder = { Text("--", color = Color(0xFF94A3B8), fontSize = 14.sp) },
             suffix = { Text("BPM", fontSize = 12.sp) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
 
-        Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = statusColor.copy(alpha = 0.12f),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+        if (evaluation != null) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = evaluation.containerColor,
+                border = BorderStroke(1.dp, evaluation.borderColor),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = statusColor,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Đánh giá: $statusText",
-                    color = statusColor,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp
-                )
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = evaluation.contentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Đánh giá: ${evaluation.title}",
+                        color = evaluation.contentColor,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                }
             }
         }
     }
