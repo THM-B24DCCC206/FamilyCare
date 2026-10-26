@@ -5,12 +5,27 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import android.util.Log
+import com.google.firebase.messaging.FirebaseMessaging
 
 class FamilyCareApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannels()
+        fetchFcmToken()
+    }
+
+    private fun fetchFcmToken() {
+        FirebaseMessaging.getInstance().token
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    Log.d(TAG, "Lấy FCM token thành công")
+                    Log.d(TAG, "FCM token: ${task.result}")
+                } else {
+                    Log.e(TAG, "Không lấy được FCM token", task.exception)
+                }
+            }
     }
 
     private fun createNotificationChannels() {
@@ -18,7 +33,6 @@ class FamilyCareApp : Application() {
             val notificationManager =
                 getSystemService(NotificationManager::class.java)
 
-            // Kênh cảnh báo khẩn cấp SOS
             val emergencyChannel = NotificationChannel(
                 CHANNEL_EMERGENCY,
                 "Cảnh báo khẩn cấp SOS",
@@ -29,7 +43,6 @@ class FamilyCareApp : Application() {
                 enableVibration(true)
             }
 
-            // Kênh nhắc lịch uống thuốc
             val medicationChannel = NotificationChannel(
                 CHANNEL_MEDICATION,
                 "Nhắc nhở uống thuốc",
@@ -39,7 +52,6 @@ class FamilyCareApp : Application() {
                 enableVibration(true)
             }
 
-            // Kênh cảnh báo chỉ số bất thường
             val healthAlertChannel = NotificationChannel(
                 CHANNEL_HEALTH_ALERT,
                 "Cảnh báo chỉ số sức khỏe",
@@ -49,7 +61,6 @@ class FamilyCareApp : Application() {
                     "Thông báo khi chỉ số đo vượt ngưỡng an toàn"
             }
 
-            // Kênh nhắc lịch khám
             val appointmentChannel = NotificationChannel(
                 CHANNEL_APPOINTMENT,
                 "Nhắc lịch khám",
@@ -60,7 +71,6 @@ class FamilyCareApp : Application() {
                 enableVibration(true)
             }
 
-            // Đăng ký tất cả các kênh thông báo
             notificationManager.createNotificationChannels(
                 listOf(
                     emergencyChannel,
@@ -73,6 +83,8 @@ class FamilyCareApp : Application() {
     }
 
     companion object {
+        private const val TAG = "FamilyCareFCM"
+
         const val CHANNEL_EMERGENCY = "emergency_channel"
         const val CHANNEL_MEDICATION = "medication_channel"
         const val CHANNEL_HEALTH_ALERT = "health_alert_channel"

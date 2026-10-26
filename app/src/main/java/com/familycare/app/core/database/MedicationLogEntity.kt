@@ -4,6 +4,7 @@ package com.familycare.app.core.database
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.ColumnInfo
 
 @Entity(
     tableName = "medication_logs",
@@ -30,5 +31,8 @@ data class MedicationLogEntity(
     val actualTakenTime: Long? = null,
 
     val isTaken: Boolean = false,
-    val isSkipped: Boolean = false
+    val isSkipped: Boolean = false,
+
+    // Đã xử lý cảnh báo quá giờ hay chưa
+    val overdueNotified: Boolean = false
 )

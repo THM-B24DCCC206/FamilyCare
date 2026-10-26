@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AppointmentEntity::class,
         MedicationLogEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -94,6 +94,16 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             }
         }
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    ALTER TABLE medication_logs
+                    ADD COLUMN overdueNotified INTEGER NOT NULL DEFAULT 0
+                    """.trimIndent()
+                )
+            }
+        }
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -104,7 +114,8 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2,
-                        MIGRATION_2_3
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
                     )
                     .build()
                     .also { INSTANCE = it }

@@ -39,11 +39,12 @@ class MedicationAlarmScheduler(private val context: Context) {
             }
 
             val pendingIntent = createPendingIntent(
-                medicineId,
-                medicineName,
-                dosage,
-                time,
-                PendingIntent.FLAG_UPDATE_CURRENT
+                medicineId = medicineId,
+                name = medicineName,
+                dosage = dosage,
+                time = time,
+                scheduledAt = calendar.timeInMillis,
+                flag = PendingIntent.FLAG_UPDATE_CURRENT
             ) ?: return@forEach
 
             try {
@@ -116,6 +117,7 @@ class MedicationAlarmScheduler(private val context: Context) {
         name: String,
         dosage: String,
         time: String,
+        scheduledAt: Long,
         flag: Int
     ): PendingIntent? {
         val intent = Intent(
@@ -127,6 +129,7 @@ class MedicationAlarmScheduler(private val context: Context) {
             putExtra(EXTRA_MEDICINE_NAME, name)
             putExtra(EXTRA_DOSAGE, dosage)
             putExtra(EXTRA_TIME, time)
+            putExtra(EXTRA_SCHEDULED_AT, scheduledAt)
         }
 
         return PendingIntent.getBroadcast(
@@ -145,6 +148,7 @@ class MedicationAlarmScheduler(private val context: Context) {
         const val EXTRA_MEDICINE_NAME = "medicine_name"
         const val EXTRA_DOSAGE = "medicine_dosage"
         const val EXTRA_TIME = "medicine_time"
+        const val EXTRA_SCHEDULED_AT = "scheduled_at"
 
         private fun requestCode(id: String, time: String) =
             "$id|$time".hashCode()

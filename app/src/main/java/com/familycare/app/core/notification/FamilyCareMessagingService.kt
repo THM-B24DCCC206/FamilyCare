@@ -14,23 +14,32 @@ import com.familycare.app.R
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.Executors
 
 class FamilyCareMessagingService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "FamilyCareFCM"
         private const val CHANNEL_ID = "familycare_family_reminders"
+
+        // Chỉ dùng khi chạy Android Emulator trên cùng máy với server.
+        // Điện thoại thật cần URL HTTPS công khai.
+        private const val SERVER_URL =
+            "http://127.0.0.1:3000/register-device"
+
+        private val networkExecutor = Executors.newSingleThreadExecutor()
     }
 
     override fun onCreate() {
         super.onCreate()
 
-        // Lấy token hiện tại để chuẩn bị đăng ký thiết bị.
         FirebaseMessaging.getInstance().token
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
-                    val token = task.result
-                    Log.d(TAG, "FCM token: $token")
+                    registerDevice(task.result)
                 } else {
                     Log.e(TAG, "Không lấy được FCM token", task.exception)
                 }
@@ -40,6 +49,67 @@ class FamilyCareMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         Log.d(TAG, "FCM token đã được cập nhật")
+        registerDevice(token)
+    }
+
+    private fun registerDevice(token: String) {
+        val familyCode = FamilyLinkPreferences.getFamilyCode(this)
+
+        if (familyCode.isNullOrBlank()) {
+            Log.d(TAG, "Chưa liên kết gia đình; chưa đăng ký thiết bị.")
+            return
+        }
+
+        networkExecutor.execute {
+            var connection: HttpURLConnection? = null
+
+            try {
+                connection = (URL(SERVER_URL).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 10000
+                    readTimeout = 10000
+                    doOutput = true
+                    setRequestProperty(
+                        "Content-Type",
+                        "application/json; charset=UTF-8"
+                    )
+                }
+
+                val payload = JSONObject().apply {
+                    put("familyCode", familyCode)
+                    put("token", token)
+                }.toString()
+
+                connection.outputStream.use { output ->
+                    output.write(payload.toByteArray(Charsets.UTF_8))
+                }
+
+                val responseCode = connection.responseCode
+                val responseStream = if (responseCode in 200..299) {
+                    connection.inputStream
+                } else {
+                    connection.errorStream
+                }
+
+                val responseText = responseStream
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    .orEmpty()
+
+                if (responseCode in 200..299) {
+                    Log.d(TAG, "Đăng ký thiết bị thành công.")
+                } else {
+                    Log.e(
+                        TAG,
+                        "Đăng ký thiết bị thất bại: HTTP $responseCode, $responseText"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Không thể đăng ký thiết bị với server.", e)
+            } finally {
+                connection?.disconnect()
+            }
+        }
     }
 
     override fun onMessageReceived(message: RemoteMessage) {

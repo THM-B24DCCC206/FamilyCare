@@ -63,4 +63,15 @@ interface MedicationLogDao {
         """
     )
     suspend fun getLogById(logId: String): MedicationLogEntity?
+    @Query(
+        """
+        UPDATE medication_logs
+        SET overdueNotified = 1
+        WHERE id = :logId
+          AND isTaken = 0
+          AND isSkipped = 0
+          AND overdueNotified = 0
+        """
+    )
+    suspend fun markOverdueNotified(logId: String): Int
 }

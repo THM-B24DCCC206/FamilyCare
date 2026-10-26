@@ -28,6 +28,11 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.text.KeyboardOptions
+import com.familycare.app.core.notification.FamilyDeviceRegistrar
+import com.familycare.app.core.notification.FamilyLinkPreferences
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +42,12 @@ fun ProfileScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    var familyCode by remember {
+        mutableStateOf(
+            FamilyLinkPreferences.getFamilyCode(context) ?: ""
+        )
+    }
+    var isLinkingFamily by remember { mutableStateOf(false) }
 
     var showPreview by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
@@ -306,24 +317,79 @@ fun ProfileScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         Text(
-                            "Mã mời gia đình:",
+                            "Liên kết gia đình",
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
+
                         Text(
-                            "FAM-982143",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.primary
+                            "Nhập mã gia đình để thiết bị nhận cảnh báo uống thuốc."
                         )
+
+                        OutlinedTextField(
+                            value = familyCode,
+                            onValueChange = { familyCode = it.uppercase() },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Mã gia đình") },
+                            placeholder = { Text("FC-H135E-2026") },
+                            singleLine = true,
+                            enabled = !isLinkingFamily
+                        )
+
+                        Button(
+                            onClick = {
+                                isLinkingFamily = true
+
+                                FamilyDeviceRegistrar.linkFamily(
+                                    context = context,
+                                    familyCodeInput = familyCode
+                                ) { success, message ->
+                                    scope.launch {
+                                        isLinkingFamily = false
+                                        snackbarHostState.showSnackbar(message)
+
+                                        if (success) {
+                                            familyCode =
+                                                FamilyLinkPreferences.getFamilyCode(context)
+                                                    ?: familyCode
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isLinkingFamily && familyCode.isNotBlank()
+                        ) {
+                            if (isLinkingFamily) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Đang liên kết...")
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Link,
+                                    contentDescription = null
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Liên kết thiết bị")
+                            }
+                        }
+
                         Text(
-                            "Chia sẻ mã này để con cháu cùng " +
-                                "tham gia theo dõi sức khỏe",
-                            style = MaterialTheme.typography.bodySmall
+                            "Mã thử nghiệm hiện tại: FC-H135E-2026",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
