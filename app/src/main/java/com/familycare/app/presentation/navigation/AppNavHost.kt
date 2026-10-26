@@ -124,7 +124,7 @@ fun AppNavHost() {
                     onNavigateToMedication = { navController.navigate(Screen.Medication.route) },
                     onNavigateToSos = { navController.navigate(Screen.SosPanic.route) },
                     onNavigateToSmartwatch = { navController.navigate(Screen.Smartwatch.route) },
-                    onNavigateToPpg = { navController.navigate(Screen.CameraPpg.route) }
+                    onNavigateToNotifications = { navController.navigate(Screen.EmergencyAlerts.route) }
                 )
             }
 

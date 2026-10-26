@@ -10,13 +10,14 @@ fun DashboardScreen(
     onNavigateToOcr: () -> Unit = {},
     onNavigateToEmergency: () -> Unit = {},
     onNavigateToSos: () -> Unit = onNavigateToEmergency,
-    onNavigateToSmartwatch: () -> Unit = {}
+    onNavigateToSmartwatch: () -> Unit = {},
+    onNavigateToNotifications: () -> Unit = onNavigateToEmergency
 ) {
     HomeScreen(
         onNavigateToVitals = onNavigateToPpg,
         onNavigateToMedication = onNavigateToOcr,
         onNavigateToSos = onNavigateToSos,
         onNavigateToSmartwatch = onNavigateToSmartwatch,
-        onNavigateToPpg = onNavigateToPpg
+        onNavigateToNotifications = onNavigateToNotifications
     )
 }

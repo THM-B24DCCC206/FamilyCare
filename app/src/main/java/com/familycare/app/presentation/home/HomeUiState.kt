@@ -55,6 +55,7 @@ data class HomeUiState(
     val latestVitals: VitalSummary? = null,
     val todayMedications: List<MedicationSchedule> = emptyList(),
     val connectedDevice: BleDevice? = null,
+    val unreadNotificationCount: Int = 0,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )

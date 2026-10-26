@@ -498,6 +498,22 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         }
     }
 
+    override fun getAllAlerts(): Flow<List<AlertEntity>> {
+        return _signal.map {
+            withContext(Dispatchers.IO) {
+                val db = dbHelper.readableDatabase
+                val cursor = db.query("alerts", null, null, null, null, null, "timestamp DESC")
+                val list = mutableListOf<AlertEntity>()
+                cursor.use { c ->
+                    while (c.moveToNext()) {
+                        list.add(cursorToAlert(c))
+                    }
+                }
+                list
+            }
+        }
+    }
+
     override suspend fun getRecentAlertsByType(
         userId: String,
         type: String,

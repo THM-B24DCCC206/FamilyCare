@@ -33,7 +33,17 @@ class HomeViewModel(
 
     init {
         observeBleDevice()
+        observeNotifications()
         loadInitialData()
+    }
+
+    private fun observeNotifications() {
+        viewModelScope.launch {
+            alertDao.getAllAlerts().collect { alerts ->
+                val unreadCount = alerts.count { !it.isRead }
+                _uiState.update { it.copy(unreadNotificationCount = unreadCount) }
+            }
+        }
     }
 
     private fun observeBleDevice() {

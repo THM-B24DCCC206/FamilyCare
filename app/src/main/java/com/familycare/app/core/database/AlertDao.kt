@@ -11,6 +11,9 @@ interface AlertDao {
     @Query("SELECT * FROM alerts WHERE familyId = :familyId ORDER BY timestamp DESC")
     fun getAlertsByFamily(familyId: String): Flow<List<AlertEntity>>
 
+    @Query("SELECT * FROM alerts ORDER BY timestamp DESC")
+    fun getAllAlerts(): Flow<List<AlertEntity>>
+
     @Query("SELECT * FROM alerts WHERE targetUserId = :userId AND type = :type AND timestamp >= :sinceTimestamp ORDER BY timestamp DESC")
     suspend fun getRecentAlertsByType(
         userId: String,

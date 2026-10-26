@@ -31,7 +31,8 @@ fun HomeScreen(
     onNavigateToMedication: () -> Unit,
     onNavigateToSos: () -> Unit,
     onNavigateToSmartwatch: () -> Unit,
-    onNavigateToPpg: () -> Unit,
+    onNavigateToNotifications: () -> Unit = {},
+    onNavigateToPpg: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(
         factory = HomeViewModel.provideFactory(LocalContext.current)
     )
@@ -79,19 +80,40 @@ fun HomeScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onNavigateToPpg) {
-                        Icon(
-                            imageVector = Icons.Default.Favorite,
-                            contentDescription = "Đo nhịp tim Camera",
-                            tint = Color(0xFFE11D48)
-                        )
-                    }
+                    // 1. Icon Đồng hồ thông minh (Watch)
                     IconButton(onClick = onNavigateToSmartwatch) {
+                        val isConnected = uiState.connectedDevice?.isConnected == true
                         Icon(
                             imageVector = Icons.Default.Watch,
                             contentDescription = "Đồng hồ thông minh",
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = if (isConnected) Color(0xFF16A34A) else MaterialTheme.colorScheme.primary
                         )
+                    }
+
+                    // 2. Nút Chuông thông báo (Notifications) có Badge màu đỏ
+                    IconButton(onClick = onNavigateToNotifications) {
+                        BadgedBox(
+                            badge = {
+                                if (uiState.unreadNotificationCount > 0) {
+                                    Badge(
+                                        containerColor = Color(0xFFDC2626),
+                                        contentColor = Color.White
+                                    ) {
+                                        Text(
+                                            text = if (uiState.unreadNotificationCount > 99) "99+" else "${uiState.unreadNotificationCount}",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Thông báo",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             )
@@ -501,73 +523,7 @@ fun HomeScreen(
                 }
             }
 
-            // 4. Thanh Thiết Bị Bluetooth (Hiển thị trạng thái kết nối từ connectedDevice trên 1 dòng)
-            item {
-                val device = uiState.connectedDevice
-                Surface(
-                    onClick = onNavigateToSmartwatch,
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Watch,
-                                contentDescription = null,
-                                tint = if (device != null) Color(0xFF16A34A) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = device?.name ?: "Đồng hồ thông minh BLE",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (device != null) {
-                                Surface(
-                                    color = Color(0xFFDCFCE7),
-                                    shape = RoundedCornerShape(6.dp)
-                                ) {
-                                    Text(
-                                        text = "Đã kết nối • ${device.batteryLevel}%",
-                                        color = Color(0xFF166534),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = "Chạm để ghép nối",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.ChevronRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 5. Thẻ Lịch Thuốc Hôm Nay (todayMedications)
+            // 4. Thẻ Lịch Thuốc Hôm Nay (todayMedications)
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
