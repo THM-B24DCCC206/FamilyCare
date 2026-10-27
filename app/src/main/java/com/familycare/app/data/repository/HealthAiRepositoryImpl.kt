@@ -31,9 +31,9 @@ class HealthAiRepositoryImpl(
         context: UserHealthContext,
         history: List<ChatMessage>
     ): Resource<String> = withContext(Dispatchers.IO) {
-        val apiKey = apiKeyProvider()
+        val apiKey = apiKeyProvider().trim()
         if (apiKey.isBlank() || apiKey == "YOUR_GEMINI_API_KEY") {
-            return@withContext Resource.Error("Chưa cấu hình API Key của Google Gemini. Vui lòng kiểm tra lại thiết lập.")
+            return@withContext Resource.Error("Chưa cấu hình API Key của Google Gemini. Bác hãy bấm vào biểu tượng chìa khóa 🔑 ở góc trên hoặc nút bên dưới để nhập API Key nhé.")
         }
 
         try {
@@ -59,9 +59,9 @@ class HealthAiRepositoryImpl(
         context: UserHealthContext,
         history: List<ChatMessage>
     ): Flow<Resource<String>> = flow {
-        val apiKey = apiKeyProvider()
+        val apiKey = apiKeyProvider().trim()
         if (apiKey.isBlank() || apiKey == "YOUR_GEMINI_API_KEY") {
-            emit(Resource.Error("Chưa cấu hình API Key của Google Gemini."))
+            emit(Resource.Error("Chưa cấu hình API Key của Google Gemini. Bác hãy bấm vào biểu tượng chìa khóa 🔑 để nhập API Key nhé."))
             return@flow
         }
 
@@ -159,7 +159,10 @@ class HealthAiRepositoryImpl(
     }
 
     companion object {
-        // Khóa Gemini API cấu hình qua biến môi trường hoặc truyền trực tiếp vào constructor
-        val DEFAULT_API_KEY: String = System.getenv("GEMINI_API_KEY") ?: ""
+        // Khóa Gemini API cấu hình qua BuildConfig, biến môi trường hoặc SharedPreferences
+        val DEFAULT_API_KEY: String
+            get() = runCatching {
+                com.familycare.app.BuildConfig.GEMINI_API_KEY
+            }.getOrDefault(System.getenv("GEMINI_API_KEY") ?: "")
     }
 }

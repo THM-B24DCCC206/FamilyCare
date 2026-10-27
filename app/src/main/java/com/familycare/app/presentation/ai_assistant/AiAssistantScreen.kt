@@ -41,6 +41,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -117,6 +119,7 @@ fun AiAssistantScreen(
                 familyMembers = uiState.familyMembers,
                 selectedMemberId = uiState.selectedMemberId,
                 onMemberSelected = viewModel::onMemberSelected,
+                onShowApiKeyDialog = { viewModel.toggleApiKeyDialog(true) },
                 onShowContextDialog = { viewModel.toggleContextDialog(true) },
                 onClearConversation = viewModel::clearConversation
             )
@@ -210,6 +213,7 @@ fun AiAssistantScreen(
                         ErrorMessageCard(
                             errorMessage = uiState.errorMessage!!,
                             onRetry = { viewModel.retryLastMessage() },
+                            onOpenApiKeyDialog = { viewModel.toggleApiKeyDialog(true) },
                             onDismiss = { viewModel.clearError() }
                         )
                     }
@@ -223,6 +227,18 @@ fun AiAssistantScreen(
         ContextInjectionDialog(
             context = uiState.healthContext!!,
             onDismiss = { viewModel.toggleContextDialog(false) }
+        )
+    }
+
+    // Dialog cấu hình Google Gemini API Key
+    if (uiState.showApiKeyDialog) {
+        GeminiApiKeyDialog(
+            initialKey = uiState.currentApiKey,
+            onDismiss = { viewModel.toggleApiKeyDialog(false) },
+            onSave = { newKey ->
+                viewModel.saveApiKey(newKey)
+                Toast.makeText(context, "Đã lưu Google Gemini API Key thành công!", Toast.LENGTH_SHORT).show()
+            }
         )
     }
 }
@@ -241,6 +257,7 @@ fun AiAssistantTopBar(
     familyMembers: List<Member>,
     selectedMemberId: String,
     onMemberSelected: (String) -> Unit,
+    onShowApiKeyDialog: () -> Unit,
     onShowContextDialog: () -> Unit,
     onClearConversation: () -> Unit
 ) {
@@ -367,6 +384,15 @@ fun AiAssistantTopBar(
             }
         },
         actions = {
+            // Nút cấu hình Google Gemini API Key
+            IconButton(onClick = onShowApiKeyDialog) {
+                Icon(
+                    imageVector = Icons.Default.VpnKey,
+                    contentDescription = "Cấu hình Google Gemini API Key",
+                    tint = Color(0xFF2563EB)
+                )
+            }
+            // Nút xem chi tiết Context Injection
             IconButton(onClick = onShowContextDialog) {
                 Icon(
                     imageVector = Icons.Default.Info,
@@ -374,6 +400,7 @@ fun AiAssistantTopBar(
                     tint = Color(0xFF2563EB)
                 )
             }
+            // Nút làm mới đoạn hội thoại
             IconButton(onClick = onClearConversation) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
@@ -820,14 +847,18 @@ fun AiTypingIndicator() {
 }
 
 /**
- * Khung báo lỗi và hỗ trợ Thử lại (Error State)
+ * Khung báo lỗi và hỗ trợ Thử lại / Nhập API Key (Error State)
  */
 @Composable
 fun ErrorMessageCard(
     errorMessage: String,
     onRetry: () -> Unit,
+    onOpenApiKeyDialog: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val isApiKeyError = errorMessage.contains("API Key", ignoreCase = true) ||
+            errorMessage.contains("chìa khóa", ignoreCase = true)
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer
@@ -850,7 +881,7 @@ fun ErrorMessageCard(
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Không thể gửi tin nhắn",
+                    text = if (isApiKeyError) "Chưa cấu hình API Key" else "Không thể gửi tin nhắn",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onErrorContainer
@@ -863,14 +894,28 @@ fun ErrorMessageCard(
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            FilledTonalButton(
-                onClick = onRetry,
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError
-                )
-            ) {
-                Text("Thử lại", fontSize = 13.sp)
+
+            if (isApiKeyError) {
+                Button(
+                    onClick = onOpenApiKeyDialog,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("🔑 Nhập Key", fontSize = 12.sp)
+                }
+            } else {
+                FilledTonalButton(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("Thử lại", fontSize = 12.sp)
+                }
             }
         }
     }
@@ -917,6 +962,118 @@ fun WarningLevelBanner(warningLevel: ContextWarningLevel) {
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Hộp thoại cho phép người dùng nhập trực tiếp Google Gemini API Key
+ */
+@Composable
+fun GeminiApiKeyDialog(
+    initialKey: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var apiKeyInput by remember { mutableStateOf(initialKey) }
+    var isPasswordVisible by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFEFF6FF)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VpnKey,
+                            contentDescription = null,
+                            tint = Color(0xFF2563EB),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Google Gemini API Key",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                        Text(
+                            text = "Dùng cho Trợ lý AI & Quét đơn thuốc",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Hãy nhập hoặc dán khóa Google Gemini API Key của bạn vào đây (bắt đầu bằng AIzaSy...):",
+                    fontSize = 13.sp,
+                    color = Color(0xFF334155),
+                    lineHeight = 18.sp
+                )
+
+                OutlinedTextField(
+                    value = apiKeyInput,
+                    onValueChange = { apiKeyInput = it },
+                    placeholder = { Text("Dán API Key (AIzaSy...)", fontSize = 13.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                            Icon(
+                                imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (isPasswordVisible) "Ẩn" else "Hiện",
+                                tint = Color(0xFF64748B)
+                            )
+                        }
+                    }
+                )
+
+                Text(
+                    text = "💡 Lưu ý: Bạn có thể lấy khóa API hoàn toàn miễn phí tại trang Google AI Studio: https://aistudio.google.com/app/apikey",
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B),
+                    lineHeight = 16.sp
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Hủy", color = Color(0xFF64748B))
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { onSave(apiKeyInput.trim()) },
+                        enabled = apiKeyInput.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Lưu Khóa API")
+                    }
+                }
             }
         }
     }

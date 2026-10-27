@@ -258,7 +258,8 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
      */
     private suspend fun parsePrescriptionWithAiOrFallback(rawOcrText: String): List<ScannedMedicineItem> =
         withContext(Dispatchers.IO) {
-            val apiKey = HealthAiRepositoryImpl.DEFAULT_API_KEY
+            val sessionManager = com.familycare.app.core.common.SessionManager(getApplication())
+            val apiKey = sessionManager.geminiApiKey.ifBlank { HealthAiRepositoryImpl.DEFAULT_API_KEY }
 
             if (apiKey.isNotBlank() && apiKey != "YOUR_GEMINI_API_KEY") {
                 try {

@@ -43,7 +43,10 @@ class AiAssistantViewModel(
     val selectedMemberId: StateFlow<String> = _selectedMemberId.asStateFlow()
 
     private val _uiState = MutableStateFlow(
-        AiAssistantUiState(selectedMemberId = currentUserId)
+        AiAssistantUiState(
+            selectedMemberId = currentUserId,
+            currentApiKey = sessionManager.geminiApiKey
+        )
     )
     val uiState: StateFlow<AiAssistantUiState> = _uiState.asStateFlow()
 
@@ -240,6 +243,29 @@ class AiAssistantViewModel(
     }
 
     /**
+     * Bật/tắt hộp thoại cấu hình Google Gemini API Key
+     */
+    fun toggleApiKeyDialog(show: Boolean) {
+        _uiState.update { it.copy(showApiKeyDialog = show) }
+    }
+
+    /**
+     * Lưu khóa Google Gemini API Key vào SharedPreferences và thử gửi lại nếu có
+     */
+    fun saveApiKey(newKey: String) {
+        val cleanKey = newKey.trim()
+        sessionManager.saveGeminiApiKey(cleanKey)
+        _uiState.update {
+            it.copy(
+                currentApiKey = cleanKey,
+                showApiKeyDialog = false,
+                errorMessage = null
+            )
+        }
+        retryLastMessage()
+    }
+
+    /**
      * Khởi tạo lại cuộc trò chuyện cho thành viên đang chọn
      */
     fun clearConversation() {
@@ -406,6 +432,7 @@ class AiAssistantViewModel(
     companion object {
         /**
          * Factory khởi tạo ViewModel thuận tiện, tự động cấu hình Room Database & Repository
+         * Tự động lấy API key từ SessionManager hoặc BuildConfig
          */
         fun provideFactory(context: Context): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -418,7 +445,13 @@ class AiAssistantViewModel(
                     medicineDao = db.medicineDao(),
                     medicationLogDao = db.medicationLogDao()
                 )
-                val aiRepo = HealthAiRepositoryImpl()
+                val aiRepo = HealthAiRepositoryImpl(
+                    apiKeyProvider = {
+                        sessionManager.geminiApiKey.ifBlank {
+                            HealthAiRepositoryImpl.DEFAULT_API_KEY
+                        }
+                    }
+                )
                 val sendChatUseCase = SendChatMessageUseCase(aiRepo, getContextUseCase)
 
                 return AiAssistantViewModel(

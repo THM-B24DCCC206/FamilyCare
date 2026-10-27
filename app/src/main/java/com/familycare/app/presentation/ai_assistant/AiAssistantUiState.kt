@@ -27,6 +27,8 @@ data class AiAssistantUiState(
     val healthContext: UserHealthContext? = null,
     val isRecordingVoice: Boolean = false,
     val showContextDialog: Boolean = false,
+    val showApiKeyDialog: Boolean = false,
+    val currentApiKey: String = "",
     val familyMembers: List<Member> = emptyList(),
     val selectedMemberId: String = "",
     val quickQuestions: List<String> = emptyList()

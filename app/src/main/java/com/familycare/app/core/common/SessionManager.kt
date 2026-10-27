@@ -18,6 +18,7 @@ class SessionManager(context: Context) {
         private const val KEY_FAMILY_ID = "family_id"
         private const val KEY_FAMILY_NAME = "family_name"
         private const val KEY_INVITE_CODE = "invite_code"
+        private const val KEY_GEMINI_API_KEY = "gemini_api_key"
     }
 
     fun saveUserSession(
@@ -61,6 +62,10 @@ class SessionManager(context: Context) {
         }
     }
 
+    fun saveGeminiApiKey(apiKey: String) {
+        prefs.edit().putString(KEY_GEMINI_API_KEY, apiKey.trim()).apply()
+    }
+
     fun clearSession() {
         prefs.edit().apply {
             putBoolean(KEY_IS_LOGGED_IN, false)
@@ -98,4 +103,7 @@ class SessionManager(context: Context) {
 
     val inviteCode: String
         get() = prefs.getString(KEY_INVITE_CODE, "") ?: ""
+
+    val geminiApiKey: String
+        get() = prefs.getString(KEY_GEMINI_API_KEY, "") ?: ""
 }
