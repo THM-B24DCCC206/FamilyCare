@@ -307,17 +307,28 @@ fun AlertItemCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Nội dung thông điệp
+                // Nội dung thông điệp (Làm sạch các câu nhắc nhở định vị rườm rà nếu có từ bản ghi cũ)
+                val displayMessage = alert.message
+                    .replace("Vị trí thực tế: Chưa nhận diện được vị trí GPS (Vui lòng bật Định vị). ", "")
+                    .replace("Chưa nhận diện được vị trí GPS (Vui lòng bật Định vị). ", "")
+                    .replace("(Vui lòng bật Định vị)", "")
+                    .trim()
+
                 Text(
-                    text = alert.message,
+                    text = displayMessage,
                     fontSize = 13.sp,
                     color = Color(0xFF334155),
                     lineHeight = 18.sp
                 )
 
-                // Địa chỉ thực tế từ Geocoder (Loại bỏ hoàn toàn các mã tọa độ thô)
+                // Địa chỉ thực tế từ Geocoder (Loại bỏ hoàn toàn các mã tọa độ thô hoặc chuỗi thông báo hệ thống)
                 val cleanAddress = alert.address?.takeIf {
-                    it.isNotBlank() && !it.startsWith("QPG2") && !it.startsWith("(")
+                    it.isNotBlank() &&
+                    !it.startsWith("QPG2") &&
+                    !it.startsWith("(") &&
+                    !it.contains("Vui lòng bật") &&
+                    !it.contains("Định vị") &&
+                    !it.contains("Chưa nhận diện")
                 }
                 if (cleanAddress != null) {
                     Spacer(modifier = Modifier.height(6.dp))

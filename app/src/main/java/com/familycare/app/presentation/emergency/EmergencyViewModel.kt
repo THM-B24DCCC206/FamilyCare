@@ -312,12 +312,27 @@ class EmergencyViewModel(
                 val lat = loc?.first ?: 0.0
                 val lng = loc?.second ?: 0.0
 
-                val address = if (loc != null && _uiState.value.currentAddress != "📍 Đang xác định vị trí hiện tại...") {
-                    _uiState.value.currentAddress
-                } else if (loc != null) {
-                    emergencyManager.resolveAddress(lat, lng)
+                // Xác định địa chỉ thực tế (loại bỏ hoàn toàn các chuỗi thông báo trạng thái GPS/hệ thống)
+                val rawCurrentAddress = _uiState.value.currentAddress
+                val isRealUiAddress = loc != null &&
+                    !rawCurrentAddress.startsWith("📍") &&
+                    !rawCurrentAddress.contains("GPS") &&
+                    !rawCurrentAddress.contains("Định vị") &&
+                    !rawCurrentAddress.contains("vị trí")
+
+                val resolvedAddress = if (isRealUiAddress) {
+                    rawCurrentAddress
+                } else if (loc != null && lat != 0.0 && lng != 0.0) {
+                    val addr = emergencyManager.resolveAddress(lat, lng)
+                    if (!addr.startsWith("📍") && !addr.contains("GPS") && !addr.contains("Định vị")) addr else null
                 } else {
-                    "Vị trí người thân cần trợ giúp khẩn cấp"
+                    null
+                }
+
+                val alertMessage = if (!resolvedAddress.isNullOrBlank()) {
+                    "Vị trí thực tế: $resolvedAddress. Đã phát cảnh báo khẩn cấp tới toàn bộ người thân."
+                } else {
+                    "Đã phát cảnh báo khẩn cấp tới toàn bộ người thân."
                 }
 
                 val hospitals = if (lat != 0.0 && lng != 0.0) {
@@ -335,7 +350,7 @@ class EmergencyViewModel(
                     familyId = _uiState.value.familyId,
                     latitude = lat,
                     longitude = lng,
-                    address = address,
+                    address = resolvedAddress ?: "Đang xác định",
                     bloodType = _uiState.value.bloodType,
                     medicalConditions = _uiState.value.chronicDiseases,
                     allergies = _uiState.value.drugAllergies,
@@ -352,13 +367,13 @@ class EmergencyViewModel(
                     type = AlertType.SOS_EMERGENCY,
                     level = AlertLevel.CRITICAL,
                     title = "🚨 CẢNH BÁO CẤP CỨU GIA ĐÌNH - ${payload.senderName}!",
-                    message = "Vị trí thực tế: $address. Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.",
+                    message = alertMessage,
                     timestamp = payload.timestamp,
                     isRead = false,
                     isResolved = false,
-                    address = address,
-                    latitude = lat,
-                    longitude = lng
+                    address = resolvedAddress,
+                    latitude = if (lat != 0.0) lat else null,
+                    longitude = if (lng != 0.0) lng else null
                 )
                 alertRepository.createAlert(alert)
 
@@ -369,7 +384,7 @@ class EmergencyViewModel(
                         isSirenPlaying = true,
                         currentLatitude = if (lat != 0.0) lat else it.currentLatitude,
                         currentLongitude = if (lng != 0.0) lng else it.currentLongitude,
-                        currentAddress = address,
+                        currentAddress = resolvedAddress ?: it.currentAddress,
                         isOwnerNotified = true,
                         nearbyHospitals = hospitals
                     )

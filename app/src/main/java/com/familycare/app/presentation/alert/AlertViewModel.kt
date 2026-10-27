@@ -28,6 +28,7 @@ class AlertViewModel(
         viewModelScope.launch {
             // Xóa sạch toàn bộ dữ liệu mẫu / giả lập cũ trong SQLite
             alertDao.deleteDummyAlerts()
+            alertDao.cleanGpsReminderFromAlerts()
         }
     }
 
@@ -35,18 +36,37 @@ class AlertViewModel(
         alertDao.getAllAlerts(),
         _selectedFilter
     ) { allAlerts, filter ->
+        // Loại bỏ triệt để các cảnh báo thuộc về các thành viên giả lập/mẫu cũ
+        val validAlerts = allAlerts.filter { alert ->
+            !alert.memberName.contains("Nguyễn Văn Nam") &&
+            !alert.memberName.contains("Nguyễn Hoàng") &&
+            !alert.memberName.contains("Trần Thị Lan") &&
+            !alert.message.contains("Nguyễn Hoàng") &&
+            !alert.message.contains("Trần Thị Lan")
+        }.map { alert ->
+            // Bỏ dòng nhắc nhở định vị rườm rà nếu có
+            if (alert.message.contains("Vui lòng bật Định vị") || alert.message.contains("Chưa nhận diện được vị trí")) {
+                alert.copy(
+                    message = "Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.",
+                    address = null
+                )
+            } else {
+                alert
+            }
+        }
+
         val filtered = when (filter) {
-            AlertFilter.ALL -> allAlerts
-            AlertFilter.CRITICAL -> allAlerts.filter { it.alertLevel == AlertLevel.CRITICAL }
-            AlertFilter.WARNING -> allAlerts.filter { it.alertLevel == AlertLevel.WARNING }
+            AlertFilter.ALL -> validAlerts
+            AlertFilter.CRITICAL -> validAlerts.filter { it.alertLevel == AlertLevel.CRITICAL }
+            AlertFilter.WARNING -> validAlerts.filter { it.alertLevel == AlertLevel.WARNING }
         }
 
         AlertUiState(
             alerts = filtered,
             selectedFilter = filter,
-            allCount = allAlerts.size,
-            criticalCount = allAlerts.count { it.alertLevel == AlertLevel.CRITICAL },
-            warningCount = allAlerts.count { it.alertLevel == AlertLevel.WARNING },
+            allCount = validAlerts.size,
+            criticalCount = validAlerts.count { it.alertLevel == AlertLevel.CRITICAL },
+            warningCount = validAlerts.count { it.alertLevel == AlertLevel.WARNING },
             isLoading = false
         )
     }.stateIn(
