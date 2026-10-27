@@ -100,6 +100,10 @@ fun EmergencyScreen(
                     viewModel.triggerSos()
                     Toast.makeText(context, "ĐÃ KÍCH HOẠT BÁO ĐỘNG SOS!", Toast.LENGTH_LONG).show()
                 },
+                onSosDismissed = {
+                    viewModel.dismissSos()
+                    Toast.makeText(context, "ĐÃ HỦY BÁO ĐỘNG SOS AN TOÀN", Toast.LENGTH_SHORT).show()
+                },
                 isActivated = isActivated,
                 holdDurationMs = 2000L
             )

@@ -12,22 +12,21 @@ sealed interface SosStatus {
 
 data class EmergencyUiState(
     val sosStatus: SosStatus = SosStatus.Idle,
-    val isHolding: Boolean = false,
-    val holdProgress: Float = 0f, // 0.0f đến 1.0f (tương đương 2 giây)
     val isSirenPlaying: Boolean = false,
-    val currentLatitude: Double? = 10.7769,
-    val currentLongitude: Double? = 106.7009,
-    val currentAddress: String = "201B Nguyễn Chí Thanh, Phường 12, Quận 5, TP. Hồ Chí Minh",
-    val targetUserName: String = "Bác Nguyễn Văn Nam",
-    val familyId: String = "fam_123456",
-    val familyOwnerName: String = "Bác Nguyễn Văn Nam",
-    val familyOwnerRole: String = "Chủ hộ gia đình",
-    val familyOwnerPhone: String = "0912.345.678",
+    val currentLatitude: Double? = null,
+    val currentLongitude: Double? = null,
+    val currentAddress: String = "Đang xác định vị trí thực tế...",
+    val targetUserId: String = "",
+    val targetUserName: String = "Đang tải hồ sơ...",
+    val targetUserPhone: String = "",
+    val bloodType: String = "--",
+    val chronicDiseases: String = "",
+    val drugAllergies: String = "",
+    val familyId: String = "",
+    val familyOwnerName: String = "Đang tải...",
+    val familyOwnerRole: String = "Trưởng gia đình",
+    val familyOwnerPhone: String = "",
     val isOwnerNotified: Boolean = false,
     val nearbyHospitals: List<NearbyHospital> = emptyList(),
-    val emergencyContacts: List<String> = listOf(
-        "Chủ hộ (Bác Nguyễn Văn Nam): 0912.345.678",
-        "Bác sĩ gia đình (BS. Tuấn): 0987.654.321",
-        "Con trai (Nguyễn Hoàng): 0903.112.233"
-    )
+    val emergencyContacts: List<String> = emptyList()
 )
