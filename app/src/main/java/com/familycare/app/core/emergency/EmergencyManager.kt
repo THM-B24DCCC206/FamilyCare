@@ -16,16 +16,17 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.resume
 
 /**
  * Trình quản lý sự cố khẩn cấp (EmergencyManager):
- * 1. Bắt tọa độ GPS độ chính xác cao bằng FusedLocationProviderClient thời gian thực.
+ * 1. Tự động định vị ngầm thời gian thực bằng FusedLocationProviderClient (Chạy 100% ngầm, không hộp thoại).
  * 2. Phân giải địa chỉ tiếng Việt qua Android Geocoder (Không dùng địa chỉ giả lập hardcode).
- * 3. Kích hoạt còi hú âm lượng tối đa và rung dồn dập qua EmergencySirenController.
- * 4. Đóng gói EmergencyPayload sẵn sàng gửi qua Firebase Cloud Messaging (FCM).
+ * 3. Cơ chế Fallback tức thời: Ưu tiên GPS chính xác cao, tự động lấy nhanh vị trí cache getLastLocation().
+ * 4. Kích hoạt còi hú âm lượng tối đa và rung dồn dập qua EmergencySirenController.
  */
 class EmergencyManager(
     private val context: Context
@@ -38,71 +39,122 @@ class EmergencyManager(
         LocationServices.getFusedLocationProviderClient(context)
     }
 
+    @Volatile
+    private var lastCachedCoords: Pair<Double, Double>? = null
+
     /**
-     * Lấy tọa độ GPS chính xác thời gian thực bằng FusedLocationProviderClient
-     * Xóa bỏ hoàn toàn tọa độ hardcoded Lê Thánh Tôn.
+     * Lấy vị trí gần nhất trong bộ nhớ cache phần cứng cực nhanh (< 50ms)
+     * Dùng cho cơ chế Fallback tức thời khi người dùng bấm SOS mà GPS chưa fix xong.
      */
     @SuppressLint("MissingPermission")
-    suspend fun getCurrentGpsLocation(): Pair<Double, Double>? = suspendCancellableCoroutine { continuation ->
+    suspend fun getLastKnownLocationQuickly(): Pair<Double, Double>? = withContext(Dispatchers.IO) {
+        // Nếu đã có cache gần đây trong phiên
+        lastCachedCoords?.let { return@withContext it }
+
+        if (!hasLocationPermission()) return@withContext null
+
+        suspendCancellableCoroutine { continuation ->
+            try {
+                fusedLocationClient.lastLocation.addOnSuccessListener { loc: Location? ->
+                    if (loc != null) {
+                        val coords = Pair(loc.latitude, loc.longitude)
+                        lastCachedCoords = coords
+                        Log.d(TAG, "Lấy lastLocation cache thành công: ${coords.first}, ${coords.second}")
+                        continuation.resume(coords)
+                    } else {
+                        continuation.resume(null)
+                    }
+                }.addOnFailureListener {
+                    continuation.resume(null)
+                }
+            } catch (_: Exception) {
+                continuation.resume(null)
+            }
+        }
+    }
+
+    /**
+     * Tự động định vị ngầm thời gian thực với độ chính xác cao (Priority.PRIORITY_HIGH_ACCURACY).
+     * Có timeout 4500ms tự ngắt để tránh treo luồng, tự động fallback sang lastLocation nếu GPS fix chậm.
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun getCurrentGpsLocation(timeoutMs: Long = 4500L): Pair<Double, Double>? = withTimeoutOrNull(timeoutMs) {
+        if (!hasLocationPermission()) {
+            Log.w(TAG, "Chưa được cấp quyền truy cập vị trí.")
+            return@withTimeoutOrNull null
+        }
+
+        suspendCancellableCoroutine { continuation ->
+            val cancellationTokenSource = CancellationTokenSource()
+            continuation.invokeOnCancellation {
+                cancellationTokenSource.cancel()
+            }
+
+            try {
+                fusedLocationClient.getCurrentLocation(
+                    Priority.PRIORITY_HIGH_ACCURACY,
+                    cancellationTokenSource.token
+                ).addOnSuccessListener { location: Location? ->
+                    if (location != null) {
+                        val coords = Pair(location.latitude, location.longitude)
+                        lastCachedCoords = coords
+                        Log.d(TAG, "Định vị ngầm GPS thành công: ${coords.first}, ${coords.second}")
+                        continuation.resume(coords)
+                    } else {
+                        // Nếu chưa bắt được GPS tức thời, lấy vị trí cache gần nhất
+                        fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc: Location? ->
+                            if (lastLoc != null) {
+                                val coords = Pair(lastLoc.latitude, lastLoc.longitude)
+                                lastCachedCoords = coords
+                                Log.d(TAG, "Fallback sang lastLocation thành công: ${coords.first}, ${coords.second}")
+                                continuation.resume(coords)
+                            } else {
+                                continuation.resume(null)
+                            }
+                        }.addOnFailureListener {
+                            continuation.resume(null)
+                        }
+                    }
+                }.addOnFailureListener { e ->
+                    Log.e(TAG, "Lỗi getCurrentLocation, thử lấy lastLocation", e)
+                    fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc: Location? ->
+                        if (lastLoc != null) {
+                            val coords = Pair(lastLoc.latitude, lastLoc.longitude)
+                            lastCachedCoords = coords
+                            continuation.resume(coords)
+                        } else {
+                            continuation.resume(null)
+                        }
+                    }.addOnFailureListener {
+                        continuation.resume(null)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Ngoại lệ khi gọi FusedLocationProviderClient", e)
+                continuation.resume(null)
+            }
+        }
+    } ?: run {
+        // Nếu timeout 4500ms, fallback ngay sang lastLocation cache
+        getLastKnownLocationQuickly()
+    }
+
+    private fun hasLocationPermission(): Boolean {
         val hasFine = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         val hasCoarse = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-
-        if (!hasFine && !hasCoarse) {
-            Log.w(TAG, "Chưa được cấp quyền truy cập vị trí (ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION)")
-            continuation.resume(null)
-            return@suspendCancellableCoroutine
-        }
-
-        val cancellationTokenSource = CancellationTokenSource()
-        continuation.invokeOnCancellation {
-            cancellationTokenSource.cancel()
-        }
-
-        try {
-            // Ưu tiên lấy tọa độ GPS tức thời thời gian thực với độ chính xác cao nhất
-            fusedLocationClient.getCurrentLocation(
-                Priority.PRIORITY_HIGH_ACCURACY,
-                cancellationTokenSource.token
-            ).addOnSuccessListener { location: Location? ->
-                if (location != null) {
-                    Log.d(TAG, "Lấy GPS thời gian thực thành công: ${location.latitude}, ${location.longitude}")
-                    continuation.resume(Pair(location.latitude, location.longitude))
-                } else {
-                    // Nếu chưa bắt được GPS ngay, thử lấy vị trí gần nhất đã lưu trong cache phần cứng
-                    fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc: Location? ->
-                        if (lastLoc != null) {
-                            Log.d(TAG, "Lấy lastLocation thành công: ${lastLoc.latitude}, ${lastLoc.longitude}")
-                            continuation.resume(Pair(lastLoc.latitude, lastLoc.longitude))
-                        } else {
-                            Log.w(TAG, "Không lấy được vị trí GPS thời gian thực từ thiết bị.")
-                            continuation.resume(null)
-                        }
-                    }.addOnFailureListener { e ->
-                        Log.e(TAG, "Lỗi lấy lastLocation", e)
-                        continuation.resume(null)
-                    }
-                }
-            }.addOnFailureListener { e ->
-                Log.e(TAG, "Lỗi getCurrentLocation", e)
-                continuation.resume(null)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Ngoại lệ khi gọi Location Provider", e)
-            continuation.resume(null)
-        }
+        return hasFine || hasCoarse
     }
 
     /**
-     * Tra cứu địa chỉ số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành phố thực tế từ tọa độ GPS.
-     * Hoàn toàn không dùng địa chỉ mẫu giả lập.
+     * Phân giải địa chỉ tiếng Việt qua Android Geocoder (Hoàn toàn không dùng địa chỉ mẫu giả lập).
      */
     suspend fun resolveAddress(latitude: Double, longitude: Double): String = withContext(Dispatchers.IO) {
         try {
-            val geocoder = Geocoder(context, Locale("vi", "VN"))
+            val geocoder = Geocoder(context, Locale.Builder().setLanguage("vi").setRegion("VN").build())
             @Suppress("DEPRECATION")
             val addresses: List<Address>? = geocoder.getFromLocation(latitude, longitude, 1)
 
@@ -116,7 +168,6 @@ class EmergencyManager(
                     return@withContext fullAddress
                 }
 
-                // Nếu getAddressLine rỗng, ghép từ các thành phần chi tiết
                 val parts = listOfNotNull(
                     addr.featureName,
                     addr.thoroughfare,
@@ -132,29 +183,19 @@ class EmergencyManager(
             Log.e(TAG, "Lỗi phân giải địa chỉ bằng Geocoder", e)
         }
 
-        // Nếu Geocoder không có kết nối hoặc thiết bị thiếu backend định vị, hiển thị tọa độ cụ thể
         "Vị trí GPS: %.5f° N, %.5f° E".format(Locale.US, latitude, longitude)
     }
 
-    /**
-     * Kích hoạt còi hú báo động âm lượng tối đa 100% và rung khẩn cấp
-     */
     fun startSirenAlarm() {
         EmergencySirenController.startSiren(context)
     }
 
-    /**
-     * Dừng còi hú báo động, ngắt rung và khôi phục âm lượng ban đầu
-     */
     fun stopSirenAlarm() {
         EmergencySirenController.stopSiren(context)
     }
 
     fun isSirenPlaying(): Boolean = EmergencySirenController.isSirenPlaying()
 
-    /**
-     * Đóng gói Payload thông báo khẩn cấp gửi qua Firebase Cloud Messaging (FCM Data Message)
-     */
     fun createEmergencyPayload(
         userId: String,
         senderName: String,

@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 
 /**
  * ViewModel xử lý nghiệp vụ Nút bấm SOS 1-chạm & Điều phối còi hú, GPS thời gian thực,
- * FCM Alert tới toàn bộ thành viên gia đình, phân định chính xác vai trò Trưởng gia đình / Thành viên.
+ * Tự động định vị ngầm 100%, không yêu cầu thao tác thủ công rườm rà.
  */
 class EmergencyViewModel(
     private val emergencyManager: EmergencyManager,
@@ -66,18 +66,17 @@ class EmergencyViewModel(
 
     /**
      * 1. Truy vấn Dữ Liệu Chủ Hộ & Danh Bạ Khẩn Cấp Thật Từ Room Database
-     * Phân định chính xác: Người đăng nhập là Ly Trần (Trưởng gia đình), Hải Minh Trần là Thành viên.
      */
     private fun loadFamilyAndUserData() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val currentLoggedInId = sessionManager.userId.ifBlank { "user_me" }
                 val currentLoggedInName = sessionManager.userName.ifBlank { "Tôi" }
-                val currentLoggedInRole = sessionManager.userRole.uppercase() // "ADMIN" hoặc "MEMBER"
+                val currentLoggedInRole = sessionManager.userRole.uppercase()
 
                 var allUsers: List<UserEntity> = userDao.getAllUsers()
 
-                // 1. Đảm bảo currentUser có trong DB và đồng bộ đúng role từ sessionManager
+                // Đảm bảo currentUser có trong DB và đồng bộ đúng role từ sessionManager
                 var currentUser = if (currentLoggedInId.isNotBlank()) {
                     userDao.getUserById(currentLoggedInId)
                 } else null
@@ -100,9 +99,7 @@ class EmergencyViewModel(
                     currentUser = updated
                 }
 
-                // 2. Nếu tài khoản hiện tại là ADMIN (Trưởng gia đình - Ly Trần):
-                // Thì Ly Trần CHÍNH LÀ TRƯỞNG GIA ĐÌNH.
-                // Các thành viên khác trong DB (ví dụ: Hải Minh Trần) phải là MEMBER để không bị xung đột.
+                // Nếu tài khoản hiện tại là ADMIN (Trưởng gia đình - Ly Trần):
                 val isCurrentOwner = currentLoggedInRole == "ADMIN" || currentUser.role.uppercase() == "ADMIN"
                 if (isCurrentOwner) {
                     allUsers.filter { it.id != currentLoggedInId && it.role.uppercase() == "ADMIN" }.forEach { oldAdmin ->
@@ -114,9 +111,6 @@ class EmergencyViewModel(
 
                 val otherMembers = allUsers.filter { it.id != currentUser.id && it.id != "user_01" && it.id != "user_demo_01" }
 
-                // 3. Xác định Người tiếp nhận SOS & Nội dung thẻ trên màn hình SOS:
-                // - Nếu Ly Trần là Trưởng gia đình: Ly Trần là người phát nạn -> người tiếp nhận là thành viên khác (Hải Minh Trần)
-                // - Nếu người phát nạn là Thành viên: người tiếp nhận là Trưởng gia đình (Ly Trần)
                 val recipientUser: UserEntity? = if (isCurrentOwner) {
                     otherMembers.firstOrNull()
                 } else {
@@ -155,7 +149,6 @@ class EmergencyViewModel(
                 val diseases = formatJsonList(currentUser.chronicDiseasesJson)
                 val allergies = formatJsonList(currentUser.drugAllergiesJson)
 
-                // 4. Danh bạ khẩn cấp: Thể hiện đúng ai là Trưởng gia đình, ai là Thành viên
                 val contacts = mutableListOf<String>()
                 val myRoleTag = if (isCurrentOwner) "Tôi - Trưởng gia đình" else "Tôi - Thành viên"
                 contacts.add("$targetName ($myRoleTag) • $targetPhone")
@@ -191,8 +184,6 @@ class EmergencyViewModel(
                         emergencyContacts = contacts
                     )
                 }
-
-                Log.d(TAG, "Đã tải dữ liệu người dùng: Tôi ($targetName - $myRoleTag), Người tiếp nhận ($recipientName - $recipientRole)")
             } catch (e: Exception) {
                 Log.e(TAG, "Lỗi nạp dữ liệu gia đình từ Room DB", e)
             }
@@ -200,12 +191,31 @@ class EmergencyViewModel(
     }
 
     /**
-     * 2. Bắt Tọa Độ GPS Thời Gian Thực (Xóa bỏ hoàn toàn hardcode Lê Thánh Tôn)
-     * Tính toán khoảng cách thực tế đến các bệnh viện lân cận.
+     * 2. Tự Động Định Vị Ngầm & Xóa Bỏ Hoàn Toàn Tọa Độ Ảo:
+     * Chạy ngầm 100%, không hiển thị banner/hộp thoại bắt người dùng thao tác thủ công.
      */
     private fun loadRealtimeLocationAndHospitals() {
         viewModelScope.launch {
             try {
+                _uiState.update { it.copy(currentAddress = "📍 Đang xác định vị trí hiện tại...") }
+
+                // Thử lấy nhanh vị trí cache gần nhất để hiển thị tức thì nếu có
+                val quickCache = emergencyManager.getLastKnownLocationQuickly()
+                if (quickCache != null) {
+                    val (cachedLat, cachedLng) = quickCache
+                    val cachedAddress = emergencyManager.resolveAddress(cachedLat, cachedLng)
+                    val cachedHospitals = NearbyHospitalProvider.getNearbyHospitals(cachedLat, cachedLng)
+                    _uiState.update {
+                        it.copy(
+                            currentLatitude = cachedLat,
+                            currentLongitude = cachedLng,
+                            currentAddress = cachedAddress,
+                            nearbyHospitals = cachedHospitals
+                        )
+                    }
+                }
+
+                // Gọi ngầm định vị GPS độ chính xác cao
                 val loc = emergencyManager.getCurrentGpsLocation()
                 if (loc != null) {
                     val (lat, lng) = loc
@@ -220,26 +230,21 @@ class EmergencyViewModel(
                             nearbyHospitals = hospitals
                         )
                     }
-                } else {
+                } else if (_uiState.value.currentLatitude == null) {
                     _uiState.update {
-                        it.copy(
-                            currentAddress = "Chưa nhận diện được vị trí GPS (Vui lòng bật Định vị)",
-                            nearbyHospitals = emptyList()
-                        )
+                        it.copy(currentAddress = "📍 Đang xác định vị trí hiện tại...")
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Lỗi lấy vị trí thời gian thực", e)
+                Log.e(TAG, "Lỗi định vị ngầm", e)
             }
         }
     }
 
     /**
      * Kích hoạt toàn bộ quy trình khẩn cấp khi người dùng giữ nút SOS đủ 2 giây:
-     * 1. Bắt tọa độ GPS độ chính xác cao tức thời & giải mã địa chỉ thật bằng Geocoder.
-     * 2. Ép volume 100%, phát còi hú liên tục và rung khẩn cấp.
-     * 3. Đóng gói FCM Data Message (ưu tiên cao) sẵn sàng gửi đến toàn bộ thiết bị người thân.
-     * 4. Lưu cảnh báo Alert CRITICAL vào Room Database.
+     * Cơ chế Fallback tức thời: Ưu tiên tọa độ đã định vị, nếu chưa có thì lấy cache getLastLocation().
+     * Tuyệt đối không chặn tiến trình phát còi hú và bắn tín hiệu cứu nạn.
      */
     fun triggerSos() {
         if (_uiState.value.sosStatus is SosStatus.LocatingAndActivating) return
@@ -248,20 +253,32 @@ class EmergencyViewModel(
 
         viewModelScope.launch {
             try {
-                val loc = emergencyManager.getCurrentGpsLocation()
-                val lat = loc?.first ?: _uiState.value.currentLatitude ?: 0.0
-                val lng = loc?.second ?: _uiState.value.currentLongitude ?: 0.0
-                val address = if (loc != null) {
+                // 1. Lấy tọa độ GPS: ưu tiên tọa độ đã tìm được, fallback ngay sang lastLocation cache
+                val loc = (_uiState.value.currentLatitude?.let { lat ->
+                    _uiState.value.currentLongitude?.let { lng ->
+                        Pair(lat, lng)
+                    }
+                }) ?: emergencyManager.getLastKnownLocationQuickly()
+
+                val lat = loc?.first ?: 0.0
+                val lng = loc?.second ?: 0.0
+
+                val address = if (loc != null && _uiState.value.currentAddress != "📍 Đang xác định vị trí hiện tại...") {
+                    _uiState.value.currentAddress
+                } else if (loc != null) {
                     emergencyManager.resolveAddress(lat, lng)
                 } else {
-                    _uiState.value.currentAddress
+                    "Vị trí người thân cần trợ giúp khẩn cấp"
                 }
+
                 val hospitals = if (lat != 0.0 && lng != 0.0) {
                     NearbyHospitalProvider.getNearbyHospitals(lat, lng)
-                } else emptyList()
+                } else _uiState.value.nearbyHospitals
 
+                // 2. Kích hoạt còi hú âm lượng tối đa và rung dồn dập
                 emergencyManager.startSirenAlarm()
 
+                // 3. Đóng gói EmergencyPayload
                 val payload = emergencyManager.createEmergencyPayload(
                     userId = _uiState.value.targetUserId,
                     senderName = _uiState.value.targetUserName,
@@ -277,6 +294,7 @@ class EmergencyViewModel(
                     familyOwnerPhone = _uiState.value.familyOwnerPhone
                 )
 
+                // 4. Lưu bản ghi cảnh báo đỏ vào Room Database
                 val alert = Alert(
                     id = payload.eventId,
                     familyId = payload.familyId,
@@ -293,19 +311,20 @@ class EmergencyViewModel(
                 )
                 alertRepository.createAlert(alert)
 
+                // 5. Cập nhật UI hoàn tất
                 _uiState.update {
                     it.copy(
                         sosStatus = SosStatus.Activated(payload),
                         isSirenPlaying = true,
-                        currentLatitude = lat,
-                        currentLongitude = lng,
+                        currentLatitude = if (lat != 0.0) lat else it.currentLatitude,
+                        currentLongitude = if (lng != 0.0) lng else it.currentLongitude,
                         currentAddress = address,
                         isOwnerNotified = true,
                         nearbyHospitals = hospitals
                     )
                 }
 
-                Log.d(TAG, "Đã kích hoạt SOS thành công! Payload FCM: ${payload.toFcmDataMap()}")
+                Log.d(TAG, "Đã kích hoạt SOS thành công! Payload: ${payload.toFcmDataMap()}")
             } catch (e: Exception) {
                 Log.e(TAG, "Lỗi khi kích hoạt SOS", e)
                 _uiState.update {
@@ -329,7 +348,7 @@ class EmergencyViewModel(
                 isOwnerNotified = false
             )
         }
-        Log.d(TAG, "Người dùng đã giữ 2 giây để hủy báo động SOS an toàn.")
+        Log.d(TAG, "Đã hủy báo động SOS.")
     }
 
     fun resetSos() {
