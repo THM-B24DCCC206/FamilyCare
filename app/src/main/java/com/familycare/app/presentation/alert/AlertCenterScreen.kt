@@ -58,6 +58,15 @@ fun AlertCenterScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
                     }
                 },
+                actions = {
+                    IconButton(onClick = { viewModel.clearAllAlerts() }) {
+                        Icon(
+                            Icons.Default.DeleteOutline,
+                            contentDescription = "Xóa sạch tất cả cảnh báo",
+                            tint = Color(0xFF64748B)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White
                 )

@@ -769,6 +769,17 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         Unit
     }
 
+    override suspend fun clearAllAlerts(): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            db.delete("alerts", null, null)
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi clearAllAlerts", e)
+        }
+        Unit
+    }
+
     override suspend fun cleanGpsReminderFromAlerts(): Unit = withContext(Dispatchers.IO) {
         try {
             val db = dbHelper.writableDatabase

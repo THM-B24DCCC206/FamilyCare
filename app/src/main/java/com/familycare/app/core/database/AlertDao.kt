@@ -54,6 +54,9 @@ interface AlertDao {
 
     suspend fun markAlertAsRead(alertId: String) = markAsRead(alertId)
 
+    @Query("DELETE FROM alerts")
+    suspend fun clearAllAlerts()
+
     @Query("DELETE FROM alerts WHERE id = :alertId")
     suspend fun deleteAlert(alertId: Long)
 

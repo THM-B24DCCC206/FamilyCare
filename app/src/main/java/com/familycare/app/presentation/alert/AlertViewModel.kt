@@ -26,9 +26,8 @@ class AlertViewModel(
 
     init {
         viewModelScope.launch {
-            // Xóa sạch toàn bộ dữ liệu mẫu / giả lập cũ trong SQLite
-            alertDao.deleteDummyAlerts()
-            alertDao.cleanGpsReminderFromAlerts()
+            // Xóa sạch toàn bộ thông báo cũ theo yêu cầu người dùng để bắt đầu phiên test mới tinh
+            alertDao.clearAllAlerts()
         }
     }
 
@@ -99,6 +98,15 @@ class AlertViewModel(
     fun onResolveAlert(alertId: Long) {
         viewModelScope.launch {
             alertDao.updateResolvedStatus(alertId, true)
+        }
+    }
+
+    /**
+     * Xóa sạch 100% cảnh báo để thử nghiệm từ đầu
+     */
+    fun clearAllAlerts() {
+        viewModelScope.launch {
+            alertDao.clearAllAlerts()
         }
     }
 
