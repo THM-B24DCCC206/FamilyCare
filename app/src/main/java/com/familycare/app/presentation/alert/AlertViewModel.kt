@@ -44,29 +44,40 @@ class AlertViewModel(
             !alert.message.contains("Nguyễn Hoàng") &&
             !alert.message.contains("Trần Thị Lan")
         }.map { alert ->
+            var finalAlert = alert
+            // Đảm bảo: Mọi cảnh báo SOS / Báo động cấp cứu đều 100% là AlertLevel.CRITICAL (Khẩn cấp)
+            if (finalAlert.alertType == com.familycare.app.domain.model.AlertType.SOS_EMERGENCY ||
+                finalAlert.title.contains("SOS", ignoreCase = true) ||
+                finalAlert.title.contains("CẤP CỨU", ignoreCase = true)) {
+                if (finalAlert.alertLevel != AlertLevel.CRITICAL) {
+                    finalAlert = finalAlert.copy(alertLevel = AlertLevel.CRITICAL)
+                }
+            }
             // Bỏ dòng nhắc nhở định vị rườm rà nếu có
-            if (alert.message.contains("Vui lòng bật Định vị") || alert.message.contains("Chưa nhận diện được vị trí")) {
-                alert.copy(
+            if (finalAlert.message.contains("Vui lòng bật Định vị") || finalAlert.message.contains("Chưa nhận diện được vị trí")) {
+                finalAlert = finalAlert.copy(
                     message = "Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.",
                     address = null
                 )
-            } else {
-                alert
             }
+            finalAlert
         }
 
         val filtered = when (filter) {
             AlertFilter.ALL -> validAlerts
             AlertFilter.CRITICAL -> validAlerts.filter { it.alertLevel == AlertLevel.CRITICAL }
-            AlertFilter.WARNING -> validAlerts.filter { it.alertLevel == AlertLevel.WARNING }
+            AlertFilter.WARNING -> validAlerts.filter { it.alertLevel != AlertLevel.CRITICAL }
         }
+
+        val critCount = validAlerts.count { it.alertLevel == AlertLevel.CRITICAL }
+        val warnCount = validAlerts.count { it.alertLevel != AlertLevel.CRITICAL }
 
         AlertUiState(
             alerts = filtered,
             selectedFilter = filter,
             allCount = validAlerts.size,
-            criticalCount = validAlerts.count { it.alertLevel == AlertLevel.CRITICAL },
-            warningCount = validAlerts.count { it.alertLevel == AlertLevel.WARNING },
+            criticalCount = critCount,
+            warningCount = warnCount,
             isLoading = false
         )
     }.stateIn(

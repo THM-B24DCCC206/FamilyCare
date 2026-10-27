@@ -182,6 +182,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         try {
             db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%' OR id = 1 OR id = 2 OR id = 3")
             db.execSQL("UPDATE alerts SET message = 'Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.', address = NULL WHERE message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'")
+            db.execSQL("UPDATE alerts SET alertLevel = 'CRITICAL', level = 'CRITICAL' WHERE alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'")
         } catch (_: Exception) {}
         try {
             db.execSQL("DELETE FROM users WHERE fullName LIKE '%Nguyễn Văn Nam%' OR id = 'member_bac_nam' OR id = 'user_demo_01' OR id = 'user_01' OR fullName = 'Bác Trần Thị Lan' OR fullName = 'Con Nguyễn Hoàng'")
@@ -275,6 +276,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         try {
             db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%' OR id = 1 OR id = 2 OR id = 3")
             db.execSQL("UPDATE alerts SET message = 'Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.', address = NULL WHERE message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'")
+            db.execSQL("UPDATE alerts SET alertLevel = 'CRITICAL', level = 'CRITICAL' WHERE alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'")
         } catch (_: Exception) {}
         try {
             db.execSQL("DELETE FROM users WHERE fullName LIKE '%Nguyễn Văn Nam%' OR id = 'member_bac_nam' OR id = 'user_demo_01' OR id = 'user_01' OR fullName = 'Bác Trần Thị Lan' OR fullName = 'Con Nguyễn Hoàng'")
@@ -755,6 +757,11 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
                 putNull("address")
             }
             db.update("alerts", cv, "message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'", null)
+            val cvCritical = ContentValues().apply {
+                put("alertLevel", "CRITICAL")
+                put("level", "CRITICAL")
+            }
+            db.update("alerts", cvCritical, "alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'", null)
             _signal.value = System.currentTimeMillis()
         } catch (e: Exception) {
             Log.e("AppDatabase", "Lỗi deleteDummyAlerts", e)
@@ -770,6 +777,11 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
                 putNull("address")
             }
             db.update("alerts", cv, "message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'", null)
+            val cvCritical = ContentValues().apply {
+                put("alertLevel", "CRITICAL")
+                put("level", "CRITICAL")
+            }
+            db.update("alerts", cvCritical, "alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'", null)
             _signal.value = System.currentTimeMillis()
         } catch (e: Exception) {
             Log.e("AppDatabase", "Lỗi cleanGpsReminderFromAlerts", e)
@@ -844,9 +856,23 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
             val famVal = if (famCol != -1 && !c.isNull(famCol)) c.getString(famCol) else ""
 
             val alertTypeEnum = runCatching { com.familycare.app.domain.model.AlertType.valueOf(typeStr) }
-                .getOrDefault(com.familycare.app.domain.model.AlertType.THRESHOLD_EXCEEDED)
-            val alertLevelEnum = runCatching { com.familycare.app.domain.model.AlertLevel.valueOf(lvlStr) }
-                .getOrDefault(com.familycare.app.domain.model.AlertLevel.WARNING)
+                .getOrDefault(
+                    if (typeStr.contains("SOS", ignoreCase = true) || titleVal.contains("SOS", ignoreCase = true) || titleVal.contains("CẤP CỨU", ignoreCase = true)) {
+                        com.familycare.app.domain.model.AlertType.SOS_EMERGENCY
+                    } else {
+                        com.familycare.app.domain.model.AlertType.THRESHOLD_EXCEEDED
+                    }
+                )
+
+            // Khóa cứng: Bất kỳ cảnh báo SOS hoặc có còi cứu hộ khẩn cấp đều 100% là CRITICAL (Khẩn cấp)
+            val alertLevelEnum = when {
+                alertTypeEnum == com.familycare.app.domain.model.AlertType.SOS_EMERGENCY -> com.familycare.app.domain.model.AlertLevel.CRITICAL
+                typeStr.contains("SOS", ignoreCase = true) || titleVal.contains("SOS", ignoreCase = true) || titleVal.contains("CẤP CỨU", ignoreCase = true) -> com.familycare.app.domain.model.AlertLevel.CRITICAL
+                titleVal.contains("CẢNH BÁO ĐỎ", ignoreCase = true) -> com.familycare.app.domain.model.AlertLevel.CRITICAL
+                lvlStr.equals("CRITICAL", ignoreCase = true) -> com.familycare.app.domain.model.AlertLevel.CRITICAL
+                lvlStr.equals("INFO", ignoreCase = true) -> com.familycare.app.domain.model.AlertLevel.INFO
+                else -> com.familycare.app.domain.model.AlertLevel.WARNING
+            }
 
             AlertEntity(
                 id = idVal,

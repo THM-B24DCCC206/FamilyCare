@@ -224,18 +224,31 @@ fun AlertItemCard(
     val isCritical = alert.alertLevel == AlertLevel.CRITICAL
     val isWarning = alert.alertLevel == AlertLevel.WARNING
 
+    // Lựa chọn 1: Màu vàng nắng / hổ phách pastel nhẹ nhàng cho Nhắc nhở, dịu mắt
     val indicatorColor = when {
         isCritical -> Color(0xFFEF4444)
-        isWarning -> Color(0xFFF59E0B)
-        else -> Color(0xFF3B82F6)
+        isWarning -> Color(0xFFFBBF24)
+        else -> Color(0xFF38BDF8)
     }
 
-    val cardBg = if (alert.isRead) Color(0xFFF8FAFC) else Color.White
+    val cardBg = when {
+        alert.isRead -> Color(0xFFF8FAFC)
+        isCritical -> Color(0xFFFFFBFB)
+        isWarning -> Color(0xFFFFFDF5)
+        else -> Color.White
+    }
+
+    val cardBorder = when {
+        alert.isRead -> Color(0xFFE2E8F0)
+        isCritical -> Color(0xFFFECACA)
+        isWarning -> Color(0xFFFDE68A)
+        else -> Color(0xFFE2E8F0)
+    }
 
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = cardBg),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        border = BorderStroke(1.dp, cardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = if (alert.isRead) 1.dp else 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -279,13 +292,15 @@ fun AlertItemCard(
                     }
 
                     if (!alert.isRead) {
+                        val badgeBg = if (isCritical) Color(0xFFFEE2E2) else Color(0xFFFEF3C7)
+                        val badgeTextColor = if (isCritical) Color(0xFFDC2626) else Color(0xFFB45309)
                         Surface(
-                            color = Color(0xFFFEE2E2),
+                            color = badgeBg,
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Text(
                                 text = "MỚI",
-                                color = Color(0xFFDC2626),
+                                color = badgeTextColor,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -386,7 +401,11 @@ fun AlertItemCard(
                             modifier = Modifier
                                 .weight(if (lat != null && lng != null && lat != 0.0 && lng != 0.0) 0.9f else 1f)
                                 .height(42.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            border = BorderStroke(1.dp, if (isWarning) Color(0xFFFDE68A) else Color(0xFFE2E8F0)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (isWarning) Color(0xFFB45309) else Color(0xFF334155)
+                            )
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(4.dp))
