@@ -153,9 +153,11 @@ fun ProfileScreen(
                         Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "📄 Xuất báo cáo y tế (PDF)",
+                            text = "Xuất Báo Cáo Y Tế (PDF)",
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }

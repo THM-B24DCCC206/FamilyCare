@@ -232,7 +232,10 @@ fun PreviewMedicalReportScreen(
                         text = "Xem Trước Báo Cáo Y Tế",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        fontSize = 18.sp,
+                        color = Color(0xFF1E293B),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 },
                 navigationIcon = {
@@ -241,15 +244,6 @@ fun PreviewMedicalReportScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Quay lại",
                             tint = Color(0xFF1E293B)
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { shareReport() }) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Chia sẻ báo cáo",
-                            tint = Color(0xFF2563EB)
                         )
                     }
                 },
@@ -274,7 +268,7 @@ fun PreviewMedicalReportScreen(
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Nút chính: Tải PDF
+                    // Nút chính: Tải PDF (Chỉ 1 icon duy nhất, không lặp emoji)
                     Button(
                         onClick = {
                             val sanitizedName = displayMemberName.replace("\\s+".toRegex(), "_")
@@ -294,13 +288,15 @@ fun PreviewMedicalReportScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "📥 Tải Về Báo Cáo PDF",
+                            text = "Tải Về Báo Cáo PDF",
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
 
-                    // Nút phụ: Chia sẻ Báo Cáo
+                    // Nút phụ: Chia sẻ Báo Cáo (Chỉ 1 icon duy nhất, không lặp emoji)
                     OutlinedButton(
                         onClick = { shareReport() },
                         modifier = Modifier
@@ -318,10 +314,12 @@ fun PreviewMedicalReportScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "📤 Chia sẻ Báo Cáo",
+                            text = "Chia Sẻ Báo Cáo",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF2563EB)
+                            color = Color(0xFF2563EB),
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -365,21 +363,31 @@ fun PreviewMedicalReportScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF1E40AF),
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 0.5.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Text(
                                 text = "Họ và tên: ",
                                 fontSize = 14.sp,
                                 color = Color(0xFF475569),
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Text(
                                 text = displayMemberName,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B)
+                                color = Color(0xFF1E293B),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -392,7 +400,9 @@ fun PreviewMedicalReportScreen(
                                 text = "Tháng báo cáo: ",
                                 fontSize = 14.sp,
                                 color = Color(0xFF475569),
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
                             )
 
                             Surface(
@@ -405,7 +415,7 @@ fun PreviewMedicalReportScreen(
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.CalendarMonth,
@@ -418,7 +428,9 @@ fun PreviewMedicalReportScreen(
                                         text = selectedMonthText,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF1D4ED8)
+                                        color = Color(0xFF1D4ED8),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                     Spacer(modifier = Modifier.width(2.dp))
                                     Icon(
@@ -431,17 +443,24 @@ fun PreviewMedicalReportScreen(
                             }
                         }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Text(
                                 text = "Thời điểm lập: ",
                                 fontSize = 13.sp,
-                                color = Color(0xFF64748B)
+                                color = Color(0xFF64748B),
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Text(
                                 text = dateFormat.format(Date()),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = Color(0xFF334155)
+                                color = Color(0xFF334155),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -465,7 +484,9 @@ fun PreviewMedicalReportScreen(
                             text = "Thông Tin Y Bạ & Bệnh Nền",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
+                            color = Color(0xFF1E293B),
+                            maxLines = 1,
+                            softWrap = false
                         )
 
                         // Nhóm máu
@@ -482,7 +503,13 @@ fun PreviewMedicalReportScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = "Nhóm máu", fontSize = 13.sp, color = Color(0xFF475569))
+                                Text(
+                                    text = "Nhóm máu",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF475569),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                             val blood = memberUser?.bloodType?.ifBlank { "Chưa xác định" } ?: "Chưa xác định"
                             Surface(
@@ -494,6 +521,8 @@ fun PreviewMedicalReportScreen(
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFBE123C),
+                                    maxLines = 1,
+                                    softWrap = false,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
@@ -503,10 +532,23 @@ fun PreviewMedicalReportScreen(
 
                         // Bệnh nền
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(text = "Bệnh nền mãn tính:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF334155))
+                            Text(
+                                text = "Bệnh nền mãn tính:",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF334155),
+                                maxLines = 1,
+                                softWrap = false
+                            )
                             val diseases = memberUser?.chronicDiseases.orEmpty()
                             if (diseases.isEmpty()) {
-                                Text(text = "Chưa ghi nhận bệnh nền", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                                Text(
+                                    text = "Chưa ghi nhận bệnh nền",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             } else {
                                 FlowRow(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -523,6 +565,9 @@ fun PreviewMedicalReportScreen(
                                                 fontSize = 12.sp,
                                                 color = Color(0xFF1D4ED8),
                                                 fontWeight = FontWeight.Medium,
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Ellipsis,
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                             )
                                         }
@@ -535,10 +580,23 @@ fun PreviewMedicalReportScreen(
 
                         // Dị ứng
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(text = "Dị ứng thuốc & thức ăn:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF334155))
+                            Text(
+                                text = "Dị ứng thuốc & thức ăn:",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF334155),
+                                maxLines = 1,
+                                softWrap = false
+                            )
                             val allergies = memberUser?.drugAllergies.orEmpty()
                             if (allergies.isEmpty()) {
-                                Text(text = "Chưa ghi nhận dị ứng", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                                Text(
+                                    text = "Chưa ghi nhận dị ứng",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             } else {
                                 FlowRow(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -555,6 +613,9 @@ fun PreviewMedicalReportScreen(
                                                 fontSize = 12.sp,
                                                 color = Color(0xFFB91C1C),
                                                 fontWeight = FontWeight.Medium,
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Ellipsis,
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                             )
                                         }
@@ -583,14 +644,18 @@ fun PreviewMedicalReportScreen(
                             text = "Lịch Uống Thuốc Đang Dùng",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
+                            color = Color(0xFF1E293B),
+                            maxLines = 1,
+                            softWrap = false
                         )
 
                         if (medicines.isEmpty()) {
                             Text(
                                 text = "Chưa có danh sách thuốc đang sử dụng",
                                 fontSize = 13.sp,
-                                color = Color(0xFF94A3B8)
+                                color = Color(0xFF94A3B8),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         } else {
                             medicines.forEachIndexed { index, med ->
@@ -631,6 +696,7 @@ fun PreviewMedicalReportScreen(
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(
+                                            modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
@@ -638,7 +704,11 @@ fun PreviewMedicalReportScreen(
                                                 text = med.name,
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF1E293B)
+                                                color = Color(0xFF1E293B),
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
                                             )
                                             if (med.purpose.isNotBlank()) {
                                                 Surface(
@@ -649,6 +719,9 @@ fun PreviewMedicalReportScreen(
                                                         text = med.purpose,
                                                         fontSize = 10.sp,
                                                         color = Color(0xFF475569),
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                        overflow = TextOverflow.Ellipsis,
                                                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                     )
                                                 }
@@ -666,7 +739,10 @@ fun PreviewMedicalReportScreen(
                                             Text(
                                                 text = subDetails,
                                                 fontSize = 12.sp,
-                                                color = Color(0xFF64748B)
+                                                color = Color(0xFF64748B),
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                         }
                                     }
@@ -703,8 +779,14 @@ fun PreviewMedicalReportScreen(
                                 text = "Chỉ Số Sinh Tồn ($selectedMonthText)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B)
+                                color = Color(0xFF1E293B),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
+
+                            Spacer(modifier = Modifier.width(8.dp))
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -715,6 +797,8 @@ fun PreviewMedicalReportScreen(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF475569),
+                                    maxLines = 1,
+                                    softWrap = false,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
@@ -722,9 +806,12 @@ fun PreviewMedicalReportScreen(
 
                         if (monthlyMetrics.isEmpty()) {
                             Text(
-                                text = "Chưa có lượt đo sinh tồn nào được ghi nhận trong tháng $selectedMonthText.",
+                                text = "Chưa có lượt đo sinh tồn nào trong tháng $selectedMonthText.",
                                 fontSize = 13.sp,
-                                color = Color(0xFF94A3B8)
+                                color = Color(0xFF94A3B8),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         } else {
                             monthlyMetrics.forEachIndexed { index, metric ->
@@ -748,25 +835,34 @@ fun PreviewMedicalReportScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f, fill = false)) {
                                         Text(
                                             text = "${index + 1}. $typeName",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF1E293B)
+                                            color = Color(0xFF1E293B),
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             text = dateFormat.format(Date(metric.timestamp)),
                                             fontSize = 11.sp,
-                                            color = Color(0xFF94A3B8)
+                                            color = Color(0xFF94A3B8),
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
 
                                     Text(
                                         text = value,
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = Color(0xFF2563EB)
+                                        color = Color(0xFF2563EB),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
 
@@ -851,7 +947,9 @@ private fun MonthYearPickerDialog(
             Text(
                 text = "Chọn Tháng Báo Cáo",
                 fontWeight = FontWeight.Bold,
-                fontSize = 17.sp
+                fontSize = 17.sp,
+                maxLines = 1,
+                softWrap = false
             )
         },
         text = {
@@ -889,7 +987,9 @@ private fun MonthYearPickerDialog(
                                     text = monthLabel,
                                     fontSize = 13.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else Color(0xFF1E293B)
+                                    color = if (isSelected) Color.White else Color(0xFF1E293B),
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
