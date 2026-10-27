@@ -54,7 +54,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
-    onNavigateToPdfReport: () -> Unit = {},
+    onNavigateToPdfReport: (memberId: String) -> Unit = {},
     onLogout: () -> Unit = {},
     viewModel: ProfileViewModel = viewModel(
         factory = ProfileViewModel.provideFactory(LocalContext.current)
@@ -63,49 +63,9 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
-    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showLogoutDialog by remember { mutableStateOf(false) }
-    var showPreview by remember { mutableStateOf(false) }
-    var isLoadingReport by remember { mutableStateOf(false) }
-    var reportMetrics by remember { mutableStateOf<List<HealthMetricEntity>>(emptyList()) }
-
-    // Launcher tải/lưu file PDF
-    val pdfLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/pdf")
-    ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                val memberName = uiState.selectedMemberUser?.fullName.orEmpty().ifBlank { sessionManager.userName }
-                val memberRole = uiState.familyMembers.firstOrNull { it.id == uiState.selectedMemberId }?.role.orEmpty()
-                val bloodType = uiState.selectedMemberUser?.bloodType.orEmpty()
-                val chronicDiseases = uiState.selectedMemberUser?.chronicDiseases.orEmpty()
-                val drugAllergies = uiState.selectedMemberUser?.drugAllergies.orEmpty()
-                val medicines = uiState.selectedMemberMedicines
-
-                val message = try {
-                    withContext(Dispatchers.IO) {
-                        HealthReportPdfExporter.export(
-                            context = context,
-                            uri = uri,
-                            metrics = reportMetrics,
-                            memberName = memberName,
-                            memberRole = memberRole,
-                            bloodType = bloodType,
-                            chronicDiseases = chronicDiseases,
-                            drugAllergies = drugAllergies,
-                            medicines = medicines
-                        )
-                    }
-                    "Đã xuất báo cáo y tế PDF cho $memberName thành công!"
-                } catch (e: Exception) {
-                    "Xuất PDF thất bại: ${e.localizedMessage ?: "Lỗi không xác định"}"
-                }
-                snackbarHostState.showSnackbar(message)
-            }
-        }
-    }
 
     LaunchedEffect(uiState.saveSuccessMessage) {
         uiState.saveSuccessMessage?.let {
@@ -113,32 +73,6 @@ fun ProfileScreen(
             viewModel.clearSaveMessage()
         }
     }
-
-    val locale = Locale.forLanguageTag("vi-VN")
-    val now = Calendar.getInstance()
-    val monthStart = Calendar.getInstance().apply {
-        set(Calendar.DAY_OF_MONTH, 1)
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-
-    val nextMonth = Calendar.getInstance().apply {
-        set(Calendar.DAY_OF_MONTH, 1)
-        add(Calendar.MONTH, 1)
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-
-    val monthText = SimpleDateFormat("MM/yyyy", locale).format(now.time)
-    val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", locale)
-
-    val monthlyMetrics = reportMetrics
-        .filter { it.timestamp in monthStart until nextMonth }
-        .sortedByDescending { it.timestamp }
 
     val selectedMember = uiState.selectedMemberUser ?: uiState.currentUser
     val selectedMemberName = selectedMember?.fullName.orEmpty().ifBlank { sessionManager.userName }
@@ -148,18 +82,11 @@ fun ProfileScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (showPreview) "Xem Trước Báo Cáo Y Tế" else "Hồ Sơ Sức Khỏe",
+                        text = "Hồ Sơ Sức Khỏe",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1E293B)
                     )
-                },
-                navigationIcon = {
-                    if (showPreview) {
-                        IconButton(onClick = { showPreview = false }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
-                        }
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -169,333 +96,110 @@ fun ProfileScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        if (showPreview) {
-            // MÀN HÌNH XEM TRƯỚC BÁO CÁO Y TẾ CHO THÀNH VIÊN ĐƯỢC CHỌN
-            Column(
+        if (uiState.status is ProfileUiStatus.Loading && uiState.currentUser == null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color(0xFF2563EB))
+            }
+        } else {
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp)
             ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "BÁO CÁO Y TẾ CÁ NHÂN",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1E40AF)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Họ và tên: $selectedMemberName",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
-                        )
-                        Text(text = "Tháng báo cáo: $monthText", style = MaterialTheme.typography.bodyMedium)
-                        Text(text = "Thời điểm lập: ${dateFormat.format(Date())}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF64748B))
-                    }
+                // 1. Thẻ Tài Khoản Đăng Nhập Hiện Tại
+                item {
+                    AccountHeaderCard(
+                        userName = sessionManager.userName.ifBlank { uiState.currentUser?.fullName ?: "Tôi" },
+                        userEmail = sessionManager.userEmail.ifBlank { uiState.currentUser?.email ?: "Chưa liên kết email" },
+                        userRole = sessionManager.userRole
+                    )
                 }
 
-                // Tóm tắt Y bạ
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "Thông Tin Y Bạ & Bệnh Nền",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
-                        )
-                        Text(text = "• Nhóm máu: ${selectedMember?.bloodType?.ifBlank { "Chưa xác định" }}", fontSize = 14.sp)
-                        Text(
-                            text = "• Bệnh nền: ${if (selectedMember?.chronicDiseases.isNullOrEmpty()) "Không có" else selectedMember?.chronicDiseases?.joinToString(", ")}",
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            text = "• Dị ứng: ${if (selectedMember?.drugAllergies.isNullOrEmpty()) "Không có" else selectedMember?.drugAllergies?.joinToString(", ")}",
-                            fontSize = 14.sp
-                        )
-                    }
+                // 2. Khối "Thành viên trong gia đình" (FamilyMemberList)
+                item {
+                    FamilyMemberSection(
+                        members = uiState.familyMembers,
+                        selectedMemberId = uiState.selectedMemberId,
+                        onSelectMember = { viewModel.onMemberSelect(it) },
+                        onAddMember = { viewModel.openAddMemberDialog() }
+                    )
                 }
 
-                // Đơn thuốc đang sử dụng
-                if (uiState.selectedMemberMedicines.isNotEmpty()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                // 3. Thẻ Y Bạ Động theo Thành Viên Được Chọn (MemberHealthCard)
+                item {
+                    MemberHealthCard(
+                        member = selectedMember,
+                        memberName = selectedMemberName,
+                        onEdit = { viewModel.openEditHealthCardDialog() }
+                    )
+                }
+
+                // 4. Nút Xuất Báo Cáo Y Tế (PDF) theo Người Được Chọn (Mở màn hình Preview)
+                item {
+                    Button(
+                        onClick = {
+                            val targetId = uiState.selectedMemberId.ifBlank { sessionManager.userId }
+                            onNavigateToPdfReport(targetId)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                     ) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "Lịch Uống Thuốc Đang Dùng",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B)
-                            )
-                            uiState.selectedMemberMedicines.forEach { med ->
-                                Text(text = "💊 $med", fontSize = 14.sp, color = Color(0xFF334155))
-                            }
-                        }
+                        Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "📄 Xuất báo cáo y tế (PDF)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
 
-                // Dữ liệu chỉ số sức khỏe
-                Text(
-                    text = "Dữ liệu đo sinh tồn (${monthlyMetrics.size} bản ghi)",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B)
-                )
+                // 5. Thẻ Mã Mời Gia Đình Rút Gọn
+                item {
+                    CompactFamilyInviteCard(
+                        familyName = sessionManager.familyName,
+                        inviteCode = sessionManager.inviteCode.ifEmpty { "FAM-8606" },
+                        onCopy = { code ->
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("Mã mời gia đình", code)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "Đã sao chép mã mời: $code", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
 
-                if (monthlyMetrics.isEmpty()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                // 6. Nút "Đăng xuất tài khoản" Tinh Tế ở Cuối Cùng
+                item {
+                    OutlinedButton(
+                        onClick = { showLogoutDialog = true },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color(0xFFDC2626)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                "Chưa có dữ liệu số đo sinh tồn trong tháng này",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "Khi đo huyết áp hoặc nhịp tim cho $selectedMemberName, số đo sẽ được cập nhật vào báo cáo.",
-                                fontSize = 13.sp,
-                                color = Color(0xFF64748B)
-                            )
-                        }
-                    }
-                } else {
-                    monthlyMetrics.forEachIndexed { index, metric ->
-                        val typeName = when (metric.type) {
-                            "BLOOD_PRESSURE" -> "Huyết áp"
-                            "HEART_RATE" -> "Nhịp tim"
-                            "BLOOD_SUGAR" -> "Đường huyết"
-                            "TEMPERATURE" -> "Nhiệt độ"
-                            else -> metric.type
-                        }
-                        val value = if (metric.valueSecondary != null) {
-                            "${metric.valuePrimary.toInt()}/${metric.valueSecondary.toInt()} ${metric.unit}"
-                        } else {
-                            "${metric.valuePrimary.toInt()} ${metric.unit}"
-                        }
-
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        "${index + 1}. $typeName",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
-                                    Text(
-                                        value,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 16.sp,
-                                        color = Color(0xFF2563EB)
-                                    )
-                                }
-                                Text(
-                                    "Thời gian đo: ${dateFormat.format(Date(metric.timestamp))}",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF64748B)
-                                )
-                                if (metric.notes.isNotBlank()) {
-                                    Text("Ghi chú: ${metric.notes}", fontSize = 12.sp, color = Color(0xFF475569))
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Button(
-                    onClick = {
-                        val sanitizedName = selectedMemberName.replace(" ", "_")
-                        val cleanMonth = monthText.replace("/", "_")
-                        pdfLauncher.launch("Bao_cao_y_te_${sanitizedName}_$cleanMonth.pdf")
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                ) {
-                    Icon(Icons.Default.Download, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Tải Về Báo Cáo PDF", fontWeight = FontWeight.Bold)
-                }
-
-                OutlinedButton(
-                    onClick = { showPreview = false },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Quay Lại Hồ Sơ")
-                }
-            }
-        } else {
-            // MÀN HÌNH CHÍNH HỒ SƠ SỨC KHỎE
-            if (uiState.status is ProfileUiStatus.Loading && uiState.currentUser == null) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color(0xFF2563EB))
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp)
-                ) {
-                    // 1. Thẻ Tài Khoản Đăng Nhập Hiện Tại
-                    item {
-                        AccountHeaderCard(
-                            userName = sessionManager.userName.ifBlank { uiState.currentUser?.fullName ?: "Tôi" },
-                            userEmail = sessionManager.userEmail.ifBlank { uiState.currentUser?.email ?: "Chưa liên kết email" },
-                            userRole = sessionManager.userRole
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = null,
+                            tint = Color(0xFFDC2626),
+                            modifier = Modifier.size(18.dp)
                         )
-                    }
-
-                    // 2. Khối "Thành viên trong gia đình" (FamilyMemberList)
-                    item {
-                        FamilyMemberSection(
-                            members = uiState.familyMembers,
-                            selectedMemberId = uiState.selectedMemberId,
-                            onSelectMember = { viewModel.onMemberSelect(it) },
-                            onAddMember = { viewModel.openAddMemberDialog() }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Đăng xuất tài khoản",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFDC2626)
                         )
-                    }
-
-                    // 3. Thẻ Y Bạ Động theo Thành Viên Được Chọn (MemberHealthCard)
-                    item {
-                        MemberHealthCard(
-                            member = selectedMember,
-                            memberName = selectedMemberName,
-                            onEdit = { viewModel.openEditHealthCardDialog() }
-                        )
-                    }
-
-                    // 4. Nút Xuất Báo Cáo Y Tế (PDF) theo Người Được Chọn
-                    item {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    isLoadingReport = true
-                                    try {
-                                        val targetId = uiState.selectedMemberId.ifBlank { sessionManager.userId }
-                                        val metrics = withContext(Dispatchers.IO) {
-                                            AppDatabase.getInstance(context)
-                                                .healthMetricDao
-                                                .getMetricsByMember(targetId)
-                                                .firstOrNull() ?: emptyList()
-                                        }
-                                        reportMetrics = metrics
-                                        showPreview = true
-                                    } catch (e: Exception) {
-                                        snackbarHostState.showSnackbar(
-                                            "Không tải được báo cáo: ${e.localizedMessage ?: "Lỗi không xác định"}"
-                                        )
-                                    } finally {
-                                        isLoadingReport = false
-                                    }
-                                }
-                            },
-                            enabled = !isLoadingReport,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                        ) {
-                            if (isLoadingReport) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text("Đang tải dữ liệu...")
-                            } else {
-                                Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "📄 Xuất báo cáo y tế (PDF)",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    // 5. Thẻ Mã Mời Gia Đình Rút Gọn
-                    item {
-                        CompactFamilyInviteCard(
-                            familyName = sessionManager.familyName,
-                            inviteCode = sessionManager.inviteCode.ifEmpty { "FAM-8606" },
-                            onCopy = { code ->
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("Mã mời gia đình", code)
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "Đã sao chép mã mời: $code", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-                    }
-
-                    // 6. Nút "Đăng xuất tài khoản" Tinh Tế ở Cuối Cùng
-                    item {
-                        OutlinedButton(
-                            onClick = { showLogoutDialog = true },
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color(0xFFEF4444)),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color(0xFFDC2626)
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(46.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Logout,
-                                contentDescription = null,
-                                tint = Color(0xFFDC2626),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Đăng xuất tài khoản",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFFDC2626)
-                            )
-                        }
                     }
                 }
             }

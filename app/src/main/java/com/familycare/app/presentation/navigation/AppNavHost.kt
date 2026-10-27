@@ -35,6 +35,7 @@ import com.familycare.app.presentation.emergency.EmergencyScreen
 import com.familycare.app.presentation.home.HomeScreen
 import com.familycare.app.presentation.medication.MedicationScreen
 import com.familycare.app.presentation.ocr.OcrPrescriptionScreen
+import com.familycare.app.presentation.profile.PreviewMedicalReportScreen
 import com.familycare.app.presentation.profile.ProfileScreen
 import com.familycare.app.presentation.schedule.HealthScheduleScreen
 
@@ -166,11 +167,31 @@ fun AppNavHost() {
             // Tab 5: Hồ sơ
             composable(Screen.Profile.route) {
                 ProfileScreen(
+                    onNavigateToPdfReport = { memberId ->
+                        navController.navigate("${Screen.PdfReport.route}?memberId=$memberId")
+                    },
                     onLogout = {
                         navController.navigate(Screen.Login.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     }
+                )
+            }
+
+            // Màn hình Xem Trước Báo Cáo Y Tế (Ẩn BottomBar)
+            composable(
+                route = "${Screen.PdfReport.route}?memberId={memberId}",
+                arguments = listOf(
+                    navArgument("memberId") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                )
+            ) { backStackEntry ->
+                val memberId = backStackEntry.arguments?.getString("memberId").orEmpty()
+                PreviewMedicalReportScreen(
+                    memberId = memberId,
+                    onBack = { navController.popBackStack() }
                 )
             }
 
