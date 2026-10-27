@@ -178,6 +178,14 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         try { db.execSQL("ALTER TABLE alerts ADD COLUMN address TEXT") } catch (_: Exception) {}
         try { db.execSQL("ALTER TABLE alerts ADD COLUMN isResolved INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
 
+        // Dọn dẹp sạch sẽ toàn bộ các bản ghi dữ liệu mẫu giả lập cũ
+        try {
+            db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%' OR id = 1 OR id = 2 OR id = 3")
+        } catch (_: Exception) {}
+        try {
+            db.execSQL("DELETE FROM users WHERE fullName LIKE '%Nguyễn Văn Nam%' OR id = 'member_bac_nam' OR id = 'user_demo_01' OR id = 'user_01' OR fullName = 'Bác Trần Thị Lan' OR fullName = 'Con Nguyễn Hoàng'")
+        } catch (_: Exception) {}
+
         db.execSQL(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS index_medication_logs_medicineId_scheduledDate_scheduledTime
@@ -261,6 +269,14 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         try { db.execSQL("ALTER TABLE alerts ADD COLUMN alertLevel TEXT NOT NULL DEFAULT 'WARNING'") } catch (_: Exception) {}
         try { db.execSQL("ALTER TABLE alerts ADD COLUMN address TEXT") } catch (_: Exception) {}
         try { db.execSQL("ALTER TABLE alerts ADD COLUMN isResolved INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
+
+        // Dọn dẹp sạch sẽ toàn bộ các bản ghi dữ liệu mẫu giả lập cũ
+        try {
+            db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%' OR id = 1 OR id = 2 OR id = 3")
+        } catch (_: Exception) {}
+        try {
+            db.execSQL("DELETE FROM users WHERE fullName LIKE '%Nguyễn Văn Nam%' OR id = 'member_bac_nam' OR id = 'user_demo_01' OR id = 'user_01' OR fullName = 'Bác Trần Thị Lan' OR fullName = 'Con Nguyễn Hoàng'")
+        } catch (_: Exception) {}
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -720,6 +736,21 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
             _signal.value = System.currentTimeMillis()
         } catch (e: Exception) {
             Log.e("AppDatabase", "Lỗi deleteAlert", e)
+        }
+        Unit
+    }
+
+    override suspend fun deleteDummyAlerts(): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            db.delete(
+                "alerts",
+                "memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%' OR id = 1 OR id = 2 OR id = 3",
+                null
+            )
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi deleteDummyAlerts", e)
         }
         Unit
     }

@@ -409,9 +409,7 @@ fun EmergencyScreen(
                         // Nút tìm bệnh viện gần nhất (Gọn gàng 1 dòng không gãy chữ)
                         OutlinedButton(
                             onClick = {
-                                val searchLat = lat ?: 10.7769
-                                val searchLng = lng ?: 106.7009
-                                searchNearbyHospitalsOnMaps(context, searchLat, searchLng)
+                                searchNearbyHospitalsOnMaps(context, lat, lng)
                             },
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
@@ -481,9 +479,7 @@ fun EmergencyScreen(
                         }
 
                         TextButton(onClick = {
-                            val searchLat = uiState.currentLatitude ?: 10.7769
-                            val searchLng = uiState.currentLongitude ?: 106.7009
-                            searchNearbyHospitalsOnMaps(context, searchLat, searchLng)
+                            searchNearbyHospitalsOnMaps(context, uiState.currentLatitude, uiState.currentLongitude)
                         }) {
                             Text("Mở bản đồ", fontSize = 12.sp)
                         }
@@ -684,8 +680,13 @@ fun openGoogleMapsLocation(context: Context, latitude: Double, longitude: Double
     }
 }
 
-fun searchNearbyHospitalsOnMaps(context: Context, latitude: Double, longitude: Double) {
-    val uri = Uri.parse("geo:$latitude,$longitude?q=bệnh+viện+cấp+cứu+gần+nhất")
+fun searchNearbyHospitalsOnMaps(context: Context, latitude: Double? = null, longitude: Double? = null) {
+    val geoUriString = if (latitude != null && longitude != null && latitude != 0.0 && longitude != 0.0) {
+        "geo:$latitude,$longitude?q=bệnh+viện+cấp+cứu+gần+nhất"
+    } else {
+        "geo:0,0?q=bệnh+viện+cấp+cứu+gần+nhất"
+    }
+    val uri = Uri.parse(geoUriString)
     val mapIntent = Intent(Intent.ACTION_VIEW, uri).apply {
         setPackage("com.google.android.apps.maps")
     }

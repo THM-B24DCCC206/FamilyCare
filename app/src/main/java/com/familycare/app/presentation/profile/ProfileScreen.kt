@@ -947,7 +947,7 @@ private fun AddMemberDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Họ và tên *") },
-                    placeholder = { Text("Ví dụ: Ly Trần, Bác Nam...") },
+                    placeholder = { Text("Ví dụ: Ly Trần, Hải Minh...") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

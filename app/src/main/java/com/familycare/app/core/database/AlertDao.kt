@@ -57,6 +57,9 @@ interface AlertDao {
     @Query("DELETE FROM alerts WHERE id = :alertId")
     suspend fun deleteAlert(alertId: Long)
 
+    @Query("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%' OR id = 1 OR id = 2 OR id = 3")
+    suspend fun deleteDummyAlerts()
+
     suspend fun deleteAlert(alertId: String) {
         val idLong = alertId.toLongOrNull()
         if (idLong != null) {

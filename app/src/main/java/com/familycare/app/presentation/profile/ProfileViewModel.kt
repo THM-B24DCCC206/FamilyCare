@@ -69,6 +69,7 @@ class ProfileViewModel(
         runCatching {
             userDao.deleteUserById("user_01")
             userDao.deleteUserById("user_demo_01")
+            userDao.deleteUserById("member_bac_nam")
         }
 
         // Đảm bảo tài khoản đăng nhập hiện tại có trong DB
@@ -89,32 +90,35 @@ class ProfileViewModel(
 
         var allDbUsers = userDao.getAllUsers()
 
-        // Nếu chưa có thành viên khác trong DB, seed mẫu các thành viên gia đình quen thuộc
-        val otherMembersInDb = allDbUsers.filter { it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01" }
+        // Nếu chưa có thành viên khác trong DB, seed thành viên người thân thật (Hải Minh Trần)
+        val otherMembersInDb = allDbUsers.filter { it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01" && it.id != "member_bac_nam" }
         if (otherMembersInDb.isEmpty()) {
-            val lyTran = UserEntity(
-                id = "member_ly_tran",
-                fullName = "Ly Trần",
-                email = "ly.tran@familycare.vn",
-                role = "MEMBER",
-                birthDate = "20/11/1992",
-                bloodType = "A+",
-                chronicDiseasesJson = "[]",
-                drugAllergiesJson = "[\"Dị ứng Kháng sinh\"]"
-            )
-            userDao.insertUser(lyTran)
-
-            val bacNam = UserEntity(
-                id = "member_bac_nam",
-                fullName = "Bác Nguyễn Văn Nam",
-                email = "nam.nguyen@familycare.vn",
-                role = "MEMBER",
-                birthDate = "15/04/1958",
-                bloodType = "O+",
-                chronicDiseasesJson = "[\"Cao huyết áp\", \"Đái tháo đường type 2\"]",
-                drugAllergiesJson = "[\"Dị ứng Aspirin\"]"
-            )
-            userDao.insertUser(bacNam)
+            val isCurrentLy = currentUserName.contains("Ly", ignoreCase = true)
+            if (isCurrentLy) {
+                val haiMinh = UserEntity(
+                    id = "user_02",
+                    fullName = "Hải Minh Trần",
+                    email = "haiminh@familycare.vn",
+                    role = "MEMBER",
+                    birthDate = "28/11/2006",
+                    bloodType = "O+",
+                    chronicDiseasesJson = "[]",
+                    drugAllergiesJson = "[]"
+                )
+                userDao.insertUser(haiMinh)
+            } else {
+                val lyTran = UserEntity(
+                    id = "member_ly_tran",
+                    fullName = "Ly Trần",
+                    email = "ly.tran@familycare.vn",
+                    role = "ADMIN",
+                    birthDate = "20/11/1992",
+                    bloodType = "A+",
+                    chronicDiseasesJson = "[]",
+                    drugAllergiesJson = "[]"
+                )
+                userDao.insertUser(lyTran)
+            }
 
             allDbUsers = userDao.getAllUsers()
         }

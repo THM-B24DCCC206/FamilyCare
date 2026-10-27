@@ -205,15 +205,15 @@ class GetHealthContextUseCase(
     private suspend fun seedDefaultDemoUser(): UserEntity {
         val defaultUser = UserEntity(
             id = "user_me",
-            fullName = "Bác Nguyễn Văn Nam",
-            email = "nam.nguyen@familycare.vn",
+            fullName = "Ly Trần",
+            email = "lytran@familycare.vn",
             avatarUrl = "",
-            familyId = "fam_123456",
+            familyId = "fam_01",
             role = "ADMIN",
-            birthDate = "15/04/1958",
-            bloodType = "O+",
-            chronicDiseasesJson = "[\"Cao huyết áp\", \"Đái tháo đường type 2\"]",
-            drugAllergiesJson = "[\"Dị ứng nhóm Sulfamid\", \"Dị ứng Aspirin\"]"
+            birthDate = "20/11/1992",
+            bloodType = "A+",
+            chronicDiseasesJson = "[]",
+            drugAllergiesJson = "[]"
         )
         userDao.insertUser(defaultUser)
         return defaultUser
