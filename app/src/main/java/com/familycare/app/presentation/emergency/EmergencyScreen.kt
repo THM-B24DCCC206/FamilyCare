@@ -135,7 +135,7 @@ fun EmergencyScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (isActivated) "ĐÃ BÁO CHO CHỦ GIA ĐÌNH" else "CHỦ GIA ĐÌNH TIẾP NHẬN SOS",
+                                text = if (isActivated) uiState.recipientCardTitleActive else uiState.recipientCardTitle,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 14.sp,
                                 color = if (isActivated) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
@@ -150,10 +150,7 @@ fun EmergencyScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = if (isActivated)
-                            "✅ Đã gửi tín hiệu khẩn cấp ưu tiên cao nhất (FCM High Priority) kèm tọa độ GPS trực tiếp đến máy Chủ hộ."
-                        else
-                            "Khi kích hoạt SOS, hệ thống sẽ tự động gửi thông báo đỏ, rung chuông cực đại và tọa độ GPS đến Chủ gia đình.",
+                        text = if (isActivated) uiState.recipientDescriptionActive else uiState.recipientDescription,
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isActivated) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -175,7 +172,7 @@ fun EmergencyScreen(
                         ) {
                             Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Gọi Chủ Hộ", fontSize = 12.sp)
+                            Text(uiState.recipientCallButtonText, fontSize = 12.sp)
                         }
 
                         OutlinedButton(
