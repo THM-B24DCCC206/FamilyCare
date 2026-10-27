@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -543,15 +544,20 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
     override fun getAllAlerts(): Flow<List<AlertEntity>> {
         return _signal.map {
             withContext(Dispatchers.IO) {
-                val db = dbHelper.readableDatabase
-                val cursor = db.query("alerts", null, null, null, null, null, "timestamp DESC")
-                val list = mutableListOf<AlertEntity>()
-                cursor.use { c ->
-                    while (c.moveToNext()) {
-                        list.add(cursorToAlert(c))
+                try {
+                    val db = dbHelper.readableDatabase
+                    val cursor = db.query("alerts", null, null, null, null, null, "timestamp DESC")
+                    val list = mutableListOf<AlertEntity>()
+                    cursor.use { c ->
+                        while (c.moveToNext()) {
+                            list.add(cursorToAlert(c))
+                        }
                     }
+                    list
+                } catch (e: Exception) {
+                    Log.e("AppDatabase", "Lỗi truy vấn getAllAlerts", e)
+                    emptyList()
                 }
-                list
             }
         }
     }
@@ -561,23 +567,28 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         type: String,
         sinceTimestamp: Long
     ): List<AlertEntity> = withContext(Dispatchers.IO) {
-        val db = dbHelper.readableDatabase
-        val cursor = db.query(
-            "alerts",
-            null,
-            "(memberId = ? OR targetUserId = ?) AND (alertType = ? OR type = ?) AND timestamp >= ?",
-            arrayOf(userId, userId, type, type, sinceTimestamp.toString()),
-            null,
-            null,
-            "timestamp DESC"
-        )
-        val list = mutableListOf<AlertEntity>()
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                list.add(cursorToAlert(c))
+        try {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query(
+                "alerts",
+                null,
+                "(memberId = ? OR targetUserId = ?) AND (alertType = ? OR type = ?) AND timestamp >= ?",
+                arrayOf(userId, userId, type, type, sinceTimestamp.toString()),
+                null,
+                null,
+                "timestamp DESC"
+            )
+            val list = mutableListOf<AlertEntity>()
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    list.add(cursorToAlert(c))
+                }
             }
+            list
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi truy vấn getRecentAlertsByType", e)
+            emptyList()
         }
-        list
     }
 
     override suspend fun getLatestAlertForMember(
@@ -585,175 +596,234 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         alertType: com.familycare.app.domain.model.AlertType,
         alertTypeStr: String
     ): AlertEntity? = withContext(Dispatchers.IO) {
-        val db = dbHelper.readableDatabase
-        val cursor = db.query(
-            "alerts",
-            null,
-            "(memberId = ? OR targetUserId = ?) AND (alertType = ? OR type = ?)",
-            arrayOf(memberId, memberId, alertType.name, alertType.name),
-            null,
-            null,
-            "timestamp DESC",
-            "1"
-        )
-        cursor.use { c ->
-            if (c.moveToNext()) cursorToAlert(c) else null
+        try {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query(
+                "alerts",
+                null,
+                "(memberId = ? OR targetUserId = ?) AND (alertType = ? OR type = ?)",
+                arrayOf(memberId, memberId, alertType.name, alertType.name),
+                null,
+                null,
+                "timestamp DESC",
+                "1"
+            )
+            cursor.use { c ->
+                if (c.moveToNext()) cursorToAlert(c) else null
+            }
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi truy vấn getLatestAlertForMember", e)
+            null
         }
     }
 
     override suspend fun getAlertById(alertId: Long): AlertEntity? = withContext(Dispatchers.IO) {
-        val db = dbHelper.readableDatabase
-        val cursor = db.query("alerts", null, "id = ?", arrayOf(alertId.toString()), null, null, null, "1")
-        cursor.use { c ->
-            if (c.moveToNext()) cursorToAlert(c) else null
+        try {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query("alerts", null, "id = ?", arrayOf(alertId.toString()), null, null, null, "1")
+            cursor.use { c ->
+                if (c.moveToNext()) cursorToAlert(c) else null
+            }
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi truy vấn getAlertById", e)
+            null
         }
     }
 
     fun getUnreadAlerts(familyId: String): Flow<List<AlertEntity>> {
         return _signal.map {
             withContext(Dispatchers.IO) {
-                val db = dbHelper.readableDatabase
-                val cursor = db.query("alerts", null, "familyId = ? AND isRead = 0", arrayOf(familyId), null, null, "timestamp DESC")
-                val list = mutableListOf<AlertEntity>()
-                cursor.use { c ->
-                    while (c.moveToNext()) {
-                        list.add(cursorToAlert(c))
+                try {
+                    val db = dbHelper.readableDatabase
+                    val cursor = db.query("alerts", null, "familyId = ? AND isRead = 0", arrayOf(familyId), null, null, "timestamp DESC")
+                    val list = mutableListOf<AlertEntity>()
+                    cursor.use { c ->
+                        while (c.moveToNext()) {
+                            list.add(cursorToAlert(c))
+                        }
                     }
+                    list
+                } catch (e: Exception) {
+                    Log.e("AppDatabase", "Lỗi truy vấn getUnreadAlerts", e)
+                    emptyList()
                 }
-                list
             }
         }
     }
 
     override suspend fun insertAlert(alert: AlertEntity): Long = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            if (alert.id > 0) {
-                put("id", alert.id)
+        try {
+            val db = dbHelper.writableDatabase
+            val values = ContentValues().apply {
+                if (alert.id > 0) {
+                    put("id", alert.id)
+                }
+                put("memberId", alert.memberId)
+                put("memberName", alert.memberName)
+                put("targetUserId", alert.memberId)
+                put("targetUserName", alert.memberName)
+                put("alertType", alert.alertType.name)
+                put("type", alert.alertType.name)
+                put("alertLevel", alert.alertLevel.name)
+                put("level", alert.alertLevel.name)
+                put("title", alert.title)
+                put("message", alert.message)
+                put("address", alert.address)
+                put("timestamp", alert.timestamp)
+                put("isRead", if (alert.isRead) 1 else 0)
+                put("isResolved", if (alert.isResolved) 1 else 0)
+                put("familyId", alert.familyId)
+                alert.latitude?.let { put("latitude", it) }
+                alert.longitude?.let { put("longitude", it) }
             }
-            put("memberId", alert.memberId)
-            put("memberName", alert.memberName)
-            put("targetUserId", alert.memberId)
-            put("targetUserName", alert.memberName)
-            put("alertType", alert.alertType.name)
-            put("type", alert.alertType.name)
-            put("alertLevel", alert.alertLevel.name)
-            put("level", alert.alertLevel.name)
-            put("title", alert.title)
-            put("message", alert.message)
-            put("address", alert.address)
-            put("timestamp", alert.timestamp)
-            put("isRead", if (alert.isRead) 1 else 0)
-            put("isResolved", if (alert.isResolved) 1 else 0)
-            put("familyId", alert.familyId)
-            alert.latitude?.let { put("latitude", it) }
-            alert.longitude?.let { put("longitude", it) }
+            val insertedId = db.insertWithOnConflict("alerts", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            _signal.value = System.currentTimeMillis()
+            insertedId
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi insertAlert", e)
+            -1L
         }
-        val insertedId = db.insertWithOnConflict("alerts", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-        _signal.value = System.currentTimeMillis()
-        insertedId
     }
 
-    override suspend fun updateReadStatus(alertId: Long, isRead: Boolean) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put("isRead", if (isRead) 1 else 0)
+    override suspend fun updateReadStatus(alertId: Long, isRead: Boolean): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            val values = ContentValues().apply {
+                put("isRead", if (isRead) 1 else 0)
+            }
+            db.update("alerts", values, "id = ?", arrayOf(alertId.toString()))
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi updateReadStatus", e)
         }
-        db.update("alerts", values, "id = ?", arrayOf(alertId.toString()))
-        _signal.value = System.currentTimeMillis()
+        Unit
     }
 
-    override suspend fun updateResolvedStatus(alertId: Long, isResolved: Boolean) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put("isResolved", if (isResolved) 1 else 0)
+    override suspend fun updateResolvedStatus(alertId: Long, isResolved: Boolean): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            val values = ContentValues().apply {
+                put("isResolved", if (isResolved) 1 else 0)
+            }
+            db.update("alerts", values, "id = ?", arrayOf(alertId.toString()))
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi updateResolvedStatus", e)
         }
-        db.update("alerts", values, "id = ?", arrayOf(alertId.toString()))
-        _signal.value = System.currentTimeMillis()
+        Unit
     }
 
-    override suspend fun deleteAlert(alertId: Long) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        db.delete("alerts", "id = ?", arrayOf(alertId.toString()))
-        _signal.value = System.currentTimeMillis()
+    override suspend fun deleteAlert(alertId: Long): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            db.delete("alerts", "id = ?", arrayOf(alertId.toString()))
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi deleteAlert", e)
+        }
+        Unit
     }
 
     suspend fun markAllAsRead(familyId: String) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put("isRead", 1)
+        try {
+            val db = dbHelper.writableDatabase
+            val values = ContentValues().apply {
+                put("isRead", 1)
+            }
+            db.update("alerts", values, "familyId = ?", arrayOf(familyId))
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi markAllAsRead", e)
         }
-        db.update("alerts", values, "familyId = ?", arrayOf(familyId))
-        _signal.value = System.currentTimeMillis()
     }
 
     suspend fun getRecentAlertsDirect(familyId: String, limit: Int): List<AlertEntity> = withContext(Dispatchers.IO) {
-        val db = dbHelper.readableDatabase
-        val cursor = db.query("alerts", null, "familyId = ?", arrayOf(familyId), null, null, "timestamp DESC", limit.toString())
-        val list = mutableListOf<AlertEntity>()
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                list.add(cursorToAlert(c))
+        try {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query("alerts", null, "familyId = ?", arrayOf(familyId), null, null, "timestamp DESC", limit.toString())
+            val list = mutableListOf<AlertEntity>()
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    list.add(cursorToAlert(c))
+                }
             }
+            list
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi getRecentAlertsDirect", e)
+            emptyList()
         }
-        list
     }
 
     private fun cursorToAlert(c: Cursor): AlertEntity {
-        val idCol = c.getColumnIndex("id")
-        val famCol = c.getColumnIndex("familyId")
-        val userCol = c.getColumnIndex("memberId").takeIf { it != -1 } ?: c.getColumnIndex("targetUserId")
-        val nameCol = c.getColumnIndex("memberName").takeIf { it != -1 } ?: c.getColumnIndex("targetUserName")
-        val typeCol = c.getColumnIndex("alertType").takeIf { it != -1 } ?: c.getColumnIndex("type")
-        val lvlCol = c.getColumnIndex("alertLevel").takeIf { it != -1 } ?: c.getColumnIndex("level")
-        val titleCol = c.getColumnIndex("title")
-        val msgCol = c.getColumnIndex("message")
-        val addressCol = c.getColumnIndex("address")
-        val timeCol = c.getColumnIndex("timestamp")
-        val readCol = c.getColumnIndex("isRead")
-        val resolvedCol = c.getColumnIndex("isResolved")
-        val latCol = c.getColumnIndex("latitude")
-        val lngCol = c.getColumnIndex("longitude")
+        return try {
+            val idCol = c.getColumnIndex("id")
+            val famCol = c.getColumnIndex("familyId")
+            val userCol = c.getColumnIndex("memberId").takeIf { it != -1 } ?: c.getColumnIndex("targetUserId")
+            val nameCol = c.getColumnIndex("memberName").takeIf { it != -1 } ?: c.getColumnIndex("targetUserName")
+            val typeCol = c.getColumnIndex("alertType").takeIf { it != -1 } ?: c.getColumnIndex("type")
+            val lvlCol = c.getColumnIndex("alertLevel").takeIf { it != -1 } ?: c.getColumnIndex("level")
+            val titleCol = c.getColumnIndex("title")
+            val msgCol = c.getColumnIndex("message")
+            val addressCol = c.getColumnIndex("address")
+            val timeCol = c.getColumnIndex("timestamp")
+            val readCol = c.getColumnIndex("isRead")
+            val resolvedCol = c.getColumnIndex("isResolved")
+            val latCol = c.getColumnIndex("latitude")
+            val lngCol = c.getColumnIndex("longitude")
 
-        val idVal = if (idCol != -1) {
-            try { c.getLong(idCol) } catch (_: Exception) { c.getString(idCol).toLongOrNull() ?: 0L }
-        } else 0L
+            val rawIdStr = if (idCol != -1 && !c.isNull(idCol)) {
+                try { c.getString(idCol) } catch (_: Exception) { "" }
+            } else ""
+            val idVal = rawIdStr.toLongOrNull() ?: kotlin.math.abs(rawIdStr.hashCode().toLong()).coerceAtLeast(1L)
 
-        val memberIdVal = if (userCol != -1 && !c.isNull(userCol)) c.getString(userCol) else ""
-        val memberNameVal = if (nameCol != -1 && !c.isNull(nameCol)) c.getString(nameCol) else ""
-        val typeStr = if (typeCol != -1 && !c.isNull(typeCol)) c.getString(typeCol) else ""
-        val lvlStr = if (lvlCol != -1 && !c.isNull(lvlCol)) c.getString(lvlCol) else ""
-        val titleVal = if (titleCol != -1 && !c.isNull(titleCol)) c.getString(titleCol) else ""
-        val msgVal = if (msgCol != -1 && !c.isNull(msgCol)) c.getString(msgCol) else ""
-        val addressVal = if (addressCol != -1 && !c.isNull(addressCol)) c.getString(addressCol) else null
-        val timeVal = if (timeCol != -1) c.getLong(timeCol) else System.currentTimeMillis()
-        val isReadVal = if (readCol != -1) c.getInt(readCol) == 1 else false
-        val isResolvedVal = if (resolvedCol != -1) c.getInt(resolvedCol) == 1 else false
-        val latVal = if (latCol != -1 && !c.isNull(latCol)) c.getDouble(latCol) else null
-        val lngVal = if (lngCol != -1 && !c.isNull(lngCol)) c.getDouble(lngCol) else null
-        val famVal = if (famCol != -1 && !c.isNull(famCol)) c.getString(famCol) else ""
+            val memberIdVal = if (userCol != -1 && !c.isNull(userCol)) c.getString(userCol) else ""
+            val memberNameVal = if (nameCol != -1 && !c.isNull(nameCol)) c.getString(nameCol) else ""
+            val typeStr = if (typeCol != -1 && !c.isNull(typeCol)) c.getString(typeCol) else ""
+            val lvlStr = if (lvlCol != -1 && !c.isNull(lvlCol)) c.getString(lvlCol) else ""
+            val titleVal = if (titleCol != -1 && !c.isNull(titleCol)) c.getString(titleCol) else ""
+            val msgVal = if (msgCol != -1 && !c.isNull(msgCol)) c.getString(msgCol) else ""
+            val addressVal = if (addressCol != -1 && !c.isNull(addressCol)) c.getString(addressCol) else null
+            val timeVal = if (timeCol != -1 && !c.isNull(timeCol)) c.getLong(timeCol) else System.currentTimeMillis()
+            val isReadVal = if (readCol != -1 && !c.isNull(readCol)) c.getInt(readCol) == 1 else false
+            val isResolvedVal = if (resolvedCol != -1 && !c.isNull(resolvedCol)) c.getInt(resolvedCol) == 1 else false
+            val latVal = if (latCol != -1 && !c.isNull(latCol)) c.getDouble(latCol) else null
+            val lngVal = if (lngCol != -1 && !c.isNull(lngCol)) c.getDouble(lngCol) else null
+            val famVal = if (famCol != -1 && !c.isNull(famCol)) c.getString(famCol) else ""
 
-        val alertTypeEnum = runCatching { com.familycare.app.domain.model.AlertType.valueOf(typeStr) }
-            .getOrDefault(com.familycare.app.domain.model.AlertType.THRESHOLD_EXCEEDED)
-        val alertLevelEnum = runCatching { com.familycare.app.domain.model.AlertLevel.valueOf(lvlStr) }
-            .getOrDefault(com.familycare.app.domain.model.AlertLevel.WARNING)
+            val alertTypeEnum = runCatching { com.familycare.app.domain.model.AlertType.valueOf(typeStr) }
+                .getOrDefault(com.familycare.app.domain.model.AlertType.THRESHOLD_EXCEEDED)
+            val alertLevelEnum = runCatching { com.familycare.app.domain.model.AlertLevel.valueOf(lvlStr) }
+                .getOrDefault(com.familycare.app.domain.model.AlertLevel.WARNING)
 
-        return AlertEntity(
-            id = idVal,
-            memberId = memberIdVal,
-            memberName = memberNameVal,
-            alertType = alertTypeEnum,
-            alertLevel = alertLevelEnum,
-            title = titleVal,
-            message = msgVal,
-            address = addressVal,
-            latitude = latVal,
-            longitude = lngVal,
-            timestamp = timeVal,
-            isRead = isReadVal,
-            isResolved = isResolvedVal,
-            familyId = famVal
-        )
+            AlertEntity(
+                id = idVal,
+                memberId = memberIdVal,
+                memberName = memberNameVal,
+                alertType = alertTypeEnum,
+                alertLevel = alertLevelEnum,
+                title = titleVal,
+                message = msgVal,
+                address = addressVal,
+                latitude = latVal,
+                longitude = lngVal,
+                timestamp = timeVal,
+                isRead = isReadVal,
+                isResolved = isResolvedVal,
+                familyId = famVal
+            )
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi phân giải bản ghi AlertEntity từ Cursor", e)
+            AlertEntity(
+                id = System.currentTimeMillis(),
+                memberId = "unknown",
+                memberName = "Người thân",
+                alertType = com.familycare.app.domain.model.AlertType.THRESHOLD_EXCEEDED,
+                alertLevel = com.familycare.app.domain.model.AlertLevel.WARNING,
+                title = "Thông báo sức khỏe",
+                message = "Cập nhật dữ liệu gia đình",
+                timestamp = System.currentTimeMillis()
+            )
+        }
     }
 }
 

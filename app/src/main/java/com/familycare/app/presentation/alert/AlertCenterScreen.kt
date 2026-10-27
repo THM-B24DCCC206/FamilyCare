@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -187,7 +188,12 @@ fun AlertCenterScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(uiState.alerts, key = { it.id }) { alert ->
+                    itemsIndexed(
+                        items = uiState.alerts,
+                        key = { index, alert ->
+                            "${alert.id}_${alert.timestamp}_$index"
+                        }
+                    ) { _, alert ->
                         AlertItemCard(
                             alert = alert,
                             onMarkAsRead = { viewModel.onMarkAsRead(alert.id) },
@@ -233,23 +239,20 @@ fun AlertItemCard(
         elevation = CardDefaults.cardElevation(defaultElevation = if (alert.isRead) 1.dp else 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-        ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
             // Dải nhận diện màu sắc bên trái (Indicator Strip) 5.dp
             Box(
                 modifier = Modifier
                     .width(5.dp)
-                    .fillMaxHeight()
+                    .matchParentSize()
+                    .align(Alignment.CenterStart)
                     .background(indicatorColor)
             )
 
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(14.dp)
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, top = 14.dp, end = 14.dp, bottom = 14.dp)
             ) {
                 // Dòng trên cùng: Tên thành viên thật + Mốc thời gian + Tag "MỚI" nếu chưa đọc
                 Row(
