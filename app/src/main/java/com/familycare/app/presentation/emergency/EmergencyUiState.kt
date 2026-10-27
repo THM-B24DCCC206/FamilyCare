@@ -16,6 +16,8 @@ data class EmergencyUiState(
     val currentLatitude: Double? = null,
     val currentLongitude: Double? = null,
     val currentAddress: String = "Đang xác định vị trí thực tế...",
+    val isLocationPermissionGranted: Boolean = false,
+    val isGpsEnabled: Boolean = true,
     val targetUserId: String = "",
     val targetUserName: String = "Đang tải hồ sơ...",
     val targetUserPhone: String = "",

@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
 import android.location.Location
+import android.location.LocationManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -23,9 +24,9 @@ import kotlin.coroutines.resume
 
 /**
  * Trình quản lý sự cố khẩn cấp (EmergencyManager):
- * 1. Tự động định vị ngầm thời gian thực bằng FusedLocationProviderClient (Chạy 100% ngầm, không hộp thoại).
+ * 1. Tự động định vị ngầm thời gian thực bằng FusedLocationProviderClient (Chạy 100% ngầm).
  * 2. Phân giải địa chỉ tiếng Việt qua Android Geocoder (Không dùng địa chỉ giả lập hardcode).
- * 3. Cơ chế Fallback tức thời: Ưu tiên GPS chính xác cao, tự động lấy nhanh vị trí cache getLastLocation().
+ * 3. Cơ chế Fallback tức thời: Lấy ngay lastLocation cache trong 50ms để hiển thị trước, song song lấy GPS vệ tinh.
  * 4. Kích hoạt còi hú âm lượng tối đa và rung dồn dập qua EmergencySirenController.
  */
 class EmergencyManager(
@@ -43,12 +44,37 @@ class EmergencyManager(
     private var lastCachedCoords: Pair<Double, Double>? = null
 
     /**
+     * Kiểm tra ứng dụng đã được người dùng cấp quyền truy cập vị trí runtime hay chưa
+     */
+    fun hasLocationPermission(): Boolean {
+        val hasFine = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        return hasFine || hasCoarse
+    }
+
+    /**
+     * Kiểm tra tính năng định vị (GPS / Network Location) trên thiết bị có đang BẬT không
+     */
+    fun isGpsEnabled(): Boolean {
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+        return try {
+            lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+            lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * Lấy vị trí gần nhất trong bộ nhớ cache phần cứng cực nhanh (< 50ms)
-     * Dùng cho cơ chế Fallback tức thời khi người dùng bấm SOS mà GPS chưa fix xong.
+     * Dùng để cập nhật tức thì địa chỉ lên màn hình ngay khi người dùng vừa mở SOS.
      */
     @SuppressLint("MissingPermission")
     suspend fun getLastKnownLocationQuickly(): Pair<Double, Double>? = withContext(Dispatchers.IO) {
-        // Nếu đã có cache gần đây trong phiên
         lastCachedCoords?.let { return@withContext it }
 
         if (!hasLocationPermission()) return@withContext null
@@ -75,10 +101,10 @@ class EmergencyManager(
 
     /**
      * Tự động định vị ngầm thời gian thực với độ chính xác cao (Priority.PRIORITY_HIGH_ACCURACY).
-     * Có timeout 4500ms tự ngắt để tránh treo luồng, tự động fallback sang lastLocation nếu GPS fix chậm.
+     * Có timeout 4000ms tự ngắt để tránh treo luồng, tự động fallback sang lastLocation nếu GPS fix chậm.
      */
     @SuppressLint("MissingPermission")
-    suspend fun getCurrentGpsLocation(timeoutMs: Long = 4500L): Pair<Double, Double>? = withTimeoutOrNull(timeoutMs) {
+    suspend fun getCurrentGpsLocation(timeoutMs: Long = 4000L): Pair<Double, Double>? = withTimeoutOrNull(timeoutMs) {
         if (!hasLocationPermission()) {
             Log.w(TAG, "Chưa được cấp quyền truy cập vị trí.")
             return@withTimeoutOrNull null
@@ -101,12 +127,12 @@ class EmergencyManager(
                         Log.d(TAG, "Định vị ngầm GPS thành công: ${coords.first}, ${coords.second}")
                         continuation.resume(coords)
                     } else {
-                        // Nếu chưa bắt được GPS tức thời, lấy vị trí cache gần nhất
+                        // Thử lấy vị trí cache gần nhất nếu GPS chưa fix ngay
                         fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc: Location? ->
                             if (lastLoc != null) {
                                 val coords = Pair(lastLoc.latitude, lastLoc.longitude)
                                 lastCachedCoords = coords
-                                Log.d(TAG, "Fallback sang lastLocation thành công: ${coords.first}, ${coords.second}")
+                                Log.d(TAG, "Fallback lastLocation: ${coords.first}, ${coords.second}")
                                 continuation.resume(coords)
                             } else {
                                 continuation.resume(null)
@@ -135,18 +161,7 @@ class EmergencyManager(
             }
         }
     } ?: run {
-        // Nếu timeout 4500ms, fallback ngay sang lastLocation cache
         getLastKnownLocationQuickly()
-    }
-
-    private fun hasLocationPermission(): Boolean {
-        val hasFine = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val hasCoarse = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        return hasFine || hasCoarse
     }
 
     /**

@@ -191,15 +191,64 @@ class EmergencyViewModel(
     }
 
     /**
+     * Làm mới hoặc tự động định vị ngầm thời gian thực.
+     * Kiểm tra trạng thái cấp quyền và GPS để cập nhật UI chính xác.
+     */
+    fun refreshLocation() {
+        loadRealtimeLocationAndHospitals()
+    }
+
+    /**
      * 2. Tự Động Định Vị Ngầm & Xóa Bỏ Hoàn Toàn Tọa Độ Ảo:
-     * Chạy ngầm 100%, không hiển thị banner/hộp thoại bắt người dùng thao tác thủ công.
+     * Chạy ngầm 100%, ưu tiên cache cực nhanh (<50ms) rồi cập nhật GPS độ chính xác cao.
      */
     private fun loadRealtimeLocationAndHospitals() {
         viewModelScope.launch {
             try {
-                _uiState.update { it.copy(currentAddress = "📍 Đang xác định vị trí hiện tại...") }
+                val hasPermission = emergencyManager.hasLocationPermission()
+                val isGps = emergencyManager.isGpsEnabled()
 
-                // Thử lấy nhanh vị trí cache gần nhất để hiển thị tức thì nếu có
+                _uiState.update {
+                    it.copy(
+                        isLocationPermissionGranted = hasPermission,
+                        isGpsEnabled = isGps
+                    )
+                }
+
+                if (!hasPermission) {
+                    _uiState.update {
+                        it.copy(currentAddress = "📍 Cần cấp quyền vị trí để định vị chính xác (Chạm để cấp quyền)")
+                    }
+                    return@launch
+                }
+
+                if (!isGps) {
+                    _uiState.update {
+                        it.copy(currentAddress = "📍 Vui lòng bật Định vị (GPS) trên thiết bị (Chạm để bật)")
+                    }
+                    val quickCache = emergencyManager.getLastKnownLocationQuickly()
+                    if (quickCache != null && _uiState.value.currentLatitude == null) {
+                        val (cachedLat, cachedLng) = quickCache
+                        val cachedAddress = emergencyManager.resolveAddress(cachedLat, cachedLng)
+                        val cachedHospitals = NearbyHospitalProvider.getNearbyHospitals(cachedLat, cachedLng)
+                        _uiState.update {
+                            it.copy(
+                                currentLatitude = cachedLat,
+                                currentLongitude = cachedLng,
+                                currentAddress = "$cachedAddress (Vị trí lưu trước đó - GPS đang tắt)",
+                                nearbyHospitals = cachedHospitals
+                            )
+                        }
+                    }
+                    return@launch
+                }
+
+                // Nếu chưa có tọa độ, hiển thị đang tìm kiếm
+                if (_uiState.value.currentLatitude == null) {
+                    _uiState.update { it.copy(currentAddress = "📍 Đang xác định vị trí hiện tại...") }
+                }
+
+                // Thử lấy nhanh vị trí cache gần nhất để hiển thị tức thì nếu có (< 50ms)
                 val quickCache = emergencyManager.getLastKnownLocationQuickly()
                 if (quickCache != null) {
                     val (cachedLat, cachedLng) = quickCache
@@ -215,8 +264,8 @@ class EmergencyViewModel(
                     }
                 }
 
-                // Gọi ngầm định vị GPS độ chính xác cao
-                val loc = emergencyManager.getCurrentGpsLocation()
+                // Gọi ngầm định vị GPS độ chính xác cao (Priority.PRIORITY_HIGH_ACCURACY)
+                val loc = emergencyManager.getCurrentGpsLocation(timeoutMs = 4000L)
                 if (loc != null) {
                     val (lat, lng) = loc
                     val address = emergencyManager.resolveAddress(lat, lng)
@@ -232,7 +281,7 @@ class EmergencyViewModel(
                     }
                 } else if (_uiState.value.currentLatitude == null) {
                     _uiState.update {
-                        it.copy(currentAddress = "📍 Đang xác định vị trí hiện tại...")
+                        it.copy(currentAddress = "📍 Chưa bắt được vệ tinh GPS. Vui lòng thử lại hoặc di chuyển ra nơi thoáng đãng")
                     }
                 }
             } catch (e: Exception) {
