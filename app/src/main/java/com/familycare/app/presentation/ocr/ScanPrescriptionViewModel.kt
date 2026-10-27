@@ -264,7 +264,7 @@ class ScanPrescriptionViewModel(application: Application) : AndroidViewModel(app
             if (apiKey.isNotBlank() && apiKey != "YOUR_GEMINI_API_KEY") {
                 try {
                     val generativeModel = GenerativeModel(
-                        modelName = "gemini-1.5-flash",
+                        modelName = HealthAiRepositoryImpl.MODEL_NAME,
                         apiKey = apiKey,
                         generationConfig = generationConfig {
                             temperature = 0.1f

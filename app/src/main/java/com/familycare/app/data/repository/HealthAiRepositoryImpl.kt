@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
 /**
- * Triển khai HealthAiRepository sử dụng Google AI Client SDK với mô hình Gemini 1.5 Flash.
+ * Triển khai HealthAiRepository sử dụng Google AI Client SDK với mô hình Gemini 2.5 Flash.
  * Hỗ trợ Context Injection động vào System Instructions trước mỗi lượt hội thoại.
  */
 class HealthAiRepositoryImpl(
@@ -115,7 +115,7 @@ class HealthAiRepositoryImpl(
         }
 
         return GenerativeModel(
-            modelName = "gemini-1.5-flash",
+            modelName = MODEL_NAME,
             apiKey = apiKey,
             generationConfig = config,
             safetySettings = safetySettings,
@@ -154,11 +154,16 @@ class HealthAiRepositoryImpl(
                 "Không có kết nối mạng Internet. Vui lòng bật Wi-Fi hoặc 4G để trò chuyện với Bác sĩ ảo."
             msg.contains("SocketTimeout", ignoreCase = true) ->
                 "Kết nối tới máy chủ Gemini bị gián đoạn do mạng chậm. Vui lòng bấm thử lại."
+            msg.contains("not found", ignoreCase = true) || msg.contains("MissingFieldException", ignoreCase = true) ->
+                "Mô hình AI trên máy chủ Google đang cập nhật hoặc phản hồi không đúng định dạng. Vui lòng thử lại sau ít giây."
             else -> "Đã xảy ra lỗi khi trao đổi với AI: ${e.localizedMessage ?: "Vui lòng thử lại"}"
         }
     }
 
     companion object {
+        // Tên mô hình Gemini ổn định và mới nhất hỗ trợ generateContent
+        const val MODEL_NAME = "gemini-2.5-flash"
+
         // Khóa Gemini API cấu hình qua BuildConfig, biến môi trường hoặc SharedPreferences
         val DEFAULT_API_KEY: String
             get() = runCatching {
