@@ -48,7 +48,14 @@ class DashboardViewModel(
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    // 1. Tải danh sách thành viên gia đình (Tạo mẫu nếu chưa có)
+                    // Dọn dẹp các tài khoản giả lập nếu có trong DB
+                    runCatching {
+                        userDao.deleteUserById("user_01")
+                        userDao.deleteUserById("user_demo_01")
+                        userDao.deleteUserById("member_bac_nam")
+                    }
+
+                    // 1. Tải danh sách thành viên gia đình thực tế
                     val members = seedFamilyMembersIfEmpty()
                     val currentMember = _uiState.value.selectedMember ?: members.first()
 
@@ -61,36 +68,19 @@ class DashboardViewModel(
                     val bpDomain = bpEntity.toDomainModel()
                     val hrDomain = hrEntity.toDomainModel()
 
-                    // 3. Lấy toàn bộ các lần đo trong 48h để chạy thuật toán AnalyzeThresholdUseCase
-                    val sampleHistory = listOf(
-                        bpDomain,
-                        HealthMetric(
-                            id = "bp_hist_1",
-                            userId = currentMember.id,
-                            type = MetricType.BLOOD_PRESSURE,
-                            valuePrimary = 148.0,
-                            valueSecondary = 95.0,
-                            unit = "mmHg",
-                            timestamp = System.currentTimeMillis() - 4 * 3600 * 1000L
-                        ),
-                        HealthMetric(
-                            id = "bp_hist_2",
-                            userId = currentMember.id,
-                            type = MetricType.BLOOD_PRESSURE,
-                            valuePrimary = 152.0,
-                            valueSecondary = 96.0,
-                            unit = "mmHg",
-                            timestamp = System.currentTimeMillis() - 9 * 3600 * 1000L
-                        )
-                    )
+                    // 3. Lấy các lần đo gần đây để phân tích ngưỡng
+                    val recentMetrics = healthMetricDao.getMetricsByMember(currentMember.id)
+                    val metricsList = mutableListOf<HealthMetric>()
+                    metricsList.add(bpDomain)
+                    metricsList.add(hrDomain)
 
-                    // 4. Chạy thuật toán phát hiện chuỗi vượt ngưỡng 3 lần liên tiếp
+                    // 4. Chạy thuật toán phát hiện vượt ngưỡng
                     var activeAlert: Alert? = null
                     var breachCount = 0
 
                     analyzeThresholdUseCase(
                         userId = currentMember.id,
-                        metrics = sampleHistory,
+                        metrics = metricsList,
                         userName = currentMember.fullName,
                         familyId = currentMember.familyId
                     ).collect { resource ->
@@ -98,17 +88,7 @@ class DashboardViewModel(
                             val analysis = resource.data
                             breachCount = analysis.consecutiveBreachCount
                             if (analysis.isCriticalRedAlert) {
-                                activeAlert = analysis.generatedAlert ?: Alert(
-                                    id = "alert_critical_sample",
-                                    familyId = currentMember.familyId,
-                                    targetUserId = currentMember.id,
-                                    targetUserName = currentMember.fullName,
-                                    type = AlertType.THRESHOLD_EXCEEDED,
-                                    level = AlertLevel.CRITICAL,
-                                    title = "⚠️ CẢNH BÁO ĐỎ: 3 LẦN ĐO VƯỢT NGƯỠNG LIÊN TIẾP",
-                                    message = "Huyết áp trung bình ${bpDomain.valuePrimary.toInt()}/${bpDomain.valueSecondary?.toInt()} mmHg vượt ngưỡng an toàn trong 48 giờ qua.",
-                                    timestamp = System.currentTimeMillis()
-                                )
+                                activeAlert = analysis.generatedAlert
                             }
                         }
                     }
@@ -117,7 +97,7 @@ class DashboardViewModel(
                     val upcomingMed = Medicine(
                         id = "med_01",
                         userId = currentMember.id,
-                        name = "Amlodipine 5mg (Thuốc hạ huyết áp)",
+                        name = "Amlodipine 5mg",
                         dosage = "1 viên",
                         instruction = "Uống sau bữa ăn, kèm nhiều nước ấm",
                         reminderTimes = listOf("08:00", "18:00")
@@ -172,33 +152,36 @@ class DashboardViewModel(
         loadDashboardData()
     }
 
-    // --- DỮ LIỆU MẪU BAN ĐẦU (SEED DATA) ---
+    // --- DỮ LIỆU THÀNH VIÊN THỰC TẾ (LY TRẦN & HẢI MINH TRẦN) ---
     private suspend fun seedFamilyMembersIfEmpty(): List<User> {
-        val existing = userDao.getCurrentUser()
-        if (existing != null) {
-            return listOf(
-                existing.toDomainModel(),
-                User(id = "user_02", fullName = "Bác Trần Thị Lan", role = UserRole.MEMBER, birthDate = "10/08/1960"),
-                User(id = "user_03", fullName = "Con Nguyễn Hoàng", role = UserRole.ADMIN, birthDate = "22/11/1988")
-            )
+        val allDbUsers = userDao.getAllUsers().filter {
+            it.id != "user_01" && it.id != "user_demo_01" && it.id != "member_bac_nam" && !it.fullName.contains("Nguyễn Văn Nam")
+        }
+        if (allDbUsers.isNotEmpty()) {
+            return allDbUsers.map { it.toDomainModel() }
         }
 
-        val primaryUser = UserEntity(
-            id = "user_demo_01",
-            fullName = "Bác Nguyễn Văn Nam",
-            email = "nam.nguyen@familycare.vn",
-            familyId = "fam_123456",
-            role = "MEMBER",
-            birthDate = "15/04/1958",
-            chronicDiseasesJson = "[\"Cao huyết áp vô căn\"]"
+        val lyTran = UserEntity(
+            id = "user_me",
+            fullName = "Ly Trần",
+            email = "lytran@familycare.vn",
+            role = "ADMIN",
+            birthDate = "20/11/1992",
+            bloodType = "A+"
         )
-        userDao.insertUser(primaryUser)
+        userDao.insertUser(lyTran)
 
-        return listOf(
-            primaryUser.toDomainModel(),
-            User(id = "user_02", fullName = "Bác Trần Thị Lan", role = UserRole.MEMBER, birthDate = "10/08/1960"),
-            User(id = "user_03", fullName = "Con Nguyễn Hoàng", role = UserRole.ADMIN, birthDate = "22/11/1988")
+        val haiMinh = UserEntity(
+            id = "user_02",
+            fullName = "Hải Minh Trần",
+            email = "haiminh@familycare.vn",
+            role = "MEMBER",
+            birthDate = "28/11/2006",
+            bloodType = "O+"
         )
+        userDao.insertUser(haiMinh)
+
+        return listOf(lyTran.toDomainModel(), haiMinh.toDomainModel())
     }
 
     private suspend fun seedSampleBp(userId: String): HealthMetricEntity {
@@ -206,8 +189,8 @@ class DashboardViewModel(
             id = "bp_latest",
             userId = userId,
             type = MetricType.BLOOD_PRESSURE.name,
-            valuePrimary = 145.0,
-            valueSecondary = 92.0,
+            valuePrimary = 120.0,
+            valueSecondary = 80.0,
             unit = "mmHg",
             timestamp = System.currentTimeMillis() - 30 * 60 * 1000L
         )
@@ -220,7 +203,7 @@ class DashboardViewModel(
             id = "hr_latest",
             userId = userId,
             type = MetricType.HEART_RATE.name,
-            valuePrimary = 86.0,
+            valuePrimary = 75.0,
             unit = "BPM",
             timestamp = System.currentTimeMillis() - 30 * 60 * 1000L
         )

@@ -20,5 +20,7 @@ data class ChatMessage(
     val timestamp: Long = System.currentTimeMillis(),
     val isError: Boolean = false,
     val warningLevel: ContextWarningLevel = ContextWarningLevel.NORMAL,
-    val suggestedActions: List<String> = emptyList()
+    val suggestedActions: List<String> = emptyList(),
+    val targetMemberName: String? = null,
+    val targetMemberId: String? = null
 )

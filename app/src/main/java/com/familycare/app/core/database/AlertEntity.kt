@@ -8,32 +8,42 @@ import com.familycare.app.domain.model.AlertType
 
 @Entity(tableName = "alerts")
 data class AlertEntity(
-    @PrimaryKey
-    val id: String,
-    val familyId: String,
-    val targetUserId: String,
-    val targetUserName: String,
-    val type: String,
-    val level: String,
-    val title: String,
-    val message: String,
-    val timestamp: Long,
-    val isRead: Boolean = false,
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val memberId: String = "",
+    val memberName: String = "",
+    val alertType: AlertType = AlertType.THRESHOLD_EXCEEDED,
+    val alertLevel: AlertLevel = AlertLevel.WARNING,
+    val title: String = "",
+    val message: String = "",
+    val address: String? = null,
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    val timestamp: Long = System.currentTimeMillis(),
+    val isRead: Boolean = false,
+    val isResolved: Boolean = false,
+    val familyId: String = ""
 ) {
+    // Thuộc tính tương thích cho các module cũ
+    val targetUserId: String get() = memberId
+    val targetUserName: String get() = memberName
+    val type: String get() = alertType.name
+    val level: String get() = alertLevel.name
+
     fun toDomain(): Alert {
         return Alert(
-            id = id,
+            id = id.toString(),
             familyId = familyId,
-            targetUserId = targetUserId,
-            targetUserName = targetUserName,
-            type = runCatching { AlertType.valueOf(type) }.getOrDefault(AlertType.THRESHOLD_EXCEEDED),
-            level = runCatching { AlertLevel.valueOf(level) }.getOrDefault(AlertLevel.WARNING),
+            targetUserId = memberId,
+            targetUserName = memberName,
+            type = alertType,
+            level = alertLevel,
             title = title,
             message = message,
             timestamp = timestamp,
             isRead = isRead,
+            isResolved = isResolved,
+            address = address,
             latitude = latitude,
             longitude = longitude
         )
@@ -43,19 +53,22 @@ data class AlertEntity(
 
     companion object {
         fun fromDomain(model: Alert): AlertEntity {
+            val idParsed = model.id.toLongOrNull() ?: System.currentTimeMillis()
             return AlertEntity(
-                id = model.id.ifEmpty { java.util.UUID.randomUUID().toString() },
-                familyId = model.familyId,
-                targetUserId = model.targetUserId,
-                targetUserName = model.targetUserName,
-                type = model.type.name,
-                level = model.level.name,
+                id = idParsed,
+                memberId = model.targetUserId.ifBlank { model.memberId },
+                memberName = model.targetUserName.ifBlank { model.memberName },
+                alertType = model.type,
+                alertLevel = model.level,
                 title = model.title,
                 message = model.message,
-                timestamp = model.timestamp,
-                isRead = model.isRead,
+                address = model.address,
                 latitude = model.latitude,
-                longitude = model.longitude
+                longitude = model.longitude,
+                timestamp = if (model.timestamp > 0) model.timestamp else System.currentTimeMillis(),
+                isRead = model.isRead,
+                isResolved = model.isResolved,
+                familyId = model.familyId
             )
         }
 

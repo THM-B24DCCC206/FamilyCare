@@ -25,11 +25,14 @@ class AlertRepositoryImpl(
 
     override suspend fun createAlert(alert: Alert): Resource<Unit> = withContext(Dispatchers.IO) {
         try {
-            val entity = AlertEntity.fromDomainModel(
-                if (alert.id.isBlank()) alert.copy(id = UUID.randomUUID().toString()) else alert
-            )
-            alertDao.insertAlert(entity)
-            Resource.Success(Unit)
+            val validId = if (alert.id.isBlank()) System.currentTimeMillis().toString() else alert.id
+            val entity = AlertEntity.fromDomainModel(alert.copy(id = validId))
+            val resId = alertDao.insertAlert(entity)
+            if (resId != -1L) {
+                Resource.Success(Unit)
+            } else {
+                Resource.Error("Không thể tạo cảnh báo: insertAlert trả về $resId")
+            }
         } catch (e: Exception) {
             Resource.Error(e.localizedMessage ?: "Không thể tạo cảnh báo")
         }
@@ -52,7 +55,7 @@ class AlertRepositoryImpl(
     ): Resource<Unit> = withContext(Dispatchers.IO) {
         try {
             val sosAlert = Alert(
-                id = UUID.randomUUID().toString(),
+                id = System.currentTimeMillis().toString(),
                 familyId = familyId,
                 targetUserId = userId,
                 targetUserName = "Người thân",

@@ -174,7 +174,7 @@ fun FamilySetupScreen(
                             value = familyNameInput,
                             onValueChange = { familyNameInput = it },
                             label = { Text("Tên gia đình") },
-                            placeholder = { Text("VD: Gia đình Bác Nam") },
+                            placeholder = { Text("VD: Gia đình Ly Trần") },
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()

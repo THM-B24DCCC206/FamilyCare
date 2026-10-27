@@ -84,13 +84,35 @@
                 android:value="Medication reminder alarm ringing" />
 
         </service>
-    <service
-        android:name=".core.notification.FamilyCareMessagingService"
-        android:exported="false">
-        <intent-filter>
-            <action android:name="com.google.firebase.MESSAGING_EVENT" />
-        </intent-filter>
-    </service>
+
+        <!-- Màn hình khẩn cấp toàn màn hình vượt màn hình khóa trên thiết bị Người thân (Máy B) -->
+        <activity
+            android:name=".presentation.emergency.EmergencyAlertReceiverActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:showForAllUsers="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.FamilyCare" />
+
+        <!-- Dịch vụ FCM lắng nghe cảnh báo cấp cứu EMERGENCY_SOS chạy ngầm -->
+        <service
+            android:name=".core.notification.MyFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- FileProvider cho chụp ảnh Camera OCR đơn thuốc -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
     <queries>

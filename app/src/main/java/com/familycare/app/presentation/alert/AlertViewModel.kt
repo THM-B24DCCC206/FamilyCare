@@ -4,107 +4,128 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.familycare.app.core.database.AlertDao
+import com.familycare.app.core.database.AlertEntity
 import com.familycare.app.core.database.AppDatabase
-import com.familycare.app.data.repository.AlertRepositoryImpl
-import com.familycare.app.domain.model.Alert
 import com.familycare.app.domain.model.AlertLevel
-import com.familycare.app.domain.model.AlertType
-import com.familycare.app.domain.repository.AlertRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel quản lý danh sách cảnh báo (Alert Rules & History) của Thành viên 2
+ * ViewModel quản lý và điều phối Trung Tâm Cảnh Báo (Alert Center)
+ * Sử dụng toán tử combine(alertDao.getAllAlerts(), _selectedFilter) để tính toán chính xác
+ * số lượng tab (allCount, criticalCount, warningCount) và lọc danh sách tự động.
+ * Dữ liệu hoàn toàn là dữ liệu thực tế phát sinh từ hệ thống (SOS, sinh tồn, cữ thuốc), không dùng dữ liệu giả lập.
  */
 class AlertViewModel(
-    private val alertRepository: AlertRepository
+    private val alertDao: AlertDao
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AlertUiState())
-    val uiState: StateFlow<AlertUiState> = _uiState.asStateFlow()
+    private val _selectedFilter = MutableStateFlow(AlertFilter.ALL)
+    val selectedFilter: StateFlow<AlertFilter> = _selectedFilter.asStateFlow()
 
     init {
-        observeAlerts("fam_123456")
+        // Không tự ý xóa cảnh báo trong init để tránh xóa mất bản ghi SOS người dùng vừa tạo
     }
 
-    fun observeAlerts(familyId: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            alertRepository.getAlertsByFamily(familyId).collect { alertList ->
-                val list = if (alertList.isEmpty()) seedDefaultAlerts() else alertList
-                _uiState.update {
-                    it.copy(
-                        alerts = list,
-                        isLoading = false,
-                        errorMessage = null
-                    )
+    val uiState: StateFlow<AlertUiState> = combine(
+        alertDao.getAllAlerts(),
+        _selectedFilter
+    ) { allAlerts, filter ->
+        // Loại bỏ triệt để các cảnh báo thuộc về các thành viên giả lập/mẫu cũ, nhưng GIỮ LẠI 100% cảnh báo SOS thật
+        val validAlerts = allAlerts.filter { alert ->
+            val isSos = alert.alertType == com.familycare.app.domain.model.AlertType.SOS_EMERGENCY ||
+                    alert.title.contains("SOS", ignoreCase = true) ||
+                    alert.title.contains("CẤP CỨU", ignoreCase = true)
+            if (isSos) {
+                true // Giữ lại 100% cảnh báo SOS do người dùng bấm
+            } else {
+                !alert.memberName.contains("Nguyễn Văn Nam") &&
+                !alert.memberName.contains("Nguyễn Hoàng") &&
+                !alert.memberName.contains("Trần Thị Lan") &&
+                !alert.message.contains("Nguyễn Hoàng") &&
+                !alert.message.contains("Trần Thị Lan")
+            }
+        }.map { alert ->
+            var finalAlert = alert
+            // Đảm bảo: Mọi cảnh báo SOS / Báo động cấp cứu đều 100% là AlertLevel.CRITICAL (Khẩn cấp)
+            if (finalAlert.alertType == com.familycare.app.domain.model.AlertType.SOS_EMERGENCY ||
+                finalAlert.title.contains("SOS", ignoreCase = true) ||
+                finalAlert.title.contains("CẤP CỨU", ignoreCase = true)) {
+                if (finalAlert.alertLevel != AlertLevel.CRITICAL) {
+                    finalAlert = finalAlert.copy(alertLevel = AlertLevel.CRITICAL)
                 }
             }
+            // Bỏ dòng nhắc nhở định vị rườm rà nếu có
+            if (finalAlert.message.contains("Vui lòng bật Định vị") || finalAlert.message.contains("Chưa nhận diện được vị trí")) {
+                finalAlert = finalAlert.copy(
+                    message = "Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.",
+                    address = null
+                )
+            }
+            finalAlert
         }
+
+        val filtered = when (filter) {
+            AlertFilter.ALL -> validAlerts
+            AlertFilter.CRITICAL -> validAlerts.filter { it.alertLevel == AlertLevel.CRITICAL }
+            AlertFilter.WARNING -> validAlerts.filter { it.alertLevel != AlertLevel.CRITICAL }
+        }
+
+        val critCount = validAlerts.count { it.alertLevel == AlertLevel.CRITICAL }
+        val warnCount = validAlerts.count { it.alertLevel != AlertLevel.CRITICAL }
+
+        AlertUiState(
+            alerts = filtered,
+            selectedFilter = filter,
+            allCount = validAlerts.size,
+            criticalCount = critCount,
+            warningCount = warnCount,
+            isLoading = false
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = AlertUiState(isLoading = true)
+    )
+
+    fun onFilterSelected(filter: AlertFilter) {
+        _selectedFilter.value = filter
+    }
+
+    fun onMarkAsRead(alertId: Long) {
+        viewModelScope.launch {
+            alertDao.updateReadStatus(alertId, true)
+        }
+    }
+
+    fun onResolveAlert(alertId: Long) {
+        viewModelScope.launch {
+            alertDao.updateResolvedStatus(alertId, true)
+        }
+    }
+
+    /**
+     * Xóa sạch 100% cảnh báo để thử nghiệm từ đầu
+     */
+    fun clearAllAlerts() {
+        viewModelScope.launch {
+            alertDao.clearAllAlerts()
+        }
+    }
+
+    // Hàm tương thích ngược cho mã nguồn cũ
+    fun markAsRead(alertId: String) {
+        val idLong = alertId.toLongOrNull() ?: 0L
+        onMarkAsRead(idLong)
     }
 
     fun setFilter(level: AlertLevel?) {
-        _uiState.update { it.copy(selectedFilter = level) }
-    }
-
-    fun markAsRead(alertId: String) {
-        viewModelScope.launch {
-            alertRepository.markAlertAsRead(alertId)
-            _uiState.update { state ->
-                state.copy(
-                    alerts = state.alerts.map {
-                        if (it.id == alertId) it.copy(isRead = true) else it
-                    }
-                )
-            }
+        when (level) {
+            AlertLevel.CRITICAL -> onFilterSelected(AlertFilter.CRITICAL)
+            AlertLevel.WARNING -> onFilterSelected(AlertFilter.WARNING)
+            else -> onFilterSelected(AlertFilter.ALL)
         }
-    }
-
-    private fun seedDefaultAlerts(): List<Alert> {
-        val now = System.currentTimeMillis()
-        return listOf(
-            Alert(
-                id = "alert_01",
-                familyId = "fam_123456",
-                targetUserId = "user_demo_01",
-                targetUserName = "Bác Nguyễn Văn Nam",
-                type = AlertType.THRESHOLD_EXCEEDED,
-                level = AlertLevel.CRITICAL,
-                title = "⚠️ CẢNH BÁO ĐỎ: 3 LẦN ĐO VƯỢT NGƯỠNG LIÊN TIẾP",
-                message = "Huyết áp trung bình 148/95 mmHg đo trong 48h qua vượt ngưỡng an toàn. Cần kiểm tra cữ thuốc!",
-                timestamp = now - 35 * 60 * 1000L,
-                isRead = false
-            ),
-            Alert(
-                id = "alert_02",
-                familyId = "fam_123456",
-                targetUserId = "user_demo_01",
-                targetUserName = "Bác Nguyễn Văn Nam",
-                type = AlertType.SOS_EMERGENCY,
-                level = AlertLevel.CRITICAL,
-                title = "🚨 BÁO ĐỘNG SOS KHẨN CẤP",
-                message = "Người thân đã kích hoạt còi cứu hộ tại tọa độ 10.7769, 106.7009",
-                timestamp = now - 2 * 3600 * 1000L,
-                isRead = true,
-                latitude = 10.7769,
-                longitude = 106.7009
-            ),
-            Alert(
-                id = "alert_03",
-                familyId = "fam_123456",
-                targetUserId = "user_demo_01",
-                targetUserName = "Bác Nguyễn Văn Nam",
-                type = AlertType.MEDICATION_MISSED,
-                level = AlertLevel.WARNING,
-                title = "Nhắc nhở: Quên uống thuốc Amlodipine",
-                message = "Cữ thuốc lúc 08:00 sáng chưa được đánh dấu đã uống.",
-                timestamp = now - 6 * 3600 * 1000L,
-                isRead = true
-            )
-        )
     }
 
     companion object {
@@ -112,8 +133,7 @@ class AlertViewModel(
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val db = AppDatabase.getInstance(context.applicationContext)
-                val repo = AlertRepositoryImpl(db.alertDao())
-                return AlertViewModel(repo) as T
+                return AlertViewModel(alertDao = db.alertDao()) as T
             }
         }
     }

@@ -205,7 +205,7 @@ fun LoginScreen(
                 value = fullName,
                 onValueChange = { fullName = it },
                 label = { Text("Họ và Tên") },
-                placeholder = { Text("VD: Nguyễn Văn Nam") },
+                placeholder = { Text("VD: Ly Trần") },
                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),

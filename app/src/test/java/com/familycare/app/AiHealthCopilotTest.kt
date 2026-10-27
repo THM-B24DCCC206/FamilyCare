@@ -150,7 +150,7 @@ class AiHealthCopilotTest {
         val fcmMap = payload.toFcmDataMap()
 
         assertEquals("high", fcmMap["priority"])
-        assertEquals("SOS_EMERGENCY", fcmMap["type"])
+        assertEquals("EMERGENCY_SOS", fcmMap["type"])
         assertEquals("10.7769", fcmMap["latitude"])
         assertEquals("106.7009", fcmMap["longitude"])
         assertEquals("https://maps.google.com/?q=10.7769,106.7009", fcmMap["mapsUrl"])

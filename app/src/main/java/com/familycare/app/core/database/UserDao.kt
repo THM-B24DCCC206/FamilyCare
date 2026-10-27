@@ -15,6 +15,9 @@ interface UserDao {
     @Query("SELECT * FROM users LIMIT 1")
     suspend fun getCurrentUser(): UserEntity?
 
+    @Query("SELECT * FROM users ORDER BY createdAt ASC")
+    suspend fun getAllUsers(): List<UserEntity>
+
     @Query("SELECT * FROM users LIMIT 1")
     fun observeCurrentUser(): Flow<UserEntity?>
 

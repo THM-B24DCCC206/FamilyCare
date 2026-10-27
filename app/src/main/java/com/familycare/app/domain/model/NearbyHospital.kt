@@ -109,9 +109,35 @@ object NearbyHospitalProvider {
             emergencyRoom = "Khoa Cấp cứu & Hồi sức Tích cực",
             latitude = 10.7915,
             longitude = 106.6562
+        ),
+        // Miền Trung (Đà Nẵng & lân cận)
+        NearbyHospital(
+            id = "bv_da_nang",
+            name = "Bệnh viện Đà Nẵng (Khoa Cấp cứu 24/7)",
+            address = "124 Hải Phòng, Thạch Thang, Hải Châu, Đà Nẵng",
+            distanceKm = 2.0,
+            hotline = "02363821118",
+            emergencyRoom = "Khoa Cấp cứu Hồi sức tích cực",
+            latitude = 16.0719,
+            longitude = 108.2144
+        ),
+        // Đồng bằng Sông Cửu Long (Cần Thơ)
+        NearbyHospital(
+            id = "bv_tw_can_tho",
+            name = "Bệnh viện Đa khoa TW Cần Thơ",
+            address = "315 Nguyễn Văn Linh, An Khánh, Ninh Kiều, Cần Thơ",
+            distanceKm = 2.5,
+            hotline = "02923820071",
+            emergencyRoom = "Trung tâm Hồi sức Cấp cứu 24/7",
+            latitude = 10.0279,
+            longitude = 105.7533
         )
     )
 
+    /**
+     * Tính toán khoảng cách đường chim bay thực tế từ tọa độ GPS người dùng tới các cơ sở y tế
+     * bằng thuật toán Location.distanceBetween, sắp xếp theo khoảng cách tăng dần.
+     */
     fun getNearbyHospitals(userLat: Double, userLng: Double): List<NearbyHospital> {
         val calculated = ALL_HOSPITALS.map { hospital ->
             val results = FloatArray(1)
@@ -120,20 +146,6 @@ object NearbyHospitalProvider {
             hospital.copy(distanceKm = distanceKm)
         }.sortedBy { it.distanceKm }
 
-        val closestDistance = calculated.firstOrNull()?.distanceKm ?: 999.0
-        return if (closestDistance > 50.0) {
-            val isNorthern = userLat > 15.0
-            val candidates = if (isNorthern) {
-                ALL_HOSPITALS.filter { it.latitude > 15.0 }
-            } else {
-                ALL_HOSPITALS.filter { it.latitude <= 15.0 }
-            }
-            val offsets = listOf(0.9, 1.8, 2.5, 3.6)
-            candidates.mapIndexed { index, hospital ->
-                hospital.copy(distanceKm = offsets.getOrElse(index) { 3.0 + index })
-            }.sortedBy { it.distanceKm }
-        } else {
-            calculated.take(4)
-        }
+        return calculated.take(4)
     }
 }

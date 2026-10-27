@@ -1,29 +1,91 @@
 package com.familycare.app.domain.usecase
 
 import com.familycare.app.core.common.Resource
-import com.familycare.app.core.database.dao.AlertDao
-import com.familycare.app.core.database.entity.AlertEntity
+import com.familycare.app.core.database.AlertDao
+import com.familycare.app.core.database.AlertEntity
 import com.familycare.app.domain.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import java.util.UUID
 
 /**
- * UseCase phân tích ngưỡng sức khỏe thông minh (Clean Architecture - Domain Layer).
+ * UseCase phân tích ngưỡng sức khỏe & Điều phối 3 nguồn cảnh báo (Clean Architecture - Domain Layer).
  * 
  * Nghiệp vụ chính:
- * 1. Nhận vào lịch sử đo sinh tồn (Huyết áp, Nhịp tim) trong thời gian gần đây.
- * 2. So sánh với ngưỡng an toàn cá nhân hóa (HealthThreshold).
- * 3. Thuật toán chuỗi: Phát hiện >= 3 lần đo liên tiếp vượt ngưỡng trong 48 giờ gần nhất -> Cảnh báo đỏ.
- * 4. Cơ chế Debounce / Deduplicate chống spam cảnh báo trùng lặp.
- * 5. Trả về qua Kotlin Flow<Resource<ThresholdAnalysisResult>> cho Dashboard.
+ * 1. Nguồn 1: Cấp cứu SOS (SOS_EMERGENCY) -> AlertLevel.CRITICAL, không debounce.
+ * 2. Nguồn 2: Vượt ngưỡng sinh tồn (THRESHOLD_EXCEEDED) -> Quét 48h, >= 3 lần liên tiếp -> Debounce 6h -> AlertLevel.CRITICAL.
+ * 3. Nguồn 3: Nhắc cữ thuốc (MEDICATION_MISSED) -> Quá 30 phút -> AlertLevel.WARNING.
  */
 class AnalyzeThresholdUseCase(
     private val alertDao: AlertDao? = null
 ) {
 
+    /**
+     * Nguồn 1: Cấp cứu SOS (SOS_EMERGENCY)
+     * Nhận payload từ thiết bị phát SOS hoặc FCM (chứa tên người bị nạn thật, tọa độ thật và địa chỉ số nhà tiếng Việt thật).
+     * Lưu ngay bản ghi AlertLevel.CRITICAL, không áp dụng debounce.
+     */
+    suspend fun recordSosEmergency(
+        memberId: String,
+        memberName: String,
+        address: String,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        familyId: String = ""
+    ): AlertEntity {
+        val alert = AlertEntity(
+            memberId = memberId,
+            memberName = memberName,
+            alertType = AlertType.SOS_EMERGENCY,
+            alertLevel = AlertLevel.CRITICAL,
+            title = "🚨 BÁO ĐỘNG SOS KHẨN CẤP",
+            message = "$memberName đã kích hoạt còi cứu hộ khẩn cấp tại: $address",
+            address = address,
+            latitude = latitude,
+            longitude = longitude,
+            timestamp = System.currentTimeMillis(),
+            isRead = false,
+            isResolved = false,
+            familyId = familyId
+        )
+        alertDao?.insertAlert(alert)
+        return alert
+    }
+
+    /**
+     * Nguồn 3: Nhắc cữ thuốc (MEDICATION_MISSED)
+     * Khi người thân quên uống thuốc quá 30 phút so với giờ hẹn, sinh bản ghi AlertLevel.WARNING.
+     */
+    suspend fun recordMedicationMissed(
+        memberId: String,
+        memberName: String,
+        medicineName: String,
+        scheduledTime: String,
+        familyId: String = ""
+    ): AlertEntity {
+        val alert = AlertEntity(
+            memberId = memberId,
+            memberName = memberName,
+            alertType = AlertType.MEDICATION_MISSED,
+            alertLevel = AlertLevel.WARNING,
+            title = "💊 BỎ LỠ CỮ THUỐC: QUÁ 30 PHÚT",
+            message = "$memberName chưa uống thuốc $medicineName theo lịch hẹn $scheduledTime.",
+            address = null,
+            timestamp = System.currentTimeMillis(),
+            isRead = false,
+            isResolved = false,
+            familyId = familyId
+        )
+        alertDao?.insertAlert(alert)
+        return alert
+    }
+
+    /**
+     * Nguồn 2: Vượt ngưỡng sinh tồn (THRESHOLD_EXCEEDED)
+     * Quét lịch sử đo trong 48h, phát hiện >= 3 lần đo liên tiếp vượt ngưỡng.
+     * Áp dụng Debounce Window 6 giờ để chống quá tải thông báo (Alert Fatigue).
+     */
     operator fun invoke(
         userId: String,
         metrics: List<HealthMetric>,
@@ -92,36 +154,32 @@ class AnalyzeThresholdUseCase(
             var generatedAlert: Alert? = null
 
             if (isCritical) {
-                // Kiểm tra xem đã có cảnh báo THRESHOLD_EXCEEDED nào được tạo trong cửa sổ debounce (vd: 6 giờ qua) chưa
-                val sinceTimestamp = currentTime - debounceWindowMs
-                val existingRecentAlerts = alertDao?.getRecentAlertsByType(
-                    userId = userId,
-                    type = AlertType.THRESHOLD_EXCEEDED.name,
-                    sinceTimestamp = sinceTimestamp
-                ) ?: emptyList()
+                // Áp dụng Debounce Window 6 giờ: Kiểm tra bản ghi gần nhất của memberId với loại THRESHOLD_EXCEEDED
+                val latestAlert = alertDao?.getLatestAlertForMember(userId, AlertType.THRESHOLD_EXCEEDED)
+                val isWithinDebounce = latestAlert != null && (currentTime - latestAlert.timestamp) < debounceWindowMs
 
-                if (existingRecentAlerts.isNotEmpty()) {
-                    // Đã có cảnh báo cho sự kiện vượt ngưỡng này rồi -> Ngăn spam thông báo
+                if (isWithinDebounce) {
+                    // Đã có cảnh báo trong 6h qua -> Bỏ qua không tạo bản ghi mới để chống Alert Fatigue
                     isDebounced = true
                 } else {
                     // Chưa cảnh báo trong 6h qua -> Sinh một cảnh báo đỏ mới và lưu vào Room DB
                     val latest = metricsIn48h.first()
                     val alertMessage = buildBreachAlertMessage(userName, consecutiveCount, latest)
-                    val newAlert = Alert(
-                        id = UUID.randomUUID().toString(),
-                        familyId = familyId,
-                        targetUserId = userId,
-                        targetUserName = userName,
-                        type = AlertType.THRESHOLD_EXCEEDED,
-                        level = AlertLevel.CRITICAL,
+                    val newAlert = AlertEntity(
+                        memberId = userId,
+                        memberName = userName,
+                        alertType = AlertType.THRESHOLD_EXCEEDED,
+                        alertLevel = AlertLevel.CRITICAL,
                         title = "⚠️ CẢNH BÁO ĐỎ: $consecutiveCount LẦN ĐO VƯỢT NGƯỠNG LIÊN TIẾP",
                         message = alertMessage,
                         timestamp = currentTime,
-                        isRead = false
+                        isRead = false,
+                        isResolved = false,
+                        familyId = familyId
                     )
 
-                    alertDao?.insertAlert(AlertEntity.fromDomainModel(newAlert))
-                    generatedAlert = newAlert
+                    alertDao?.insertAlert(newAlert)
+                    generatedAlert = newAlert.toDomain()
                 }
             }
 
@@ -156,7 +214,8 @@ class AnalyzeThresholdUseCase(
     }.flowOn(Dispatchers.Default)
 
     /**
-     * Kiểm tra một lần đo cụ thể có vượt ngưỡng hay không
+     * Kiểm tra một lần đo cụ thể có vượt ngưỡng hay không:
+     * Huyết áp tâm thu >= 140 mmHg hoặc tâm trương >= 90 mmHg, hoặc nhịp tim > 100 BPM.
      */
     fun isMetricExceedingThreshold(metric: HealthMetric, threshold: HealthThreshold): Boolean {
         return when (metric.type) {

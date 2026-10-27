@@ -4,31 +4,72 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.familycare.app.domain.model.AlertType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AlertDao {
+    @Query("SELECT * FROM alerts ORDER BY timestamp DESC")
+    fun getAllAlerts(): Flow<List<AlertEntity>>
+
     @Query("SELECT * FROM alerts WHERE familyId = :familyId ORDER BY timestamp DESC")
     fun getAlertsByFamily(familyId: String): Flow<List<AlertEntity>>
 
-    @Query("SELECT * FROM alerts WHERE targetUserId = :userId AND type = :type AND timestamp >= :sinceTimestamp ORDER BY timestamp DESC")
+    @Query("SELECT * FROM alerts WHERE id = :alertId LIMIT 1")
+    suspend fun getAlertById(alertId: Long): AlertEntity?
+
+    suspend fun getAlertById(alertId: String): AlertEntity? = getAlertById(alertId.toLongOrNull() ?: 0L)
+
+    @Query("SELECT * FROM alerts WHERE (memberId = :memberId OR targetUserId = :memberId) AND (alertType = :alertType OR type = :alertTypeStr) ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLatestAlertForMember(
+        memberId: String,
+        alertType: AlertType,
+        alertTypeStr: String = alertType.name
+    ): AlertEntity?
+
+    @Query("SELECT * FROM alerts WHERE (memberId = :userId OR targetUserId = :userId) AND (alertType = :type OR type = :type) AND timestamp >= :sinceTimestamp ORDER BY timestamp DESC")
     suspend fun getRecentAlertsByType(
         userId: String,
         type: String,
         sinceTimestamp: Long
     ): List<AlertEntity>
 
-    @Query("SELECT * FROM alerts WHERE id = :alertId LIMIT 1")
-    suspend fun getAlertById(alertId: String): AlertEntity?
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAlert(alert: AlertEntity)
+    suspend fun insertAlert(alert: AlertEntity): Long
 
-    @Query("UPDATE alerts SET isRead = 1 WHERE id = :alertId")
-    suspend fun markAsRead(alertId: String)
+    @Query("UPDATE alerts SET isRead = :isRead WHERE id = :alertId")
+    suspend fun updateReadStatus(alertId: Long, isRead: Boolean)
+
+    @Query("UPDATE alerts SET isResolved = :isResolved WHERE id = :alertId")
+    suspend fun updateResolvedStatus(alertId: Long, isResolved: Boolean)
+
+    suspend fun markAsRead(alertId: Long) = updateReadStatus(alertId, true)
+
+    suspend fun markAsRead(alertId: String) {
+        val idLong = alertId.toLongOrNull()
+        if (idLong != null) {
+            updateReadStatus(idLong, true)
+        }
+    }
 
     suspend fun markAlertAsRead(alertId: String) = markAsRead(alertId)
 
+    @Query("DELETE FROM alerts")
+    suspend fun clearAllAlerts()
+
     @Query("DELETE FROM alerts WHERE id = :alertId")
-    suspend fun deleteAlert(alertId: String)
+    suspend fun deleteAlert(alertId: Long)
+
+    @Query("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%'")
+    suspend fun deleteDummyAlerts()
+
+    @Query("UPDATE alerts SET message = 'Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.', address = NULL WHERE message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'")
+    suspend fun cleanGpsReminderFromAlerts()
+
+    suspend fun deleteAlert(alertId: String) {
+        val idLong = alertId.toLongOrNull()
+        if (idLong != null) {
+            deleteAlert(idLong)
+        }
+    }
 }

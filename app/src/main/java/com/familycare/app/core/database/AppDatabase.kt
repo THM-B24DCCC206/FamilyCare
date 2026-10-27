@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +51,7 @@ class AppDatabase private constructor(context: Context) {
     }
 }
 
-class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_db.db", null, 3) {
+class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_db.db", null, 4) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
@@ -79,7 +80,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
                 reminderTimes TEXT NOT NULL,
                 startDate INTEGER NOT NULL,
                 endDate INTEGER,
-                scannedViaOcr INTEGER NOT NULL
+                scannedViaOcr INTEGER NOT NULL,
+                purpose TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent()
         )
@@ -87,18 +89,24 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS alerts (
-                id TEXT PRIMARY KEY NOT NULL,
-                familyId TEXT NOT NULL,
-                targetUserId TEXT NOT NULL,
-                targetUserName TEXT NOT NULL,
-                type TEXT NOT NULL,
-                level TEXT NOT NULL,
-                title TEXT NOT NULL,
-                message TEXT NOT NULL,
-                timestamp INTEGER NOT NULL,
-                isRead INTEGER NOT NULL,
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                memberId TEXT NOT NULL DEFAULT '',
+                memberName TEXT NOT NULL DEFAULT '',
+                targetUserId TEXT NOT NULL DEFAULT '',
+                targetUserName TEXT NOT NULL DEFAULT '',
+                alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                alertLevel TEXT NOT NULL DEFAULT 'WARNING',
+                type TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                level TEXT NOT NULL DEFAULT 'WARNING',
+                title TEXT NOT NULL DEFAULT '',
+                message TEXT NOT NULL DEFAULT '',
+                address TEXT,
                 latitude REAL,
-                longitude REAL
+                longitude REAL,
+                timestamp INTEGER NOT NULL DEFAULT 0,
+                isRead INTEGER NOT NULL DEFAULT 0,
+                isResolved INTEGER NOT NULL DEFAULT 0,
+                familyId TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent()
         )
@@ -154,6 +162,31 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
             )
             """.trimIndent()
         )
+
+        // Đảm bảo cột purpose luôn tồn tại trong medicines
+        try {
+            db.execSQL("ALTER TABLE medicines ADD COLUMN purpose TEXT NOT NULL DEFAULT ''")
+        } catch (_: Exception) {
+            // Cột đã tồn tại
+        }
+
+        // Đảm bảo các cột mới luôn tồn tại trong alerts
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN memberId TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN memberName TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED'") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN alertLevel TEXT NOT NULL DEFAULT 'WARNING'") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN address TEXT") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN isResolved INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
+
+        // Dọn dẹp sạch sẽ toàn bộ các bản ghi dữ liệu mẫu giả lập cũ
+        try {
+            db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%'")
+            db.execSQL("UPDATE alerts SET message = 'Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.', address = NULL WHERE message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'")
+            db.execSQL("UPDATE alerts SET alertLevel = 'CRITICAL', level = 'CRITICAL' WHERE alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'")
+        } catch (_: Exception) {}
+        try {
+            db.execSQL("DELETE FROM users WHERE fullName LIKE '%Nguyễn Văn Nam%' OR id = 'member_bac_nam' OR id = 'user_demo_01' OR id = 'user_01' OR fullName = 'Bác Trần Thị Lan' OR fullName = 'Con Nguyễn Hoàng'")
+        } catch (_: Exception) {}
 
         db.execSQL(
             """
@@ -223,16 +256,86 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
             )
             """.trimIndent()
         )
+
+        // Đảm bảo cột purpose luôn tồn tại trong medicines
+        try {
+            db.execSQL("ALTER TABLE medicines ADD COLUMN purpose TEXT NOT NULL DEFAULT ''")
+        } catch (_: Exception) {
+            // Cột đã tồn tại
+        }
+
+        // Đảm bảo các cột mới luôn tồn tại trong alerts
+        val alertColumns = listOf(
+            "memberId TEXT NOT NULL DEFAULT ''",
+            "memberName TEXT NOT NULL DEFAULT ''",
+            "targetUserId TEXT NOT NULL DEFAULT ''",
+            "targetUserName TEXT NOT NULL DEFAULT ''",
+            "alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED'",
+            "alertLevel TEXT NOT NULL DEFAULT 'WARNING'",
+            "type TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED'",
+            "level TEXT NOT NULL DEFAULT 'WARNING'",
+            "title TEXT NOT NULL DEFAULT ''",
+            "message TEXT NOT NULL DEFAULT ''",
+            "address TEXT",
+            "latitude REAL",
+            "longitude REAL",
+            "timestamp INTEGER NOT NULL DEFAULT 0",
+            "isRead INTEGER NOT NULL DEFAULT 0",
+            "isResolved INTEGER NOT NULL DEFAULT 0",
+            "familyId TEXT NOT NULL DEFAULT ''"
+        )
+        for (col in alertColumns) {
+            try { db.execSQL("ALTER TABLE alerts ADD COLUMN $col") } catch (_: Exception) {}
+        }
+
+        // Dọn dẹp sạch sẽ toàn bộ các bản ghi dữ liệu mẫu giả lập cũ
+        try {
+            db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%'")
+            db.execSQL("UPDATE alerts SET message = 'Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.', address = NULL WHERE message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'")
+            db.execSQL("UPDATE alerts SET alertLevel = 'CRITICAL', level = 'CRITICAL' WHERE alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'")
+        } catch (_: Exception) {}
+        try {
+            db.execSQL("DELETE FROM users WHERE fullName LIKE '%Nguyễn Văn Nam%' OR id = 'member_bac_nam' OR id = 'user_demo_01' OR id = 'user_01' OR fullName = 'Bác Trần Thị Lan' OR fullName = 'Con Nguyễn Hoàng'")
+        } catch (_: Exception) {}
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS health_metrics")
-        db.execSQL("DROP TABLE IF EXISTS medicines")
-        db.execSQL("DROP TABLE IF EXISTS alerts")
-        db.execSQL("DROP TABLE IF EXISTS users")
-        db.execSQL("DROP TABLE IF EXISTS appointments")
-        db.execSQL("DROP TABLE IF EXISTS medication_logs")
-        onCreate(db)
+        if (oldVersion < 4) {
+            // Nâng cấp an toàn bảng alerts: Xóa sạch bảng cũ và tạo bảng alerts chuẩn auto-increment
+            db.execSQL("DROP TABLE IF EXISTS alerts")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    memberId TEXT NOT NULL DEFAULT '',
+                    memberName TEXT NOT NULL DEFAULT '',
+                    targetUserId TEXT NOT NULL DEFAULT '',
+                    targetUserName TEXT NOT NULL DEFAULT '',
+                    alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                    alertLevel TEXT NOT NULL DEFAULT 'WARNING',
+                    type TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                    level TEXT NOT NULL DEFAULT 'WARNING',
+                    title TEXT NOT NULL DEFAULT '',
+                    message TEXT NOT NULL DEFAULT '',
+                    address TEXT,
+                    latitude REAL,
+                    longitude REAL,
+                    timestamp INTEGER NOT NULL DEFAULT 0,
+                    isRead INTEGER NOT NULL DEFAULT 0,
+                    isResolved INTEGER NOT NULL DEFAULT 0,
+                    familyId TEXT NOT NULL DEFAULT ''
+                )
+                """.trimIndent()
+            )
+        } else {
+            db.execSQL("DROP TABLE IF EXISTS health_metrics")
+            db.execSQL("DROP TABLE IF EXISTS medicines")
+            db.execSQL("DROP TABLE IF EXISTS alerts")
+            db.execSQL("DROP TABLE IF EXISTS users")
+            db.execSQL("DROP TABLE IF EXISTS appointments")
+            db.execSQL("DROP TABLE IF EXISTS medication_logs")
+            onCreate(db)
+        }
     }
 }
 
@@ -426,12 +529,15 @@ class MedicineDaoImpl(private val dbHelper: DatabaseHelper) : MedicineDao {
                     val sCol = c.getColumnIndexOrThrow("startDate")
                     val eCol = c.getColumnIndexOrThrow("endDate")
                     val ocrCol = c.getColumnIndexOrThrow("scannedViaOcr")
+                    val purCol = c.getColumnIndex("purpose")
 
                     while (c.moveToNext()) {
                         val timesType = object : TypeToken<List<String>>() {}.type
                         val times: List<String> = runCatching {
                             gson.fromJson<List<String>>(c.getString(remCol), timesType)
                         }.getOrDefault(emptyList())
+
+                        val purpose = if (purCol != -1 && !c.isNull(purCol)) c.getString(purCol) else ""
 
                         list.add(
                             MedicineEntity(
@@ -443,7 +549,8 @@ class MedicineDaoImpl(private val dbHelper: DatabaseHelper) : MedicineDao {
                                 reminderTimes = times,
                                 startDate = c.getLong(sCol),
                                 endDate = if (!c.isNull(eCol)) c.getLong(eCol) else null,
-                                scannedViaOcr = c.getInt(ocrCol) == 1
+                                scannedViaOcr = c.getInt(ocrCol) == 1,
+                                purpose = purpose
                             )
                         )
                     }
@@ -465,6 +572,7 @@ class MedicineDaoImpl(private val dbHelper: DatabaseHelper) : MedicineDao {
             put("startDate", medicine.startDate)
             medicine.endDate?.let { put("endDate", it) }
             put("scannedViaOcr", if (medicine.scannedViaOcr) 1 else 0)
+            put("purpose", medicine.purpose)
         }
         db.insertWithOnConflict("medicines", null, values, SQLiteDatabase.CONFLICT_REPLACE)
         _signal.value = System.currentTimeMillis()
@@ -498,138 +606,414 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         }
     }
 
+    override fun getAllAlerts(): Flow<List<AlertEntity>> {
+        return _signal.map {
+            withContext(Dispatchers.IO) {
+                try {
+                    val db = dbHelper.readableDatabase
+                    val cursor = db.query("alerts", null, null, null, null, null, "timestamp DESC")
+                    val list = mutableListOf<AlertEntity>()
+                    cursor.use { c ->
+                        while (c.moveToNext()) {
+                            list.add(cursorToAlert(c))
+                        }
+                    }
+                    list
+                } catch (e: Exception) {
+                    Log.e("AppDatabase", "Lỗi truy vấn getAllAlerts", e)
+                    emptyList()
+                }
+            }
+        }
+    }
+
     override suspend fun getRecentAlertsByType(
         userId: String,
         type: String,
         sinceTimestamp: Long
     ): List<AlertEntity> = withContext(Dispatchers.IO) {
-        val db = dbHelper.readableDatabase
-        val cursor = db.query(
-            "alerts",
-            null,
-            "targetUserId = ? AND type = ? AND timestamp >= ?",
-            arrayOf(userId, type, sinceTimestamp.toString()),
-            null,
-            null,
-            "timestamp DESC"
-        )
-        val list = mutableListOf<AlertEntity>()
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                list.add(cursorToAlert(c))
+        try {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query(
+                "alerts",
+                null,
+                "(memberId = ? OR targetUserId = ?) AND (alertType = ? OR type = ?) AND timestamp >= ?",
+                arrayOf(userId, userId, type, type, sinceTimestamp.toString()),
+                null,
+                null,
+                "timestamp DESC"
+            )
+            val list = mutableListOf<AlertEntity>()
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    list.add(cursorToAlert(c))
+                }
             }
+            list
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi truy vấn getRecentAlertsByType", e)
+            emptyList()
         }
-        list
     }
 
-    override suspend fun getAlertById(alertId: String): AlertEntity? = withContext(Dispatchers.IO) {
-        val db = dbHelper.readableDatabase
-        val cursor = db.query("alerts", null, "id = ?", arrayOf(alertId), null, null, null, "1")
-        cursor.use { c ->
-            if (c.moveToNext()) cursorToAlert(c) else null
+    override suspend fun getLatestAlertForMember(
+        memberId: String,
+        alertType: com.familycare.app.domain.model.AlertType,
+        alertTypeStr: String
+    ): AlertEntity? = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query(
+                "alerts",
+                null,
+                "(memberId = ? OR targetUserId = ?) AND (alertType = ? OR type = ?)",
+                arrayOf(memberId, memberId, alertType.name, alertType.name),
+                null,
+                null,
+                "timestamp DESC",
+                "1"
+            )
+            cursor.use { c ->
+                if (c.moveToNext()) cursorToAlert(c) else null
+            }
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi truy vấn getLatestAlertForMember", e)
+            null
+        }
+    }
+
+    override suspend fun getAlertById(alertId: Long): AlertEntity? = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query("alerts", null, "id = ?", arrayOf(alertId.toString()), null, null, null, "1")
+            cursor.use { c ->
+                if (c.moveToNext()) cursorToAlert(c) else null
+            }
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi truy vấn getAlertById", e)
+            null
         }
     }
 
     fun getUnreadAlerts(familyId: String): Flow<List<AlertEntity>> {
         return _signal.map {
             withContext(Dispatchers.IO) {
-                val db = dbHelper.readableDatabase
-                val cursor = db.query("alerts", null, "familyId = ? AND isRead = 0", arrayOf(familyId), null, null, "timestamp DESC")
-                val list = mutableListOf<AlertEntity>()
-                cursor.use { c ->
-                    while (c.moveToNext()) {
-                        list.add(cursorToAlert(c))
+                try {
+                    val db = dbHelper.readableDatabase
+                    val cursor = db.query("alerts", null, "familyId = ? AND isRead = 0", arrayOf(familyId), null, null, "timestamp DESC")
+                    val list = mutableListOf<AlertEntity>()
+                    cursor.use { c ->
+                        while (c.moveToNext()) {
+                            list.add(cursorToAlert(c))
+                        }
                     }
+                    list
+                } catch (e: Exception) {
+                    Log.e("AppDatabase", "Lỗi truy vấn getUnreadAlerts", e)
+                    emptyList()
                 }
-                list
             }
         }
     }
 
-    override suspend fun insertAlert(alert: AlertEntity) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put("id", alert.id)
-            put("familyId", alert.familyId)
-            put("targetUserId", alert.targetUserId)
-            put("targetUserName", alert.targetUserName)
-            put("type", alert.type)
-            put("level", alert.level)
-            put("title", alert.title)
-            put("message", alert.message)
-            put("timestamp", alert.timestamp)
-            put("isRead", if (alert.isRead) 1 else 0)
-            alert.latitude?.let { put("latitude", it) }
-            alert.longitude?.let { put("longitude", it) }
+    override suspend fun insertAlert(alert: AlertEntity): Long = withContext(Dispatchers.IO) {
+        val idVal = if (alert.id > 0) alert.id else System.currentTimeMillis()
+        try {
+            val db = dbHelper.writableDatabase
+            val values = ContentValues().apply {
+                put("id", idVal)
+                put("memberId", alert.memberId)
+                put("memberName", alert.memberName)
+                put("targetUserId", alert.memberId)
+                put("targetUserName", alert.memberName)
+                put("alertType", alert.alertType.name)
+                put("type", alert.alertType.name)
+                put("alertLevel", alert.alertLevel.name)
+                put("level", alert.alertLevel.name)
+                put("title", alert.title)
+                put("message", alert.message)
+                put("address", alert.address)
+                put("timestamp", if (alert.timestamp > 0) alert.timestamp else System.currentTimeMillis())
+                put("isRead", if (alert.isRead) 1 else 0)
+                put("isResolved", if (alert.isResolved) 1 else 0)
+                put("familyId", alert.familyId)
+                alert.latitude?.let { put("latitude", it) }
+                alert.longitude?.let { put("longitude", it) }
+            }
+            val insertedId = db.insertWithOnConflict("alerts", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            Log.d("AppDatabase", "insertAlert thành công: insertedId = $insertedId, idVal = $idVal, title = ${alert.title}")
+            _signal.value = System.currentTimeMillis()
+            if (insertedId > 0) insertedId else idVal
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi insertAlert lần 1: ${e.message}", e)
+            try {
+                // Tự phục hồi: Tạo lại bảng alerts chuẩn chỉnh và chèn lại
+                val db = dbHelper.writableDatabase
+                db.execSQL("DROP TABLE IF EXISTS alerts")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS alerts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        memberId TEXT NOT NULL DEFAULT '',
+                        memberName TEXT NOT NULL DEFAULT '',
+                        targetUserId TEXT NOT NULL DEFAULT '',
+                        targetUserName TEXT NOT NULL DEFAULT '',
+                        alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                        alertLevel TEXT NOT NULL DEFAULT 'WARNING',
+                        type TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                        level TEXT NOT NULL DEFAULT 'WARNING',
+                        title TEXT NOT NULL DEFAULT '',
+                        message TEXT NOT NULL DEFAULT '',
+                        address TEXT,
+                        latitude REAL,
+                        longitude REAL,
+                        timestamp INTEGER NOT NULL DEFAULT 0,
+                        isRead INTEGER NOT NULL DEFAULT 0,
+                        isResolved INTEGER NOT NULL DEFAULT 0,
+                        familyId TEXT NOT NULL DEFAULT ''
+                    )
+                    """.trimIndent()
+                )
+                val values = ContentValues().apply {
+                    put("id", idVal)
+                    put("memberId", alert.memberId)
+                    put("memberName", alert.memberName)
+                    put("targetUserId", alert.memberId)
+                    put("targetUserName", alert.memberName)
+                    put("alertType", alert.alertType.name)
+                    put("type", alert.alertType.name)
+                    put("alertLevel", alert.alertLevel.name)
+                    put("level", alert.alertLevel.name)
+                    put("title", alert.title)
+                    put("message", alert.message)
+                    put("address", alert.address)
+                    put("timestamp", if (alert.timestamp > 0) alert.timestamp else System.currentTimeMillis())
+                    put("isRead", if (alert.isRead) 1 else 0)
+                    put("isResolved", if (alert.isResolved) 1 else 0)
+                    put("familyId", alert.familyId)
+                    alert.latitude?.let { put("latitude", it) }
+                    alert.longitude?.let { put("longitude", it) }
+                }
+                val retryId = db.insertWithOnConflict("alerts", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+                Log.d("AppDatabase", "insertAlert tự phục hồi thành công: retryId = $retryId, title = ${alert.title}")
+                _signal.value = System.currentTimeMillis()
+                if (retryId > 0) retryId else idVal
+            } catch (e2: Exception) {
+                Log.e("AppDatabase", "Lỗi insertAlert lần 2 (fallback thất bại): ${e2.message}", e2)
+                -1L
+            }
         }
-        db.insertWithOnConflict("alerts", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-        _signal.value = System.currentTimeMillis()
     }
 
-    override suspend fun markAsRead(alertId: String) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put("isRead", 1)
+    override suspend fun updateReadStatus(alertId: Long, isRead: Boolean): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            val values = ContentValues().apply {
+                put("isRead", if (isRead) 1 else 0)
+            }
+            db.update("alerts", values, "id = ?", arrayOf(alertId.toString()))
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi updateReadStatus", e)
         }
-        db.update("alerts", values, "id = ?", arrayOf(alertId))
-        _signal.value = System.currentTimeMillis()
+        Unit
+    }
+
+    override suspend fun updateResolvedStatus(alertId: Long, isResolved: Boolean): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            val values = ContentValues().apply {
+                put("isResolved", if (isResolved) 1 else 0)
+            }
+            db.update("alerts", values, "id = ?", arrayOf(alertId.toString()))
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi updateResolvedStatus", e)
+        }
+        Unit
+    }
+
+    override suspend fun deleteAlert(alertId: Long): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            db.delete("alerts", "id = ?", arrayOf(alertId.toString()))
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi deleteAlert", e)
+        }
+        Unit
+    }
+
+    override suspend fun deleteDummyAlerts(): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            db.delete(
+                "alerts",
+                "memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%'",
+                null
+            )
+            val cv = ContentValues().apply {
+                put("message", "Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.")
+                putNull("address")
+            }
+            db.update("alerts", cv, "message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'", null)
+            val cvCritical = ContentValues().apply {
+                put("alertLevel", "CRITICAL")
+                put("level", "CRITICAL")
+            }
+            db.update("alerts", cvCritical, "alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'", null)
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi deleteDummyAlerts", e)
+        }
+        Unit
+    }
+
+    override suspend fun clearAllAlerts(): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            db.delete("alerts", null, null)
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi clearAllAlerts", e)
+        }
+        Unit
+    }
+
+    override suspend fun cleanGpsReminderFromAlerts(): Unit = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.writableDatabase
+            val cv = ContentValues().apply {
+                put("message", "Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.")
+                putNull("address")
+            }
+            db.update("alerts", cv, "message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'", null)
+            val cvCritical = ContentValues().apply {
+                put("alertLevel", "CRITICAL")
+                put("level", "CRITICAL")
+            }
+            db.update("alerts", cvCritical, "alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'", null)
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi cleanGpsReminderFromAlerts", e)
+        }
+        Unit
     }
 
     suspend fun markAllAsRead(familyId: String) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put("isRead", 1)
+        try {
+            val db = dbHelper.writableDatabase
+            val values = ContentValues().apply {
+                put("isRead", 1)
+            }
+            db.update("alerts", values, "familyId = ?", arrayOf(familyId))
+            _signal.value = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi markAllAsRead", e)
         }
-        db.update("alerts", values, "familyId = ?", arrayOf(familyId))
-        _signal.value = System.currentTimeMillis()
-    }
-
-    override suspend fun deleteAlert(alertId: String) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        db.delete("alerts", "id = ?", arrayOf(alertId))
-        _signal.value = System.currentTimeMillis()
     }
 
     suspend fun getRecentAlertsDirect(familyId: String, limit: Int): List<AlertEntity> = withContext(Dispatchers.IO) {
-        val db = dbHelper.readableDatabase
-        val cursor = db.query("alerts", null, "familyId = ?", arrayOf(familyId), null, null, "timestamp DESC", limit.toString())
-        val list = mutableListOf<AlertEntity>()
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                list.add(cursorToAlert(c))
+        try {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query("alerts", null, "familyId = ?", arrayOf(familyId), null, null, "timestamp DESC", limit.toString())
+            val list = mutableListOf<AlertEntity>()
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    list.add(cursorToAlert(c))
+                }
             }
+            list
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi getRecentAlertsDirect", e)
+            emptyList()
         }
-        list
     }
 
     private fun cursorToAlert(c: Cursor): AlertEntity {
-        val idCol = c.getColumnIndexOrThrow("id")
-        val famCol = c.getColumnIndexOrThrow("familyId")
-        val userCol = c.getColumnIndexOrThrow("targetUserId")
-        val nameCol = c.getColumnIndexOrThrow("targetUserName")
-        val typeCol = c.getColumnIndexOrThrow("type")
-        val lvlCol = c.getColumnIndexOrThrow("level")
-        val titleCol = c.getColumnIndexOrThrow("title")
-        val msgCol = c.getColumnIndexOrThrow("message")
-        val timeCol = c.getColumnIndexOrThrow("timestamp")
-        val readCol = c.getColumnIndexOrThrow("isRead")
-        val latCol = c.getColumnIndexOrThrow("latitude")
-        val lngCol = c.getColumnIndexOrThrow("longitude")
+        return try {
+            val idCol = c.getColumnIndex("id")
+            val famCol = c.getColumnIndex("familyId")
+            val userCol = c.getColumnIndex("memberId").takeIf { it != -1 } ?: c.getColumnIndex("targetUserId")
+            val nameCol = c.getColumnIndex("memberName").takeIf { it != -1 } ?: c.getColumnIndex("targetUserName")
+            val typeCol = c.getColumnIndex("alertType").takeIf { it != -1 } ?: c.getColumnIndex("type")
+            val lvlCol = c.getColumnIndex("alertLevel").takeIf { it != -1 } ?: c.getColumnIndex("level")
+            val titleCol = c.getColumnIndex("title")
+            val msgCol = c.getColumnIndex("message")
+            val addressCol = c.getColumnIndex("address")
+            val timeCol = c.getColumnIndex("timestamp")
+            val readCol = c.getColumnIndex("isRead")
+            val resolvedCol = c.getColumnIndex("isResolved")
+            val latCol = c.getColumnIndex("latitude")
+            val lngCol = c.getColumnIndex("longitude")
 
-        return AlertEntity(
-            id = c.getString(idCol),
-            familyId = c.getString(famCol),
-            targetUserId = c.getString(userCol),
-            targetUserName = c.getString(nameCol),
-            type = c.getString(typeCol),
-            level = c.getString(lvlCol),
-            title = c.getString(titleCol),
-            message = c.getString(msgCol),
-            timestamp = c.getLong(timeCol),
-            isRead = c.getInt(readCol) == 1,
-            latitude = if (!c.isNull(latCol)) c.getDouble(latCol) else null,
-            longitude = if (!c.isNull(lngCol)) c.getDouble(lngCol) else null
-        )
+            val rawIdStr = if (idCol != -1 && !c.isNull(idCol)) {
+                try { c.getString(idCol) } catch (_: Exception) { "" }
+            } else ""
+            val idVal = rawIdStr.toLongOrNull() ?: kotlin.math.abs(rawIdStr.hashCode().toLong()).coerceAtLeast(1L)
+
+            val memberIdVal = if (userCol != -1 && !c.isNull(userCol)) c.getString(userCol) else ""
+            val memberNameVal = if (nameCol != -1 && !c.isNull(nameCol)) c.getString(nameCol) else ""
+            val typeStr = if (typeCol != -1 && !c.isNull(typeCol)) c.getString(typeCol) else ""
+            val lvlStr = if (lvlCol != -1 && !c.isNull(lvlCol)) c.getString(lvlCol) else ""
+            val titleVal = if (titleCol != -1 && !c.isNull(titleCol)) c.getString(titleCol) else ""
+            val msgVal = if (msgCol != -1 && !c.isNull(msgCol)) c.getString(msgCol) else ""
+            val addressVal = if (addressCol != -1 && !c.isNull(addressCol)) c.getString(addressCol) else null
+            val timeVal = if (timeCol != -1 && !c.isNull(timeCol)) c.getLong(timeCol) else System.currentTimeMillis()
+            val isReadVal = if (readCol != -1 && !c.isNull(readCol)) c.getInt(readCol) == 1 else false
+            val isResolvedVal = if (resolvedCol != -1 && !c.isNull(resolvedCol)) c.getInt(resolvedCol) == 1 else false
+            val latVal = if (latCol != -1 && !c.isNull(latCol)) c.getDouble(latCol) else null
+            val lngVal = if (lngCol != -1 && !c.isNull(lngCol)) c.getDouble(lngCol) else null
+            val famVal = if (famCol != -1 && !c.isNull(famCol)) c.getString(famCol) else ""
+
+            val alertTypeEnum = runCatching { com.familycare.app.domain.model.AlertType.valueOf(typeStr) }
+                .getOrDefault(
+                    if (typeStr.contains("SOS", ignoreCase = true) || titleVal.contains("SOS", ignoreCase = true) || titleVal.contains("CẤP CỨU", ignoreCase = true)) {
+                        com.familycare.app.domain.model.AlertType.SOS_EMERGENCY
+                    } else {
+                        com.familycare.app.domain.model.AlertType.THRESHOLD_EXCEEDED
+                    }
+                )
+
+            // Khóa cứng: Bất kỳ cảnh báo SOS hoặc có còi cứu hộ khẩn cấp đều 100% là CRITICAL (Khẩn cấp)
+            val alertLevelEnum = when {
+                alertTypeEnum == com.familycare.app.domain.model.AlertType.SOS_EMERGENCY -> com.familycare.app.domain.model.AlertLevel.CRITICAL
+                typeStr.contains("SOS", ignoreCase = true) || titleVal.contains("SOS", ignoreCase = true) || titleVal.contains("CẤP CỨU", ignoreCase = true) -> com.familycare.app.domain.model.AlertLevel.CRITICAL
+                titleVal.contains("CẢNH BÁO ĐỎ", ignoreCase = true) -> com.familycare.app.domain.model.AlertLevel.CRITICAL
+                lvlStr.equals("CRITICAL", ignoreCase = true) -> com.familycare.app.domain.model.AlertLevel.CRITICAL
+                lvlStr.equals("INFO", ignoreCase = true) -> com.familycare.app.domain.model.AlertLevel.INFO
+                else -> com.familycare.app.domain.model.AlertLevel.WARNING
+            }
+
+            AlertEntity(
+                id = idVal,
+                memberId = memberIdVal,
+                memberName = memberNameVal,
+                alertType = alertTypeEnum,
+                alertLevel = alertLevelEnum,
+                title = titleVal,
+                message = msgVal,
+                address = addressVal,
+                latitude = latVal,
+                longitude = lngVal,
+                timestamp = timeVal,
+                isRead = isReadVal,
+                isResolved = isResolvedVal,
+                familyId = famVal
+            )
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Lỗi phân giải bản ghi AlertEntity từ Cursor", e)
+            AlertEntity(
+                id = System.currentTimeMillis(),
+                memberId = "unknown",
+                memberName = "Người thân",
+                alertType = com.familycare.app.domain.model.AlertType.THRESHOLD_EXCEEDED,
+                alertLevel = com.familycare.app.domain.model.AlertLevel.WARNING,
+                title = "Thông báo sức khỏe",
+                message = "Cập nhật dữ liệu gia đình",
+                timestamp = System.currentTimeMillis()
+            )
+        }
     }
 }
 
@@ -650,6 +1034,18 @@ class UserDaoImpl(private val dbHelper: DatabaseHelper) : UserDao {
         cursor.use { c ->
             if (c.moveToNext()) cursorToUserEntity(c) else null
         }
+    }
+
+    override suspend fun getAllUsers(): List<UserEntity> = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.query("users", null, null, null, null, null, "createdAt ASC")
+        val list = mutableListOf<UserEntity>()
+        cursor.use { c ->
+            while (c.moveToNext()) {
+                list.add(cursorToUserEntity(c))
+            }
+        }
+        list
     }
 
     override fun observeCurrentUser(): Flow<UserEntity?> {

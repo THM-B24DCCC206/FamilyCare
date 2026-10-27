@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
 /**
- * Triển khai HealthAiRepository sử dụng Google AI Client SDK với mô hình Gemini 1.5 Flash.
+ * Triển khai HealthAiRepository sử dụng Google AI Client SDK với mô hình Gemini 2.5 Flash.
  * Hỗ trợ Context Injection động vào System Instructions trước mỗi lượt hội thoại.
  */
 class HealthAiRepositoryImpl(
@@ -31,9 +31,9 @@ class HealthAiRepositoryImpl(
         context: UserHealthContext,
         history: List<ChatMessage>
     ): Resource<String> = withContext(Dispatchers.IO) {
-        val apiKey = apiKeyProvider()
+        val apiKey = apiKeyProvider().trim()
         if (apiKey.isBlank() || apiKey == "YOUR_GEMINI_API_KEY") {
-            return@withContext Resource.Error("Chưa cấu hình API Key của Google Gemini. Vui lòng kiểm tra lại thiết lập.")
+            return@withContext Resource.Error("Chưa cấu hình API Key của Google Gemini. Bác hãy bấm vào biểu tượng chìa khóa 🔑 ở góc trên hoặc nút bên dưới để nhập API Key nhé.")
         }
 
         try {
@@ -59,9 +59,9 @@ class HealthAiRepositoryImpl(
         context: UserHealthContext,
         history: List<ChatMessage>
     ): Flow<Resource<String>> = flow {
-        val apiKey = apiKeyProvider()
+        val apiKey = apiKeyProvider().trim()
         if (apiKey.isBlank() || apiKey == "YOUR_GEMINI_API_KEY") {
-            emit(Resource.Error("Chưa cấu hình API Key của Google Gemini."))
+            emit(Resource.Error("Chưa cấu hình API Key của Google Gemini. Bác hãy bấm vào biểu tượng chìa khóa 🔑 để nhập API Key nhé."))
             return@flow
         }
 
@@ -115,7 +115,7 @@ class HealthAiRepositoryImpl(
         }
 
         return GenerativeModel(
-            modelName = "gemini-1.5-flash",
+            modelName = MODEL_NAME,
             apiKey = apiKey,
             generationConfig = config,
             safetySettings = safetySettings,
@@ -154,12 +154,20 @@ class HealthAiRepositoryImpl(
                 "Không có kết nối mạng Internet. Vui lòng bật Wi-Fi hoặc 4G để trò chuyện với Bác sĩ ảo."
             msg.contains("SocketTimeout", ignoreCase = true) ->
                 "Kết nối tới máy chủ Gemini bị gián đoạn do mạng chậm. Vui lòng bấm thử lại."
+            msg.contains("not found", ignoreCase = true) || msg.contains("MissingFieldException", ignoreCase = true) ->
+                "Mô hình AI trên máy chủ Google đang cập nhật hoặc phản hồi không đúng định dạng. Vui lòng thử lại sau ít giây."
             else -> "Đã xảy ra lỗi khi trao đổi với AI: ${e.localizedMessage ?: "Vui lòng thử lại"}"
         }
     }
 
     companion object {
-        // Khóa Gemini API cấu hình qua biến môi trường hoặc truyền trực tiếp vào constructor
-        val DEFAULT_API_KEY: String = System.getenv("GEMINI_API_KEY") ?: ""
+        // Tên mô hình Gemini ổn định và mới nhất hỗ trợ generateContent
+        const val MODEL_NAME = "gemini-2.5-flash"
+
+        // Khóa Gemini API cấu hình qua BuildConfig, biến môi trường hoặc SharedPreferences
+        val DEFAULT_API_KEY: String
+            get() = runCatching {
+                com.familycare.app.BuildConfig.GEMINI_API_KEY
+            }.getOrDefault(System.getenv("GEMINI_API_KEY") ?: "")
     }
 }
