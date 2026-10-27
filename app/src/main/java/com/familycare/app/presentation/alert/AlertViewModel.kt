@@ -32,13 +32,20 @@ class AlertViewModel(
         alertDao.getAllAlerts(),
         _selectedFilter
     ) { allAlerts, filter ->
-        // Loại bỏ triệt để các cảnh báo thuộc về các thành viên giả lập/mẫu cũ
+        // Loại bỏ triệt để các cảnh báo thuộc về các thành viên giả lập/mẫu cũ, nhưng GIỮ LẠI 100% cảnh báo SOS thật
         val validAlerts = allAlerts.filter { alert ->
-            !alert.memberName.contains("Nguyễn Văn Nam") &&
-            !alert.memberName.contains("Nguyễn Hoàng") &&
-            !alert.memberName.contains("Trần Thị Lan") &&
-            !alert.message.contains("Nguyễn Hoàng") &&
-            !alert.message.contains("Trần Thị Lan")
+            val isSos = alert.alertType == com.familycare.app.domain.model.AlertType.SOS_EMERGENCY ||
+                    alert.title.contains("SOS", ignoreCase = true) ||
+                    alert.title.contains("CẤP CỨU", ignoreCase = true)
+            if (isSos) {
+                true // Giữ lại 100% cảnh báo SOS do người dùng bấm
+            } else {
+                !alert.memberName.contains("Nguyễn Văn Nam") &&
+                !alert.memberName.contains("Nguyễn Hoàng") &&
+                !alert.memberName.contains("Trần Thị Lan") &&
+                !alert.message.contains("Nguyễn Hoàng") &&
+                !alert.message.contains("Trần Thị Lan")
+            }
         }.map { alert ->
             var finalAlert = alert
             // Đảm bảo: Mọi cảnh báo SOS / Báo động cấp cứu đều 100% là AlertLevel.CRITICAL (Khẩn cấp)

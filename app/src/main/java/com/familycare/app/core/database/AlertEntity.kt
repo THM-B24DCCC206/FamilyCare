@@ -53,8 +53,9 @@ data class AlertEntity(
 
     companion object {
         fun fromDomain(model: Alert): AlertEntity {
+            val idParsed = model.id.toLongOrNull() ?: System.currentTimeMillis()
             return AlertEntity(
-                id = model.id.toLongOrNull() ?: 0L,
+                id = idParsed,
                 memberId = model.targetUserId.ifBlank { model.memberId },
                 memberName = model.targetUserName.ifBlank { model.memberName },
                 alertType = model.type,
@@ -64,7 +65,7 @@ data class AlertEntity(
                 address = model.address,
                 latitude = model.latitude,
                 longitude = model.longitude,
-                timestamp = model.timestamp,
+                timestamp = if (model.timestamp > 0) model.timestamp else System.currentTimeMillis(),
                 isRead = model.isRead,
                 isResolved = model.isResolved,
                 familyId = model.familyId

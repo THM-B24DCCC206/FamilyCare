@@ -51,7 +51,7 @@ class AppDatabase private constructor(context: Context) {
     }
 }
 
-class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_db.db", null, 3) {
+class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_db.db", null, 4) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
@@ -265,12 +265,28 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         }
 
         // Đảm bảo các cột mới luôn tồn tại trong alerts
-        try { db.execSQL("ALTER TABLE alerts ADD COLUMN memberId TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
-        try { db.execSQL("ALTER TABLE alerts ADD COLUMN memberName TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
-        try { db.execSQL("ALTER TABLE alerts ADD COLUMN alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED'") } catch (_: Exception) {}
-        try { db.execSQL("ALTER TABLE alerts ADD COLUMN alertLevel TEXT NOT NULL DEFAULT 'WARNING'") } catch (_: Exception) {}
-        try { db.execSQL("ALTER TABLE alerts ADD COLUMN address TEXT") } catch (_: Exception) {}
-        try { db.execSQL("ALTER TABLE alerts ADD COLUMN isResolved INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
+        val alertColumns = listOf(
+            "memberId TEXT NOT NULL DEFAULT ''",
+            "memberName TEXT NOT NULL DEFAULT ''",
+            "targetUserId TEXT NOT NULL DEFAULT ''",
+            "targetUserName TEXT NOT NULL DEFAULT ''",
+            "alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED'",
+            "alertLevel TEXT NOT NULL DEFAULT 'WARNING'",
+            "type TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED'",
+            "level TEXT NOT NULL DEFAULT 'WARNING'",
+            "title TEXT NOT NULL DEFAULT ''",
+            "message TEXT NOT NULL DEFAULT ''",
+            "address TEXT",
+            "latitude REAL",
+            "longitude REAL",
+            "timestamp INTEGER NOT NULL DEFAULT 0",
+            "isRead INTEGER NOT NULL DEFAULT 0",
+            "isResolved INTEGER NOT NULL DEFAULT 0",
+            "familyId TEXT NOT NULL DEFAULT ''"
+        )
+        for (col in alertColumns) {
+            try { db.execSQL("ALTER TABLE alerts ADD COLUMN $col") } catch (_: Exception) {}
+        }
 
         // Dọn dẹp sạch sẽ toàn bộ các bản ghi dữ liệu mẫu giả lập cũ
         try {
@@ -284,13 +300,42 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS health_metrics")
-        db.execSQL("DROP TABLE IF EXISTS medicines")
-        db.execSQL("DROP TABLE IF EXISTS alerts")
-        db.execSQL("DROP TABLE IF EXISTS users")
-        db.execSQL("DROP TABLE IF EXISTS appointments")
-        db.execSQL("DROP TABLE IF EXISTS medication_logs")
-        onCreate(db)
+        if (oldVersion < 4) {
+            // Nâng cấp an toàn bảng alerts: Xóa sạch bảng cũ và tạo bảng alerts chuẩn auto-increment
+            db.execSQL("DROP TABLE IF EXISTS alerts")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    memberId TEXT NOT NULL DEFAULT '',
+                    memberName TEXT NOT NULL DEFAULT '',
+                    targetUserId TEXT NOT NULL DEFAULT '',
+                    targetUserName TEXT NOT NULL DEFAULT '',
+                    alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                    alertLevel TEXT NOT NULL DEFAULT 'WARNING',
+                    type TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                    level TEXT NOT NULL DEFAULT 'WARNING',
+                    title TEXT NOT NULL DEFAULT '',
+                    message TEXT NOT NULL DEFAULT '',
+                    address TEXT,
+                    latitude REAL,
+                    longitude REAL,
+                    timestamp INTEGER NOT NULL DEFAULT 0,
+                    isRead INTEGER NOT NULL DEFAULT 0,
+                    isResolved INTEGER NOT NULL DEFAULT 0,
+                    familyId TEXT NOT NULL DEFAULT ''
+                )
+                """.trimIndent()
+            )
+        } else {
+            db.execSQL("DROP TABLE IF EXISTS health_metrics")
+            db.execSQL("DROP TABLE IF EXISTS medicines")
+            db.execSQL("DROP TABLE IF EXISTS alerts")
+            db.execSQL("DROP TABLE IF EXISTS users")
+            db.execSQL("DROP TABLE IF EXISTS appointments")
+            db.execSQL("DROP TABLE IF EXISTS medication_logs")
+            onCreate(db)
+        }
     }
 }
 
@@ -672,12 +717,11 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
     }
 
     override suspend fun insertAlert(alert: AlertEntity): Long = withContext(Dispatchers.IO) {
+        val idVal = if (alert.id > 0) alert.id else System.currentTimeMillis()
         try {
             val db = dbHelper.writableDatabase
             val values = ContentValues().apply {
-                if (alert.id > 0) {
-                    put("id", alert.id)
-                }
+                put("id", idVal)
                 put("memberId", alert.memberId)
                 put("memberName", alert.memberName)
                 put("targetUserId", alert.memberId)
@@ -689,7 +733,7 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
                 put("title", alert.title)
                 put("message", alert.message)
                 put("address", alert.address)
-                put("timestamp", alert.timestamp)
+                put("timestamp", if (alert.timestamp > 0) alert.timestamp else System.currentTimeMillis())
                 put("isRead", if (alert.isRead) 1 else 0)
                 put("isResolved", if (alert.isResolved) 1 else 0)
                 put("familyId", alert.familyId)
@@ -697,11 +741,67 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
                 alert.longitude?.let { put("longitude", it) }
             }
             val insertedId = db.insertWithOnConflict("alerts", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            Log.d("AppDatabase", "insertAlert thành công: insertedId = $insertedId, idVal = $idVal, title = ${alert.title}")
             _signal.value = System.currentTimeMillis()
-            insertedId
+            if (insertedId > 0) insertedId else idVal
         } catch (e: Exception) {
-            Log.e("AppDatabase", "Lỗi insertAlert", e)
-            -1L
+            Log.e("AppDatabase", "Lỗi insertAlert lần 1: ${e.message}", e)
+            try {
+                // Tự phục hồi: Tạo lại bảng alerts chuẩn chỉnh và chèn lại
+                val db = dbHelper.writableDatabase
+                db.execSQL("DROP TABLE IF EXISTS alerts")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS alerts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        memberId TEXT NOT NULL DEFAULT '',
+                        memberName TEXT NOT NULL DEFAULT '',
+                        targetUserId TEXT NOT NULL DEFAULT '',
+                        targetUserName TEXT NOT NULL DEFAULT '',
+                        alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                        alertLevel TEXT NOT NULL DEFAULT 'WARNING',
+                        type TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                        level TEXT NOT NULL DEFAULT 'WARNING',
+                        title TEXT NOT NULL DEFAULT '',
+                        message TEXT NOT NULL DEFAULT '',
+                        address TEXT,
+                        latitude REAL,
+                        longitude REAL,
+                        timestamp INTEGER NOT NULL DEFAULT 0,
+                        isRead INTEGER NOT NULL DEFAULT 0,
+                        isResolved INTEGER NOT NULL DEFAULT 0,
+                        familyId TEXT NOT NULL DEFAULT ''
+                    )
+                    """.trimIndent()
+                )
+                val values = ContentValues().apply {
+                    put("id", idVal)
+                    put("memberId", alert.memberId)
+                    put("memberName", alert.memberName)
+                    put("targetUserId", alert.memberId)
+                    put("targetUserName", alert.memberName)
+                    put("alertType", alert.alertType.name)
+                    put("type", alert.alertType.name)
+                    put("alertLevel", alert.alertLevel.name)
+                    put("level", alert.alertLevel.name)
+                    put("title", alert.title)
+                    put("message", alert.message)
+                    put("address", alert.address)
+                    put("timestamp", if (alert.timestamp > 0) alert.timestamp else System.currentTimeMillis())
+                    put("isRead", if (alert.isRead) 1 else 0)
+                    put("isResolved", if (alert.isResolved) 1 else 0)
+                    put("familyId", alert.familyId)
+                    alert.latitude?.let { put("latitude", it) }
+                    alert.longitude?.let { put("longitude", it) }
+                }
+                val retryId = db.insertWithOnConflict("alerts", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+                Log.d("AppDatabase", "insertAlert tự phục hồi thành công: retryId = $retryId, title = ${alert.title}")
+                _signal.value = System.currentTimeMillis()
+                if (retryId > 0) retryId else idVal
+            } catch (e2: Exception) {
+                Log.e("AppDatabase", "Lỗi insertAlert lần 2 (fallback thất bại): ${e2.message}", e2)
+                -1L
+            }
         }
     }
 
