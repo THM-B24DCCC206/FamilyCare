@@ -180,7 +180,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
 
         // Dọn dẹp sạch sẽ toàn bộ các bản ghi dữ liệu mẫu giả lập cũ
         try {
-            db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%' OR id = 1 OR id = 2 OR id = 3")
+            db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%'")
             db.execSQL("UPDATE alerts SET message = 'Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.', address = NULL WHERE message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'")
             db.execSQL("UPDATE alerts SET alertLevel = 'CRITICAL', level = 'CRITICAL' WHERE alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'")
         } catch (_: Exception) {}
@@ -274,7 +274,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
 
         // Dọn dẹp sạch sẽ toàn bộ các bản ghi dữ liệu mẫu giả lập cũ
         try {
-            db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%' OR id = 1 OR id = 2 OR id = 3")
+            db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%'")
             db.execSQL("UPDATE alerts SET message = 'Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.', address = NULL WHERE message LIKE '%Vui lòng bật Định vị%' OR message LIKE '%Chưa nhận diện được vị trí%'")
             db.execSQL("UPDATE alerts SET alertLevel = 'CRITICAL', level = 'CRITICAL' WHERE alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'")
         } catch (_: Exception) {}
@@ -749,7 +749,7 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
             val db = dbHelper.writableDatabase
             db.delete(
                 "alerts",
-                "memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%' OR id = 1 OR id = 2 OR id = 3",
+                "memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%'",
                 null
             )
             val cv = ContentValues().apply {

@@ -25,10 +25,7 @@ class AlertViewModel(
     val selectedFilter: StateFlow<AlertFilter> = _selectedFilter.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            // Xóa sạch toàn bộ thông báo cũ theo yêu cầu người dùng để bắt đầu phiên test mới tinh
-            alertDao.clearAllAlerts()
-        }
+        // Không tự ý xóa cảnh báo trong init để tránh xóa mất bản ghi SOS người dùng vừa tạo
     }
 
     val uiState: StateFlow<AlertUiState> = combine(

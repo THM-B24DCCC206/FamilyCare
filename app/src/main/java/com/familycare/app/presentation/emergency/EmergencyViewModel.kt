@@ -375,7 +375,8 @@ class EmergencyViewModel(
                     latitude = if (lat != 0.0) lat else null,
                     longitude = if (lng != 0.0) lng else null
                 )
-                alertRepository.createAlert(alert)
+                val createRes = alertRepository.createAlert(alert)
+                Log.d(TAG, "Đã lưu bản ghi SOS vào Room DB: kết quả = $createRes, title = ${alert.title}")
 
                 // 5. Cập nhật UI hoàn tất
                 _uiState.update {
