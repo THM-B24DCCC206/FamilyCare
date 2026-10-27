@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -21,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -70,13 +70,12 @@ fun AlertCenterScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // PHẦN 4.1: THANH TAB BỘ LỌC (FILTER CHIPS HEADER)
+            // THANH TAB BỘ LỌC (FILTER CHIPS HEADER)
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Chip 1: Tất cả (X)
                 item {
                     val isSelected = uiState.selectedFilter == AlertFilter.ALL
                     FilterChip(
@@ -97,7 +96,6 @@ fun AlertCenterScreen(
                     )
                 }
 
-                // Chip 2: Khẩn cấp (Y) (chữ đỏ khi được chọn)
                 item {
                     val isSelected = uiState.selectedFilter == AlertFilter.CRITICAL
                     FilterChip(
@@ -124,7 +122,6 @@ fun AlertCenterScreen(
                     )
                 }
 
-                // Chip 3: Nhắc nhở (Z) (chữ cam khi được chọn)
                 item {
                     val isSelected = uiState.selectedFilter == AlertFilter.WARNING
                     FilterChip(
@@ -152,7 +149,7 @@ fun AlertCenterScreen(
                 }
             }
 
-            // PHẦN 4.2: DANH SÁCH THẺ CẢNH BÁO
+            // DANH SÁCH THẺ CẢNH BÁO
             if (uiState.alerts.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -185,15 +182,13 @@ fun AlertCenterScreen(
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    itemsIndexed(
+                    items(
                         items = uiState.alerts,
-                        key = { index, alert ->
-                            "${alert.id}_${alert.timestamp}_$index"
-                        }
-                    ) { _, alert ->
+                        key = { alert -> "${alert.id}_${alert.timestamp}" }
+                    ) { alert ->
                         AlertItemCard(
                             alert = alert,
                             onMarkAsRead = { viewModel.onMarkAsRead(alert.id) },
@@ -208,17 +203,6 @@ fun AlertCenterScreen(
     }
 }
 
-/**
- * Tối ưu hóa Thẻ Cảnh Báo (AlertItemCard) - Giao diện sáng sủa, thanh lịch, độ tương phản cao:
- * 1. Đổi màu nền thẻ sang nền trắng tinh (Color.White), viền xám siêu mỏng E2E8F0, bo góc 16.dp, đổ bóng nhẹ elevation = 2.dp.
- * 2. Dải viền đỏ nhận diện mép trái 5.dp (Accent Indicator): Color(0xFFDC2626) cho khẩn cấp (CRITICAL).
- * 3. Typography & Contrast:
- *    - Dòng thông tin trên cùng: "Thành viên gia đình • 16:34 - 27/10/2026" màu #64748B, font 12sp.
- *    - Huy hiệu [ MỚI ]: Nền đỏ nhạt Color(0xFFFEE2E2), chữ đỏ Color(0xFFDC2626), bo góc 6.dp.
- *    - Tiêu đề: Font đậm 15sp, màu đỏ đậm Color(0xFFDC2626) cho khẩn cấp.
- *    - Nội dung mô tả: Màu xám đậm Color(0xFF334155), font 14sp.
- * 4. Nút "Đánh dấu đã xem": Nút viền xám nhẹ OutlinedButton góc phải dưới thẻ, chữ màu xám xanh Color(0xFF475569), icon check ✓ gọn gàng.
- */
 @Composable
 fun AlertItemCard(
     alert: AlertEntity,
@@ -228,20 +212,18 @@ fun AlertItemCard(
     val isCritical = alert.alertLevel == AlertLevel.CRITICAL
     val isWarning = alert.alertLevel == AlertLevel.WARNING
 
-    // Dải viền nhận diện ở cạnh trái (Accent Indicator) rộng 5.dp
     val indicatorColor = when {
-        isCritical -> Color(0xFFDC2626) // Đỏ tươi khẩn cấp Color(0xFFDC2626)
-        isWarning -> Color(0xFFFBBF24)  // Vàng hổ phách nhạt cho nhắc nhở
+        isCritical -> Color(0xFFDC2626)
+        isWarning -> Color(0xFFFBBF24)
         else -> Color(0xFF38BDF8)
     }
 
-    // Đổi màu nền thẻ sang nền trắng tinh (Color.White)
     val cardBg = if (alert.isRead) Color(0xFFF8FAFC) else Color.White
 
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = cardBg),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        border = BorderStroke(1.dp, if (!alert.isRead && isCritical) Color(0xFFFECACA) else Color(0xFFE2E8F0)),
         elevation = CardDefaults.cardElevation(defaultElevation = if (alert.isRead) 1.dp else 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -260,7 +242,7 @@ fun AlertItemCard(
                     .fillMaxWidth()
                     .padding(start = 16.dp, top = 14.dp, end = 14.dp, bottom = 14.dp)
             ) {
-                // Dòng thông tin trên cùng: "Thành viên gia đình • 16:34 - 27/10/2026" dùng màu xám #64748B, font 12sp
+                // Header: Tên thành viên • Thời gian và Huy hiệu [MỚI]
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -271,11 +253,12 @@ fun AlertItemCard(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF64748B),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
                     if (!alert.isRead) {
-                        // Huy hiệu [ MỚI ]: Nền đỏ nhạt Color(0xFFFEE2E2), chữ đỏ Color(0xFFDC2626), bo góc 6.dp
                         val badgeBg = if (isCritical) Color(0xFFFEE2E2) else Color(0xFFFEF3C7)
                         val badgeTextColor = if (isCritical) Color(0xFFDC2626) else Color(0xFFB45309)
                         Surface(
@@ -285,7 +268,7 @@ fun AlertItemCard(
                             Text(
                                 text = "MỚI",
                                 color = badgeTextColor,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
@@ -295,7 +278,7 @@ fun AlertItemCard(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Tiêu đề: "🚨 CẢNH BÁO CẤP CỨU GIA ĐÌNH - Ly Trần!" dùng màu đỏ đậm Color(0xFFDC2626), font đậm 15sp
+                // Tiêu đề cảnh báo
                 Text(
                     text = alert.title,
                     fontSize = 15.sp,
@@ -306,7 +289,7 @@ fun AlertItemCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Nội dung mô tả: Dùng màu xám đậm Color(0xFF334155), font 14sp
+                // Nội dung mô tả (đã dọn dẹp chuỗi hệ thống thô)
                 val displayMessage = alert.message
                     .replace("Vị trí thực tế: Chưa nhận diện được vị trí GPS (Vui lòng bật Định vị). ", "")
                     .replace("Chưa nhận diện được vị trí GPS (Vui lòng bật Định vị). ", "")
@@ -315,19 +298,19 @@ fun AlertItemCard(
 
                 Text(
                     text = displayMessage,
-                    fontSize = 14.sp,
+                    fontSize = 13.5.sp,
                     color = Color(0xFF334155),
-                    lineHeight = 20.sp
+                    lineHeight = 19.sp
                 )
 
-                // Địa chỉ thực tế từ Geocoder (Loại bỏ hoàn toàn các mã tọa độ thô hoặc chuỗi thông báo hệ thống)
+                // Địa chỉ thực tế
                 val cleanAddress = alert.address?.takeIf {
                     it.isNotBlank() &&
-                    !it.startsWith("QPG2") &&
-                    !it.startsWith("(") &&
-                    !it.contains("Vui lòng bật") &&
-                    !it.contains("Định vị") &&
-                    !it.contains("Chưa nhận diện")
+                            !it.startsWith("QPG2") &&
+                            !it.startsWith("(") &&
+                            !it.contains("Vui lòng bật") &&
+                            !it.contains("Định vị") &&
+                            !it.contains("Chưa nhận diện")
                 }
                 if (cleanAddress != null) {
                     Spacer(modifier = Modifier.height(6.dp))
@@ -341,16 +324,18 @@ fun AlertItemCard(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = cleanAddress,
-                            fontSize = 12.5.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFF475569)
+                            color = Color(0xFF475569),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Nút bấm ở góc phải dưới thẻ: Nút viền xám nhẹ OutlinedButton, chữ màu xám xanh Color(0xFF475569), icon check ✓ gọn gàng
+                // Hàng nút hành động
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -363,16 +348,16 @@ fun AlertItemCard(
                             onClick = { onOpenMap(lat, lng) },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(38.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
+                                .height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Xem Bản Đồ",
-                                fontSize = 12.5.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 softWrap = false
@@ -385,8 +370,8 @@ fun AlertItemCard(
                     if (!alert.isRead) {
                         OutlinedButton(
                             onClick = onMarkAsRead,
-                            modifier = Modifier.height(38.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
@@ -396,13 +381,13 @@ fun AlertItemCard(
                             Icon(
                                 Icons.Default.Check,
                                 contentDescription = null,
-                                modifier = Modifier.size(15.dp),
+                                modifier = Modifier.size(14.dp),
                                 tint = Color(0xFF475569)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Đánh dấu đã xem",
-                                fontSize = 12.5.sp,
+                                text = "Đã xem",
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF475569),
                                 maxLines = 1,
@@ -422,7 +407,7 @@ fun AlertItemCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Đã xem",
+                                text = "Đã xử lý",
                                 fontSize = 12.sp,
                                 color = Color(0xFF16A34A),
                                 fontWeight = FontWeight.Medium
@@ -435,9 +420,6 @@ fun AlertItemCard(
     }
 }
 
-/**
- * Mở ứng dụng Google Maps dẫn đường trực tiếp tới tọa độ
- */
 fun openNavigationMap(context: Context, latitude: Double, longitude: Double) {
     val navUri = Uri.parse("google.navigation:q=$latitude,$longitude")
     val intent = Intent(Intent.ACTION_VIEW, navUri).apply {
@@ -451,9 +433,6 @@ fun openNavigationMap(context: Context, latitude: Double, longitude: Double) {
     }
 }
 
-/**
- * Định dạng thời gian theo mốc: 15:49 - 27/10/2026
- */
 fun formatAlertTime(timestamp: Long): String {
     return try {
         val sdf = SimpleDateFormat("HH:mm - dd/MM/yyyy", Locale.getDefault())
