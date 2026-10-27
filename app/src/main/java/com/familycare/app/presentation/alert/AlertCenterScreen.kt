@@ -209,11 +209,15 @@ fun AlertCenterScreen(
 }
 
 /**
- * Tối ưu hóa Thẻ Cảnh Báo (AlertItemCard):
- * 1. Card nền trắng, viền mỏng E2E8F0, góc bo tròn 16.dp, elevation 2.dp.
- * 2. Dải màu nhận diện mép trái: Đỏ tươi EF4444 (CRITICAL) hoặc Vàng hổ phách F59E0B (WARNING).
- * 3. Khi isRead == true: nền xám nhạt F8FAFC.
- * 4. Nút bấm chiều cao 42.dp, wrapContentHeight(), cỡ chữ 13sp, không bao giờ bị cắt chữ.
+ * Tối ưu hóa Thẻ Cảnh Báo (AlertItemCard) - Giao diện sáng sủa, thanh lịch, độ tương phản cao:
+ * 1. Đổi màu nền thẻ sang nền trắng tinh (Color.White), viền xám siêu mỏng E2E8F0, bo góc 16.dp, đổ bóng nhẹ elevation = 2.dp.
+ * 2. Dải viền đỏ nhận diện mép trái 5.dp (Accent Indicator): Color(0xFFDC2626) cho khẩn cấp (CRITICAL).
+ * 3. Typography & Contrast:
+ *    - Dòng thông tin trên cùng: "Thành viên gia đình • 16:34 - 27/10/2026" màu #64748B, font 12sp.
+ *    - Huy hiệu [ MỚI ]: Nền đỏ nhạt Color(0xFFFEE2E2), chữ đỏ Color(0xFFDC2626), bo góc 6.dp.
+ *    - Tiêu đề: Font đậm 15sp, màu đỏ đậm Color(0xFFDC2626) cho khẩn cấp.
+ *    - Nội dung mô tả: Màu xám đậm Color(0xFF334155), font 14sp.
+ * 4. Nút "Đánh dấu đã xem": Nút viền xám nhẹ OutlinedButton góc phải dưới thẻ, chữ màu xám xanh Color(0xFF475569), icon check ✓ gọn gàng.
  */
 @Composable
 fun AlertItemCard(
@@ -224,36 +228,25 @@ fun AlertItemCard(
     val isCritical = alert.alertLevel == AlertLevel.CRITICAL
     val isWarning = alert.alertLevel == AlertLevel.WARNING
 
-    // Lựa chọn 1: Màu vàng nắng / hổ phách pastel nhẹ nhàng cho Nhắc nhở, dịu mắt
+    // Dải viền nhận diện ở cạnh trái (Accent Indicator) rộng 5.dp
     val indicatorColor = when {
-        isCritical -> Color(0xFFEF4444)
-        isWarning -> Color(0xFFFBBF24)
+        isCritical -> Color(0xFFDC2626) // Đỏ tươi khẩn cấp Color(0xFFDC2626)
+        isWarning -> Color(0xFFFBBF24)  // Vàng hổ phách nhạt cho nhắc nhở
         else -> Color(0xFF38BDF8)
     }
 
-    val cardBg = when {
-        alert.isRead -> Color(0xFFF8FAFC)
-        isCritical -> Color(0xFFFFFBFB)
-        isWarning -> Color(0xFFFFFDF5)
-        else -> Color.White
-    }
-
-    val cardBorder = when {
-        alert.isRead -> Color(0xFFE2E8F0)
-        isCritical -> Color(0xFFFECACA)
-        isWarning -> Color(0xFFFDE68A)
-        else -> Color(0xFFE2E8F0)
-    }
+    // Đổi màu nền thẻ sang nền trắng tinh (Color.White)
+    val cardBg = if (alert.isRead) Color(0xFFF8FAFC) else Color.White
 
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = cardBg),
-        border = BorderStroke(1.dp, cardBorder),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
         elevation = CardDefaults.cardElevation(defaultElevation = if (alert.isRead) 1.dp else 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
-            // Dải nhận diện màu sắc bên trái (Indicator Strip) 5.dp
+            // Dải viền nhận diện ở cạnh trái rộng 5.dp
             Box(
                 modifier = Modifier
                     .width(5.dp)
@@ -265,33 +258,24 @@ fun AlertItemCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 14.dp, top = 14.dp, end = 14.dp, bottom = 14.dp)
+                    .padding(start = 16.dp, top = 14.dp, end = 14.dp, bottom = 14.dp)
             ) {
-                // Dòng trên cùng: Tên thành viên thật + Mốc thời gian + Tag "MỚI" nếu chưa đọc
+                // Dòng thông tin trên cùng: "Thành viên gia đình • 16:34 - 27/10/2026" dùng màu xám #64748B, font 12sp
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    Text(
+                        text = "${alert.memberName.ifBlank { "Thành viên gia đình" }} • ${formatAlertTime(alert.timestamp)}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF64748B),
                         modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = alert.memberName.ifBlank { "Thành viên gia đình" },
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "•  ${formatAlertTime(alert.timestamp)}",
-                            fontSize = 12.sp,
-                            color = Color(0xFF64748B)
-                        )
-                    }
+                    )
 
                     if (!alert.isRead) {
+                        // Huy hiệu [ MỚI ]: Nền đỏ nhạt Color(0xFFFEE2E2), chữ đỏ Color(0xFFDC2626), bo góc 6.dp
                         val badgeBg = if (isCritical) Color(0xFFFEE2E2) else Color(0xFFFEF3C7)
                         val badgeTextColor = if (isCritical) Color(0xFFDC2626) else Color(0xFFB45309)
                         Surface(
@@ -311,18 +295,18 @@ fun AlertItemCard(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Tiêu đề: Font đậm 15sp, màu sắc phân cấp rõ ràng
+                // Tiêu đề: "🚨 CẢNH BÁO CẤP CỨU GIA ĐÌNH - Ly Trần!" dùng màu đỏ đậm Color(0xFFDC2626), font đậm 15sp
                 Text(
                     text = alert.title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isCritical) Color(0xFFDC2626) else if (isWarning) Color(0xFFB45309) else Color(0xFF0F172A),
+                    color = if (isCritical) Color(0xFFDC2626) else if (isWarning) Color(0xFFD97706) else Color(0xFF0F172A),
                     lineHeight = 20.sp
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Nội dung thông điệp (Làm sạch các câu nhắc nhở định vị rườm rà nếu có từ bản ghi cũ)
+                // Nội dung mô tả: Dùng màu xám đậm Color(0xFF334155), font 14sp
                 val displayMessage = alert.message
                     .replace("Vị trí thực tế: Chưa nhận diện được vị trí GPS (Vui lòng bật Định vị). ", "")
                     .replace("Chưa nhận diện được vị trí GPS (Vui lòng bật Định vị). ", "")
@@ -331,9 +315,9 @@ fun AlertItemCard(
 
                 Text(
                     text = displayMessage,
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     color = Color(0xFF334155),
-                    lineHeight = 18.sp
+                    lineHeight = 20.sp
                 )
 
                 // Địa chỉ thực tế từ Geocoder (Loại bỏ hoàn toàn các mã tọa độ thô hoặc chuỗi thông báo hệ thống)
@@ -366,7 +350,7 @@ fun AlertItemCard(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Nút bấm: Chiều cao 42.dp, wrapContentHeight(), cỡ chữ 13sp, không bao giờ bị cắt chữ
+                // Nút bấm ở góc phải dưới thẻ: Nút viền xám nhẹ OutlinedButton, chữ màu xám xanh Color(0xFF475569), icon check ✓ gọn gàng
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -379,40 +363,48 @@ fun AlertItemCard(
                             onClick = { onOpenMap(lat, lng) },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(42.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5))
+                                .height(38.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
+                            shape = RoundedCornerShape(8.dp)
                         ) {
-                            Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "XEM GOOGLE MAPS",
-                                fontSize = 13.sp,
+                                text = "Xem Bản Đồ",
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 softWrap = false
                             )
                         }
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
 
                     if (!alert.isRead) {
                         OutlinedButton(
                             onClick = onMarkAsRead,
-                            modifier = Modifier
-                                .weight(if (lat != null && lng != null && lat != 0.0 && lng != 0.0) 0.9f else 1f)
-                                .height(42.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                            border = BorderStroke(1.dp, if (isWarning) Color(0xFFFDE68A) else Color(0xFFE2E8F0)),
+                            modifier = Modifier.height(38.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = if (isWarning) Color(0xFFB45309) else Color(0xFF334155)
+                                contentColor = Color(0xFF475569)
                             )
                         ) {
-                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(15.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                                tint = Color(0xFF475569)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Đánh dấu đã xem",
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF475569),
                                 maxLines = 1,
                                 softWrap = false
                             )
@@ -420,7 +412,7 @@ fun AlertItemCard(
                     } else {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(start = 4.dp)
+                            modifier = Modifier.padding(end = 4.dp)
                         ) {
                             Icon(
                                 Icons.Default.DoneAll,
