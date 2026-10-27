@@ -278,9 +278,14 @@ fun AlertItemCard(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Tiêu đề cảnh báo
+                // Tiêu đề cảnh báo (Đảm bảo luôn đầy đủ chữ nếu bản ghi cũ chỉ có icon)
+                val displayTitle = when {
+                    alert.title.trim() == "🚨" || alert.title.isBlank() -> "🚨 CẢNH BÁO CẤP CỨU GIA ĐÌNH"
+                    else -> alert.title
+                }
+
                 Text(
-                    text = alert.title,
+                    text = displayTitle,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (isCritical) Color(0xFFDC2626) else if (isWarning) Color(0xFFD97706) else Color(0xFF0F172A),
