@@ -17,9 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -224,37 +221,27 @@ fun AlertItemCard(
     val isCritical = alert.alertLevel == AlertLevel.CRITICAL
     val isWarning = alert.alertLevel == AlertLevel.WARNING
 
-    val indicatorColor = when {
-        isCritical -> Color(0xFFDC2626)
-        isWarning -> Color(0xFFFBBF24)
-        else -> Color(0xFF38BDF8)
-    }
-
     val cardBg = if (alert.isRead) Color(0xFFF8FAFC) else Color.White
-    val cardBorder = if (!alert.isRead && isCritical) Color(0xFFFECACA) else Color(0xFFE2E8F0)
+    // Viền bo tròn trực tiếp trên Card: đỏ tươi cho khẩn cấp chưa đọc, vàng hổ phách cho nhắc nhở chưa đọc, xám mỏng khi đã đọc
+    val cardBorder = when {
+        !alert.isRead && isCritical -> BorderStroke(1.5.dp, Color(0xFFEF4444))
+        !alert.isRead && isWarning -> BorderStroke(1.5.dp, Color(0xFFF59E0B))
+        else -> BorderStroke(1.dp, Color(0xFFE2E8F0))
+    }
 
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = cardBg),
-        border = BorderStroke(1.dp, cardBorder),
+        border = cardBorder,
         elevation = CardDefaults.cardElevation(defaultElevation = if (alert.isRead) 1.dp else 2.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .drawBehind {
-                // Dải viền đỏ/vàng nhận diện khẩn cấp ở cạnh trái rộng chính xác 5.dp
-                drawRect(
-                    color = indicatorColor,
-                    topLeft = Offset.Zero,
-                    size = Size(5.dp.toPx(), size.height)
-                )
-            }
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 18.dp, top = 14.dp, end = 14.dp, bottom = 14.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
-            // Header: Tên thành viên • Thời gian và Huy hiệu [MỚI]
+            // 1. Dòng thông tin trên cùng: "Tên thành viên • Giờ - Ngày" và Huy hiệu [ MỚI ]
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -290,29 +277,35 @@ fun AlertItemCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Tiêu đề cảnh báo (Đảm bảo luôn đầy đủ chữ rõ ràng kể cả khi bản ghi chỉ có icon)
+            // 2. Tiêu đề cảnh báo chống rớt dòng: "🚨 Báo động SOS: [Tên]"
             val displayTitle = when {
-                alert.title.trim() == "🚨" || alert.title.isBlank() -> "🚨 CẢNH BÁO CẤP CỨU GIA ĐÌNH - ${alert.memberName.ifBlank { "Người thân" }}!"
-                alert.title.startsWith("🚨") && alert.title.length <= 4 -> "🚨 CẢNH BÁO CẤP CỨU GIA ĐÌNH - ${alert.memberName.ifBlank { "Người thân" }}!"
+                isCritical -> "🚨 Báo động SOS: ${alert.memberName.ifBlank { "Người thân" }}"
+                alert.title.trim() == "🚨" || alert.title.isBlank() -> "🚨 Báo động SOS: ${alert.memberName.ifBlank { "Người thân" }}"
                 else -> alert.title
             }
 
             Text(
                 text = displayTitle,
-                fontSize = 15.sp,
+                fontSize = 14.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isCritical) Color(0xFFDC2626) else if (isWarning) Color(0xFFD97706) else Color(0xFF0F172A),
-                lineHeight = 21.sp
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(5.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // Nội dung mô tả (đã dọn dẹp chuỗi hệ thống thô)
-            val displayMessage = alert.message
-                .replace("Vị trí thực tế: Chưa nhận diện được vị trí GPS (Vui lòng bật Định vị). ", "")
-                .replace("Chưa nhận diện được vị trí GPS (Vui lòng bật Định vị). ", "")
-                .replace("(Vui lòng bật Định vị)", "")
-                .trim()
+            // 3. Nội dung mô tả: Loại bỏ hoàn toàn "Vị trí thực tế: ...", chỉ giữ thông báo ngắn gọn
+            val displayMessage = if (isCritical) {
+                "Đã phát cảnh báo khẩn cấp tới toàn bộ người thân."
+            } else {
+                val cleaned = alert.message
+                    .replace(Regex("Vị trí thực tế:[^.]*\\.\\s*"), "")
+                    .replace("Chưa nhận diện được vị trí GPS (Vui lòng bật Định vị). ", "")
+                    .replace("(Vui lòng bật Định vị)", "")
+                    .trim()
+                cleaned.ifBlank { "Đã phát cảnh báo khẩn cấp tới toàn bộ người thân." }
+            }
 
             Text(
                 text = displayMessage,
@@ -321,7 +314,7 @@ fun AlertItemCard(
                 lineHeight = 19.sp
             )
 
-            // Địa chỉ thực tế
+            // 4. Địa chỉ duy nhất bên dưới với icon ghim định vị màu cam
             val cleanAddress = alert.address?.takeIf {
                 it.isNotBlank() &&
                         !it.startsWith("QPG2") &&
@@ -353,7 +346,7 @@ fun AlertItemCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Hàng nút hành động
+            // 5. Hàng nút hành động: Đồng bộ màu sắc theo trạng thái đã đọc / chưa đọc
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -362,13 +355,15 @@ fun AlertItemCard(
                 val lat = alert.latitude
                 val lng = alert.longitude
                 if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
+                    // Chưa đọc: màu đỏ cấp cứu Color(0xFFDC2626) | Đã xử lý: màu xám xanh Color(0xFF475569)
+                    val mapBtnBg = if (!alert.isRead) Color(0xFFDC2626) else Color(0xFF475569)
                     Button(
                         onClick = { onOpenMap(lat, lng) },
                         modifier = Modifier
                             .weight(1f)
                             .height(36.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        colors = ButtonDefaults.buttonColors(containerColor = mapBtnBg),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(14.dp))
@@ -404,7 +399,7 @@ fun AlertItemCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Đã xem",
+                            text = "Đánh dấu đã xem",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF475569),
