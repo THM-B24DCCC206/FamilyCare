@@ -1,4 +1,3 @@
-
 package com.familycare.app.presentation.profile
 
 import android.content.Context
@@ -24,10 +23,16 @@ object HealthReportPdfExporter {
     fun export(
         context: Context,
         uri: Uri,
-        metrics: List<HealthMetricEntity>
+        metrics: List<HealthMetricEntity>,
+        memberName: String = "",
+        memberRole: String = "",
+        bloodType: String = "",
+        chronicDiseases: List<String> = emptyList(),
+        drugAllergies: List<String> = emptyList(),
+        medicines: List<String> = emptyList()
     ) {
         val document = PdfDocument()
-        val locale = Locale("vi", "VN")
+        val locale = Locale.forLanguageTag("vi-VN")
 
         val normalTypeface = Typeface.create(
             "sans-serif",
@@ -62,7 +67,7 @@ object HealthReportPdfExporter {
                 LEFT, 800f, RIGHT, 800f, paint
             )
             canvas.drawText(
-                "FamilyCare - Báo cáo sức khỏe",
+                "FamilyCare - Báo cáo sức khỏe cá nhân & gia đình",
                 LEFT, 820f, paint
             )
             canvas.drawText(
@@ -187,25 +192,66 @@ object HealthReportPdfExporter {
                 }
                 .sortedBy { it.timestamp }
 
+            val title = if (memberName.isNotBlank()) {
+                "BÁO CÁO Y TẾ: ${memberName.uppercase()}"
+            } else {
+                "BÁO CÁO SỨC KHỎE GIA ĐÌNH"
+            }
+
             drawWrapped(
-                "BÁO CÁO SỨC KHỎE GIA ĐÌNH",
-                size = 19f,
+                title,
+                size = 18f,
                 bold = true
             )
-            y += 5f
+            y += 4f
 
+            if (memberName.isNotBlank()) {
+                val roleSuffix = if (memberRole.isNotBlank()) " ($memberRole)" else ""
+                drawWrapped("Thành viên: $memberName$roleSuffix")
+            }
             drawWrapped("Tháng báo cáo: $monthText")
             drawWrapped(
                 "Ngày xuất: ${dateFormat.format(Date())}"
             )
-            y += 12f
+            y += 10f
 
+            // 1. Thông tin y bạ & bệnh nền của thành viên
+            if (memberName.isNotBlank() || bloodType.isNotBlank() || chronicDiseases.isNotEmpty() || drugAllergies.isNotEmpty()) {
+                drawWrapped(
+                    "THÔNG TIN Y TẾ & BỆNH NỀN",
+                    size = 14f,
+                    bold = true
+                )
+                y += 4f
+                drawWrapped("• Nhóm máu: ${bloodType.ifBlank { "Chưa xác định" }}", indent = 8f)
+                val diseasesStr = if (chronicDiseases.isEmpty()) "Không ghi nhận bệnh nền mãn tính" else chronicDiseases.joinToString(", ")
+                drawWrapped("• Bệnh nền mãn tính: $diseasesStr", indent = 8f)
+                val allergiesStr = if (drugAllergies.isEmpty()) "Không ghi nhận dị ứng" else drugAllergies.joinToString(", ")
+                drawWrapped("• Dị ứng thuốc & thức ăn: $allergiesStr", indent = 8f)
+                y += 8f
+            }
+
+            // 2. Danh sách đơn thuốc đang dùng
+            if (medicines.isNotEmpty()) {
+                drawWrapped(
+                    "ĐƠN THUỐC & LỊCH UỐNG ĐANG DÙNG",
+                    size = 14f,
+                    bold = true
+                )
+                y += 4f
+                medicines.forEach { med ->
+                    drawWrapped("• $med", indent = 8f)
+                }
+                y += 8f
+            }
+
+            // 3. Dữ liệu chỉ số sức khỏe trong tháng
             drawWrapped(
-                "DỮ LIỆU CHỈ SỐ SỨC KHỎE",
-                size = 15f,
+                "DỮ LIỆU CHỈ SỐ SỨC KHỎE TRONG THÁNG",
+                size = 14f,
                 bold = true
             )
-            y += 5f
+            y += 4f
 
             drawWrapped(
                 "Số bản ghi trong tháng: ${monthlyMetrics.size}"
@@ -214,10 +260,10 @@ object HealthReportPdfExporter {
 
             if (monthlyMetrics.isEmpty()) {
                 drawWrapped(
-                    "Chưa có dữ liệu sức khỏe được lưu trong tháng này."
+                    "Chưa có dữ liệu số đo sinh tồn được lưu trong tháng này."
                 )
                 drawWrapped(
-                    "Báo cáo không tự tạo hoặc suy đoán số đo."
+                    "Báo cáo chỉ tổng hợp dữ liệu thực tế, không tự tạo hoặc suy đoán số đo."
                 )
             } else {
                 monthlyMetrics.forEachIndexed { index, metric ->
@@ -236,9 +282,9 @@ object HealthReportPdfExporter {
                     val value = if (
                         metric.valueSecondary != null
                     ) {
-                        "${metric.valuePrimary}/${metric.valueSecondary} ${metric.unit}"
+                        "${metric.valuePrimary.toInt()}/${metric.valueSecondary.toInt()} ${metric.unit}"
                     } else {
-                        "${metric.valuePrimary} ${metric.unit}"
+                        "${metric.valuePrimary.toInt()} ${metric.unit}"
                     }
 
                     drawWrapped(
@@ -265,8 +311,8 @@ object HealthReportPdfExporter {
 
             y += 8f
             drawWrapped(
-                "Lưu ý: Báo cáo tổng hợp dữ liệu đã lưu, " +
-                    "không thay thế chẩn đoán của bác sĩ.",
+                "Lưu ý: Báo cáo tổng hợp dữ liệu cá nhân đã lưu trên ứng dụng FamilyCare, " +
+                    "không thay thế chẩn đoán chuyên môn của bác sĩ.",
                 size = 10f
             )
 

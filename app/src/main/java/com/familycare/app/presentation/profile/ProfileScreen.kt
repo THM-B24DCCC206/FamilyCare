@@ -1,9 +1,13 @@
 package com.familycare.app.presentation.profile
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,8 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,15 +32,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.familycare.app.core.common.SessionManager
 import com.familycare.app.core.database.AppDatabase
 import com.familycare.app.core.database.HealthMetricEntity
+import com.familycare.app.domain.model.User
 import com.familycare.app.domain.model.UserRole
+import com.familycare.app.presentation.home.Member
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -62,23 +71,34 @@ fun ProfileScreen(
     var isLoadingReport by remember { mutableStateOf(false) }
     var reportMetrics by remember { mutableStateOf<List<HealthMetricEntity>>(emptyList()) }
 
-    var newDiseaseText by remember { mutableStateOf("") }
-    var newAllergyText by remember { mutableStateOf("") }
-
+    // Launcher tải/lưu file PDF
     val pdfLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
         if (uri != null) {
             scope.launch {
+                val memberName = uiState.selectedMemberUser?.fullName.orEmpty().ifBlank { sessionManager.userName }
+                val memberRole = uiState.familyMembers.firstOrNull { it.id == uiState.selectedMemberId }?.role.orEmpty()
+                val bloodType = uiState.selectedMemberUser?.bloodType.orEmpty()
+                val chronicDiseases = uiState.selectedMemberUser?.chronicDiseases.orEmpty()
+                val drugAllergies = uiState.selectedMemberUser?.drugAllergies.orEmpty()
+                val medicines = uiState.selectedMemberMedicines
+
                 val message = try {
                     withContext(Dispatchers.IO) {
                         HealthReportPdfExporter.export(
-                            context,
-                            uri,
-                            reportMetrics
+                            context = context,
+                            uri = uri,
+                            metrics = reportMetrics,
+                            memberName = memberName,
+                            memberRole = memberRole,
+                            bloodType = bloodType,
+                            chronicDiseases = chronicDiseases,
+                            drugAllergies = drugAllergies,
+                            medicines = medicines
                         )
                     }
-                    "Đã xuất báo cáo PDF thành công."
+                    "Đã xuất báo cáo y tế PDF cho $memberName thành công!"
                 } catch (e: Exception) {
                     "Xuất PDF thất bại: ${e.localizedMessage ?: "Lỗi không xác định"}"
                 }
@@ -90,10 +110,11 @@ fun ProfileScreen(
     LaunchedEffect(uiState.saveSuccessMessage) {
         uiState.saveSuccessMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearSaveMessage()
         }
     }
 
-    val locale = Locale("vi", "VN")
+    val locale = Locale.forLanguageTag("vi-VN")
     val now = Calendar.getInstance()
     val monthStart = Calendar.getInstance().apply {
         set(Calendar.DAY_OF_MONTH, 1)
@@ -119,43 +140,24 @@ fun ProfileScreen(
         .filter { it.timestamp in monthStart until nextMonth }
         .sortedByDescending { it.timestamp }
 
+    val selectedMember = uiState.selectedMemberUser ?: uiState.currentUser
+    val selectedMemberName = selectedMember?.fullName.orEmpty().ifBlank { sessionManager.userName }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = if (showPreview) "Xem Trước Báo Cáo Sức Khỏe"
-                        else if (uiState.isEditing) "Chỉnh Sửa Hồ Sơ"
-                        else "Hồ Sơ Sức Khỏe",
+                        text = if (showPreview) "Xem Trước Báo Cáo Y Tế" else "Hồ Sơ Sức Khỏe",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = Color(0xFF1E293B)
                     )
                 },
                 navigationIcon = {
                     if (showPreview) {
                         IconButton(onClick = { showPreview = false }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại")
-                        }
-                    }
-                },
-                actions = {
-                    if (!showPreview) {
-                        if (!uiState.isEditing) {
-                            IconButton(onClick = { viewModel.startEditing() }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Chỉnh sửa")
-                            }
-                            IconButton(onClick = { showLogoutDialog = true }) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Logout,
-                                    contentDescription = "Đăng xuất",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        } else {
-                            IconButton(onClick = { viewModel.cancelEditing() }) {
-                                Icon(Icons.Default.Close, contentDescription = "Hủy bỏ")
-                            }
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
                         }
                     }
                 },
@@ -168,6 +170,7 @@ fun ProfileScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         if (showPreview) {
+            // MÀN HÌNH XEM TRƯỚC BÁO CÁO Y TẾ CHO THÀNH VIÊN ĐƯỢC CHỌN
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -176,33 +179,84 @@ fun ProfileScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    "BÁO CÁO SỨC KHỎE GIA ĐÌNH",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "BÁO CÁO Y TẾ CÁ NHÂN",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF1E40AF)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Họ và tên: $selectedMemberName",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1E293B)
+                        )
+                        Text(text = "Tháng báo cáo: $monthText", style = MaterialTheme.typography.bodyMedium)
+                        Text(text = "Thời điểm lập: ${dateFormat.format(Date())}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF64748B))
+                    }
+                }
 
-                Text(
-                    "Tháng báo cáo: $monthText",
-                    style = MaterialTheme.typography.titleMedium
-                )
+                // Tóm tắt Y bạ
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Thông Tin Y Bạ & Bệnh Nền",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1E293B)
+                        )
+                        Text(text = "• Nhóm máu: ${selectedMember?.bloodType?.ifBlank { "Chưa xác định" }}", fontSize = 14.sp)
+                        Text(
+                            text = "• Bệnh nền: ${if (selectedMember?.chronicDiseases.isNullOrEmpty()) "Không có" else selectedMember?.chronicDiseases?.joinToString(", ")}",
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = "• Dị ứng: ${if (selectedMember?.drugAllergies.isNullOrEmpty()) "Không có" else selectedMember?.drugAllergies?.joinToString(", ")}",
+                            fontSize = 14.sp
+                        )
+                    }
+                }
 
-                Text(
-                    "Ngày tạo: ${dateFormat.format(Date())}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                // Đơn thuốc đang sử dụng
+                if (uiState.selectedMemberMedicines.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Lịch Uống Thuốc Đang Dùng",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1E293B)
+                            )
+                            uiState.selectedMemberMedicines.forEach { med ->
+                                Text(text = "💊 $med", fontSize = 14.sp, color = Color(0xFF334155))
+                            }
+                        }
+                    }
+                }
 
-                HorizontalDivider()
-
+                // Dữ liệu chỉ số sức khỏe
                 Text(
-                    "Dữ liệu chỉ số sức khỏe",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Text(
-                    "Số bản ghi trong tháng: ${monthlyMetrics.size}",
-                    style = MaterialTheme.typography.bodyLarge
+                    text = "Dữ liệu đo sinh tồn (${monthlyMetrics.size} bản ghi)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
                 )
 
                 if (monthlyMetrics.isEmpty()) {
@@ -212,15 +266,17 @@ fun ProfileScreen(
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                "Chưa có dữ liệu sức khỏe trong tháng này",
-                                style = MaterialTheme.typography.titleMedium,
+                                "Chưa có dữ liệu số đo sinh tồn trong tháng này",
+                                style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "Hãy thực hiện đo nhịp tim PPG hoặc nhập chỉ số huyết áp để xuất báo cáo hoàn chỉnh."
+                                "Khi đo huyết áp hoặc nhịp tim cho $selectedMemberName, số đo sẽ được cập nhật vào báo cáo.",
+                                fontSize = 13.sp,
+                                color = Color(0xFF64748B)
                             )
                         }
                     }
@@ -233,7 +289,6 @@ fun ProfileScreen(
                             "TEMPERATURE" -> "Nhiệt độ"
                             else -> metric.type
                         }
-
                         val value = if (metric.valueSecondary != null) {
                             "${metric.valuePrimary.toInt()}/${metric.valueSecondary.toInt()} ${metric.unit}"
                         } else {
@@ -242,45 +297,53 @@ fun ProfileScreen(
 
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
                         ) {
                             Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        "${index + 1}. $typeName",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        value,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 16.sp,
+                                        color = Color(0xFF2563EB)
+                                    )
+                                }
                                 Text(
-                                    "${index + 1}. $typeName",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    value,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    "Thời gian đo: ${dateFormat.format(Date(metric.timestamp))}"
+                                    "Thời gian đo: ${dateFormat.format(Date(metric.timestamp))}",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF64748B)
                                 )
                                 if (metric.notes.isNotBlank()) {
-                                    Text("Ghi chú: ${metric.notes}")
+                                    Text("Ghi chú: ${metric.notes}", fontSize = 12.sp, color = Color(0xFF475569))
                                 }
                             }
                         }
                     }
                 }
 
-                Text(
-                    "Lưu ý: Báo cáo tổng hợp dữ liệu đã lưu, không thay thế chẩn đoán của bác sĩ.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
                 Button(
                     onClick = {
-                        pdfLauncher.launch("Bao_cao_suc_khoe_$monthText.pdf")
+                        val sanitizedName = selectedMemberName.replace(" ", "_")
+                        val cleanMonth = monthText.replace("/", "_")
+                        pdfLauncher.launch("Bao_cao_y_te_${sanitizedName}_$cleanMonth.pdf")
                     },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                 ) {
                     Icon(Icons.Default.Download, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -289,481 +352,149 @@ fun ProfileScreen(
 
                 OutlinedButton(
                     onClick = { showPreview = false },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Quay Lại Hồ Sơ")
                 }
             }
         } else {
-            val user = uiState.user
-
-            if (uiState.status is ProfileUiStatus.Loading && user == null) {
+            // MÀN HÌNH CHÍNH HỒ SƠ SỨC KHỎE
+            if (uiState.status is ProfileUiStatus.Loading && uiState.currentUser == null) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(color = Color(0xFF2563EB))
                 }
-            } else if (user != null) {
+            } else {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp)
                 ) {
-                    // 1. Thẻ Avatar & Thông tin cá nhân
+                    // 1. Thẻ Tài Khoản Đăng Nhập Hiện Tại
                     item {
-                        ElevatedCard(
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.elevatedCardColors(
-                                containerColor = MaterialTheme.colorScheme.surface
-                            ),
-                            elevation = CardDefaults.elevatedCardElevation(2.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(88.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primaryContainer)
-                                        .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(52.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                if (uiState.isEditing) {
-                                    OutlinedTextField(
-                                        value = uiState.editedFullName,
-                                        onValueChange = { viewModel.onFullNameChange(it) },
-                                        label = { Text("Họ và tên") },
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                } else {
-                                    Text(
-                                        text = user.fullName,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    Text(
-                                        text = user.email,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (user.role == UserRole.ADMIN) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
-                                ) {
-                                    Text(
-                                        text = if (user.role == UserRole.ADMIN) "Trưởng Gia Đình" else "Thành Viên",
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (user.role == UserRole.ADMIN) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                }
-                            }
-                        }
+                        AccountHeaderCard(
+                            userName = sessionManager.userName.ifBlank { uiState.currentUser?.fullName ?: "Tôi" },
+                            userEmail = sessionManager.userEmail.ifBlank { uiState.currentUser?.email ?: "Chưa liên kết email" },
+                            userRole = sessionManager.userRole
+                        )
                     }
 
-                    // 2. Thẻ Tổ Ấm Gia Đình & Mã Mời
+                    // 2. Khối "Thành viên trong gia đình" (FamilyMemberList)
                     item {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                            ),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(18.dp)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            Icons.Default.Home,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
+                        FamilyMemberSection(
+                            members = uiState.familyMembers,
+                            selectedMemberId = uiState.selectedMemberId,
+                            onSelectMember = { viewModel.onMemberSelect(it) },
+                            onAddMember = { viewModel.openAddMemberDialog() }
+                        )
+                    }
+
+                    // 3. Thẻ Y Bạ Động theo Thành Viên Được Chọn (MemberHealthCard)
+                    item {
+                        MemberHealthCard(
+                            member = selectedMember,
+                            memberName = selectedMemberName,
+                            onEdit = { viewModel.openEditHealthCardDialog() }
+                        )
+                    }
+
+                    // 4. Nút Xuất Báo Cáo Y Tế (PDF) theo Người Được Chọn
+                    item {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    isLoadingReport = true
+                                    try {
+                                        val targetId = uiState.selectedMemberId.ifBlank { sessionManager.userId }
+                                        val metrics = withContext(Dispatchers.IO) {
+                                            AppDatabase.getInstance(context)
+                                                .healthMetricDao
+                                                .getMetricsByMember(targetId)
+                                                .firstOrNull() ?: emptyList()
+                                        }
+                                        reportMetrics = metrics
+                                        showPreview = true
+                                    } catch (e: Exception) {
+                                        snackbarHostState.showSnackbar(
+                                            "Không tải được báo cáo: ${e.localizedMessage ?: "Lỗi không xác định"}"
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = sessionManager.familyName.ifEmpty { "Tổ Ấm Gia Đình" },
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                    } finally {
+                                        isLoadingReport = false
                                     }
                                 }
-
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "Mã mời gia đình của bạn:",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            enabled = !isLoadingReport,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                        ) {
+                            if (isLoadingReport) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = sessionManager.inviteCode.ifEmpty { "FC8899" },
-                                        style = MaterialTheme.typography.headlineMedium,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        letterSpacing = 2.sp
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            val code = sessionManager.inviteCode.ifEmpty { "FC8899" }
-                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                            val clip = android.content.ClipData.newPlainText("Mã mời gia đình", code)
-                                            clipboard.setPrimaryClip(clip)
-                                            Toast.makeText(context, "Đã sao chép mã mời: $code", Toast.LENGTH_SHORT).show()
-                                        }
-                                    ) {
-                                        Icon(Icons.Default.ContentCopy, contentDescription = "Sao chép")
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 3. Thẻ Nhóm Máu
-                    item {
-                        ElevatedCard(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.elevatedCardElevation(1.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Nhóm Máu",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Icon(Icons.Default.Bloodtype, contentDescription = null, tint = Color(0xFFE91E63))
-                                }
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                val bloodTypes = listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
-                                val currentBlood = if (uiState.isEditing) uiState.editedBloodType else user.bloodType
-
-                                if (uiState.isEditing) {
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        items(bloodTypes) { type ->
-                                            FilterChip(
-                                                selected = currentBlood == type,
-                                                onClick = { viewModel.onBloodTypeChange(type) },
-                                                label = { Text(type, fontWeight = FontWeight.Bold) }
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    Text(
-                                        text = currentBlood.ifEmpty { "Chưa xác định" },
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // 4. Thẻ Bệnh Nền
-                    item {
-                        ElevatedCard(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.elevatedCardElevation(1.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Bệnh Nền Mãn Tính",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Icon(Icons.Default.MedicalServices, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                }
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                val diseases = if (uiState.isEditing) uiState.editedChronicDiseases else user.chronicDiseases
-                                if (diseases.isEmpty()) {
-                                    Text("Chưa ghi nhận bệnh nền nào", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                } else {
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        diseases.forEach { disease ->
-                                            Surface(
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = MaterialTheme.colorScheme.secondaryContainer
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = disease,
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.Medium,
-                                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                                    )
-                                                    if (uiState.isEditing) {
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Icon(
-                                                            Icons.Default.Close,
-                                                            contentDescription = "Xóa",
-                                                            modifier = Modifier
-                                                                .size(16.dp)
-                                                                .clip(CircleShape)
-                                                                .clickable { viewModel.removeDisease(disease) }
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (uiState.isEditing) {
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        OutlinedTextField(
-                                            value = newDiseaseText,
-                                            onValueChange = { newDiseaseText = it },
-                                            placeholder = { Text("Thêm bệnh nền...", fontSize = 14.sp) },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        IconButton(
-                                            onClick = {
-                                                viewModel.addDisease(newDiseaseText)
-                                                newDiseaseText = ""
-                                            }
-                                        ) {
-                                            Icon(Icons.Default.AddCircle, contentDescription = "Thêm", tint = MaterialTheme.colorScheme.primary)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 5. Thẻ Dị ứng thuốc
-                    item {
-                        ElevatedCard(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.elevatedCardElevation(1.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Dị Ứng Thuốc & Thức Ăn",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                    Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                                }
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                val allergies = if (uiState.isEditing) uiState.editedDrugAllergies else user.drugAllergies
-                                if (allergies.isEmpty()) {
-                                    Text("Chưa ghi nhận dị ứng", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                } else {
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        allergies.forEach { allergy ->
-                                            Surface(
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = MaterialTheme.colorScheme.errorContainer
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = allergy,
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.Medium,
-                                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                                    )
-                                                    if (uiState.isEditing) {
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Icon(
-                                                            Icons.Default.Close,
-                                                            contentDescription = "Xóa",
-                                                            modifier = Modifier
-                                                                .size(16.dp)
-                                                                .clip(CircleShape)
-                                                                .clickable { viewModel.removeAllergy(allergy) }
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (uiState.isEditing) {
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        OutlinedTextField(
-                                            value = newAllergyText,
-                                            onValueChange = { newAllergyText = it },
-                                            placeholder = { Text("Thêm dị ứng...", fontSize = 14.sp) },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        IconButton(
-                                            onClick = {
-                                                viewModel.addAllergy(newAllergyText)
-                                                newAllergyText = ""
-                                            }
-                                        ) {
-                                            Icon(Icons.Default.AddCircle, contentDescription = "Thêm", tint = MaterialTheme.colorScheme.error)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 6. Nút Xuất Báo Cáo Y Tế & Đăng Xuất
-                    item {
-                        if (uiState.isEditing) {
-                            Button(
-                                onClick = { viewModel.saveProfile() },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Icon(Icons.Default.Save, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Đang tải dữ liệu...")
+                            } else {
+                                Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("LƯU HỒ SƠ Y TẾ", style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    text = "📄 Xuất báo cáo y tế (PDF)",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Button(
-                                    onClick = {
-                                        scope.launch {
-                                            isLoadingReport = true
-                                            try {
-                                                val metrics = withContext(Dispatchers.IO) {
-                                                    AppDatabase.getInstance(context)
-                                                        .healthMetricDao
-                                                        .getMetricsByMember(user.id.ifEmpty { "demo-user" })
-                                                        .first()
-                                                }
-                                                reportMetrics = metrics
-                                                showPreview = true
-                                            } catch (e: Exception) {
-                                                snackbarHostState.showSnackbar(
-                                                    "Không tải được báo cáo: ${e.localizedMessage ?: "Lỗi không xác định"}"
-                                                )
-                                            } finally {
-                                                isLoadingReport = false
-                                            }
-                                        }
-                                    },
-                                    enabled = !isLoadingReport,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(56.dp),
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                                ) {
-                                    if (isLoadingReport) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(20.dp),
-                                            color = Color.White,
-                                            strokeWidth = 2.dp
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("ĐANG TẢI BÁO CÁO...")
-                                    } else {
-                                        Icon(Icons.Default.PictureAsPdf, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("XUẤT BÁO CÁO Y TẾ THÁNG (PDF)", style = MaterialTheme.typography.labelLarge)
-                                    }
-                                }
+                        }
+                    }
 
-                                Button(
-                                    onClick = { showLogoutDialog = true },
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(56.dp)
-                                ) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.Logout,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "ĐĂNG XUẤT TÀI KHOẢN",
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                }
+                    // 5. Thẻ Mã Mời Gia Đình Rút Gọn
+                    item {
+                        CompactFamilyInviteCard(
+                            familyName = sessionManager.familyName,
+                            inviteCode = sessionManager.inviteCode.ifEmpty { "FAM-8606" },
+                            onCopy = { code ->
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Mã mời gia đình", code)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Đã sao chép mã mời: $code", Toast.LENGTH_SHORT).show()
                             }
+                        )
+                    }
+
+                    // 6. Nút "Đăng xuất tài khoản" Tinh Tế ở Cuối Cùng
+                    item {
+                        OutlinedButton(
+                            onClick = { showLogoutDialog = true },
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFFDC2626)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = null,
+                                tint = Color(0xFFDC2626),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Đăng xuất tài khoản",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFDC2626)
+                            )
                         }
                     }
                 }
@@ -796,4 +527,872 @@ fun ProfileScreen(
             }
         )
     }
+
+    // Hộp thoại chỉnh sửa thông tin Y Bạ của thành viên đang chọn
+    if (uiState.showEditHealthCardDialog && selectedMember != null) {
+        EditHealthCardDialog(
+            memberName = selectedMemberName,
+            initialBloodType = selectedMember.bloodType,
+            initialDiseases = selectedMember.chronicDiseases,
+            initialAllergies = selectedMember.drugAllergies,
+            onDismiss = { viewModel.dismissEditHealthCardDialog() },
+            onSave = { bloodType, diseases, allergies ->
+                viewModel.saveHealthCard(bloodType, diseases, allergies)
+            }
+        )
+    }
+
+    // Hộp thoại Thêm Thành Viên Mới vào gia đình
+    if (uiState.showAddMemberDialog) {
+        AddMemberDialog(
+            onDismiss = { viewModel.dismissAddMemberDialog() },
+            onAdd = { name, relationship, bloodType, diseases, allergies ->
+                viewModel.addNewMember(name, relationship, bloodType, diseases, allergies)
+            }
+        )
+    }
+}
+
+/**
+ * 1. Thẻ thông tin tài khoản đăng nhập ở đầu trang
+ */
+@Composable
+private fun AccountHeaderCard(
+    userName: String,
+    userEmail: String,
+    userRole: String
+) {
+    ElevatedCard(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.elevatedCardElevation(2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFEFF6FF))
+                    .border(2.dp, Color(0xFF2563EB), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier.size(46.dp),
+                    tint = Color(0xFF2563EB)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = userName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = Color(0xFF1E293B)
+            )
+
+            if (userEmail.isNotBlank()) {
+                Text(
+                    text = userEmail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF64748B)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val isAdmin = userRole.uppercase() == "ADMIN"
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isAdmin) Color(0xFFEFF6FF) else Color(0xFFF1F5F9)
+            ) {
+                Text(
+                    text = if (isAdmin) "Trưởng Gia Đình" else "Thành Viên",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isAdmin) Color(0xFF1D4ED8) else Color(0xFF475569)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 2. Khối "Thành viên trong gia đình" (FamilyMemberList)
+ */
+@Composable
+private fun FamilyMemberSection(
+    members: List<Member>,
+    selectedMemberId: String,
+    onSelectMember: (String) -> Unit,
+    onAddMember: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Thành viên gia đình",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1E293B)
+            )
+
+            TextButton(
+                onClick = onAddMember,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = Color(0xFF2563EB)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "+ Thêm thành viên",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF2563EB)
+                )
+            }
+        }
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(members, key = { it.id }) { member ->
+                val isSelected = member.id == selectedMemberId
+                val borderColor by animateColorAsState(
+                    if (isSelected) Color(0xFF2563EB) else Color(0xFFE2E8F0),
+                    label = "border"
+                )
+                val bgColor by animateColorAsState(
+                    if (isSelected) Color(0xFFEFF6FF) else MaterialTheme.colorScheme.surface,
+                    label = "bg"
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = bgColor,
+                    border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { onSelectMember(member.id) }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        // Avatar tròn Initials
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(if (isSelected) Color(0xFF2563EB) else Color(0xFFCBD5E1)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = member.initials.ifBlank { member.fullName.take(1).uppercase() },
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text(
+                            text = member.fullName,
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color(0xFF1E40AF) else Color(0xFF334155)
+                        )
+
+                        // Dấu tích nhỏ nếu đang được chọn
+                        if (isSelected) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF2563EB)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Đang chọn",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 3. Thẻ Y Bạ Động theo Thành Viên Được Chọn (MemberHealthCard)
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MemberHealthCard(
+    member: User?,
+    memberName: String,
+    onEdit: () -> Unit
+) {
+    ElevatedCard(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.elevatedCardElevation(2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Header Thẻ: Tiêu đề "Thông tin y tế: [Tên]" + Nút Chỉnh sửa nhỏ
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.HealthAndSafety,
+                        contentDescription = null,
+                        tint = Color(0xFF2563EB),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Thông tin y tế: $memberName",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1E293B),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                IconButton(
+                    onClick = onEdit,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Chỉnh sửa thông tin y tế",
+                        tint = Color(0xFF2563EB),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+
+            // Mục 1: Nhóm Máu (Icon giọt máu)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.WaterDrop,
+                        contentDescription = null,
+                        tint = Color(0xFFE11D48),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Nhóm máu",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF475569)
+                    )
+                }
+
+                val bloodType = member?.bloodType.orEmpty().ifBlank { "Chưa xác định" }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFFFF1F2)
+                ) {
+                    Text(
+                        text = bloodType,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFBE123C),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+
+            // Mục 2: Bệnh nền mãn tính
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.MedicalServices,
+                        contentDescription = null,
+                        tint = Color(0xFF2563EB),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Bệnh nền mãn tính",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF334155)
+                    )
+                }
+
+                val diseases = member?.chronicDiseases.orEmpty()
+                if (diseases.isEmpty()) {
+                    Text(
+                        text = "Chưa ghi nhận bệnh nền",
+                        fontSize = 13.sp,
+                        color = Color(0xFF94A3B8),
+                        modifier = Modifier.padding(start = 24.dp)
+                    )
+                } else {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(start = 24.dp)
+                    ) {
+                        diseases.forEach { disease ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFEFF6FF),
+                                border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                            ) {
+                                Text(
+                                    text = disease,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF1D4ED8),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+
+            // Mục 3: Dị ứng thuốc & thức ăn
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFDC2626),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Dị ứng thuốc & thức ăn",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF334155)
+                    )
+                }
+
+                val allergies = member?.drugAllergies.orEmpty()
+                if (allergies.isEmpty()) {
+                    Text(
+                        text = "Chưa ghi nhận dị ứng",
+                        fontSize = 13.sp,
+                        color = Color(0xFF94A3B8),
+                        modifier = Modifier.padding(start = 24.dp)
+                    )
+                } else {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(start = 24.dp)
+                    ) {
+                        allergies.forEach { allergy ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFFEF2F2),
+                                border = BorderStroke(1.dp, Color(0xFFFECACA))
+                            ) {
+                                Text(
+                                    text = allergy,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFFB91C1C),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 5. Thẻ mã mời gia đình rút gọn ở chân trang
+ */
+@Composable
+private fun CompactFamilyInviteCard(
+    familyName: String,
+    inviteCode: String,
+    onCopy: (String) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFFF8FAFC),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Home,
+                    contentDescription = null,
+                    tint = Color(0xFF2563EB),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Tổ ấm: ${familyName.ifBlank { "Gia đình" }} • Mã: $inviteCode",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF334155),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(
+                onClick = { onCopy(inviteCode) },
+                modifier = Modifier.size(30.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = "Sao chép mã mời",
+                    tint = Color(0xFF2563EB),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Hộp thoại chỉnh sửa thông tin Y bạ của thành viên (nhóm máu, bệnh nền, dị ứng)
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EditHealthCardDialog(
+    memberName: String,
+    initialBloodType: String,
+    initialDiseases: List<String>,
+    initialAllergies: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (bloodType: String, diseases: List<String>, allergies: List<String>) -> Unit
+) {
+    var bloodType by remember { mutableStateOf(initialBloodType) }
+    val diseasesList = remember { mutableStateListOf<String>().apply { addAll(initialDiseases) } }
+    val allergiesList = remember { mutableStateListOf<String>().apply { addAll(initialAllergies) } }
+
+    var newDiseaseText by remember { mutableStateOf("") }
+    var newAllergyText by remember { mutableStateOf("") }
+
+    val bloodOptions = listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Cập nhật Y Bạ: $memberName",
+                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Chọn nhóm máu
+                Text(text = "Nhóm máu:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(bloodOptions) { opt ->
+                        FilterChip(
+                            selected = bloodType == opt,
+                            onClick = { bloodType = opt },
+                            label = { Text(opt, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = Color(0xFFF1F5F9))
+
+                // Bệnh nền mãn tính
+                Text(text = "Bệnh nền mãn tính:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                if (diseasesList.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        diseasesList.forEach { dis ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFEFF6FF),
+                                border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(dis, fontSize = 12.sp, color = Color(0xFF1D4ED8))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Xóa",
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clickable { diseasesList.remove(dis) },
+                                        tint = Color(0xFF1D4ED8)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newDiseaseText,
+                        onValueChange = { newDiseaseText = it },
+                        placeholder = { Text("Ví dụ: Cao huyết áp...", fontSize = 12.sp) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = {
+                            val t = newDiseaseText.trim()
+                            if (t.isNotBlank() && !diseasesList.contains(t)) {
+                                diseasesList.add(t)
+                                newDiseaseText = ""
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.AddCircle, contentDescription = "Thêm", tint = Color(0xFF2563EB))
+                    }
+                }
+
+                HorizontalDivider(color = Color(0xFFF1F5F9))
+
+                // Dị ứng thuốc & thức ăn
+                Text(text = "Dị ứng thuốc & thức ăn:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                if (allergiesList.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        allergiesList.forEach { alg ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFFEF2F2),
+                                border = BorderStroke(1.dp, Color(0xFFFECACA))
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(alg, fontSize = 12.sp, color = Color(0xFFB91C1C))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Xóa",
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clickable { allergiesList.remove(alg) },
+                                        tint = Color(0xFFB91C1C)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newAllergyText,
+                        onValueChange = { newAllergyText = it },
+                        placeholder = { Text("Ví dụ: Dị ứng Penicillin...", fontSize = 12.sp) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = {
+                            val t = newAllergyText.trim()
+                            if (t.isNotBlank() && !allergiesList.contains(t)) {
+                                allergiesList.add(t)
+                                newAllergyText = ""
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.AddCircle, contentDescription = "Thêm", tint = Color(0xFFDC2626))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSave(bloodType, diseasesList.toList(), allergiesList.toList())
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+            ) {
+                Text("Lưu Thay Đổi")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Hủy")
+            }
+        }
+    )
+}
+
+/**
+ * Hộp thoại Thêm Thành Viên Mới vào Gia Đình
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AddMemberDialog(
+    onDismiss: () -> Unit,
+    onAdd: (name: String, relationship: String, bloodType: String, diseases: List<String>, allergies: List<String>) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var relationship by remember { mutableStateOf("Thành viên") }
+    var bloodType by remember { mutableStateOf("O+") }
+    val diseasesList = remember { mutableStateListOf<String>() }
+    val allergiesList = remember { mutableStateListOf<String>() }
+
+    var diseaseInput by remember { mutableStateOf("") }
+    var allergyInput by remember { mutableStateOf("") }
+
+    val relationshipOptions = listOf("Vợ / Chồng", "Bố", "Mẹ", "Con cái", "Thành viên")
+    val bloodOptions = listOf("A+", "B+", "AB+", "O+", "A-", "B-", "AB-", "O-")
+
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Thêm Thành Viên Gia Đình", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Họ và tên *") },
+                    placeholder = { Text("Ví dụ: Ly Trần, Bác Nam...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text("Mối quan hệ:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(relationshipOptions) { rel ->
+                        FilterChip(
+                            selected = relationship == rel,
+                            onClick = { relationship = rel },
+                            label = { Text(rel, fontSize = 12.sp) }
+                        )
+                    }
+                }
+
+                Text("Nhóm máu:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(bloodOptions) { b ->
+                        FilterChip(
+                            selected = bloodType == b,
+                            onClick = { bloodType = b },
+                            label = { Text(b, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        )
+                    }
+                }
+
+                Text("Bệnh nền (nếu có):", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                if (diseasesList.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        diseasesList.forEach { d ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFEFF6FF),
+                                border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(d, fontSize = 12.sp, color = Color(0xFF1D4ED8))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Xóa",
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clickable { diseasesList.remove(d) },
+                                        tint = Color(0xFF1D4ED8)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = diseaseInput,
+                        onValueChange = { diseaseInput = it },
+                        placeholder = { Text("Ví dụ: Cao huyết áp...", fontSize = 12.sp) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = {
+                            val t = diseaseInput.trim()
+                            if (t.isNotBlank() && !diseasesList.contains(t)) {
+                                diseasesList.add(t)
+                                diseaseInput = ""
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.AddCircle, contentDescription = "Thêm", tint = Color(0xFF2563EB))
+                    }
+                }
+
+                Text("Dị ứng thuốc & thức ăn:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                if (allergiesList.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        allergiesList.forEach { a ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFFEF2F2),
+                                border = BorderStroke(1.dp, Color(0xFFFECACA))
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(a, fontSize = 12.sp, color = Color(0xFFB91C1C))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Xóa",
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clickable { allergiesList.remove(a) },
+                                        tint = Color(0xFFB91C1C)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = allergyInput,
+                        onValueChange = { allergyInput = it },
+                        placeholder = { Text("Ví dụ: Dị ứng Hải sản...", fontSize = 12.sp) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = {
+                            val t = allergyInput.trim()
+                            if (t.isNotBlank() && !allergiesList.contains(t)) {
+                                allergiesList.add(t)
+                                allergyInput = ""
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.AddCircle, contentDescription = "Thêm", tint = Color(0xFFDC2626))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isBlank()) {
+                        Toast.makeText(context, "Vui lòng nhập họ và tên thành viên", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    onAdd(name.trim(), relationship, bloodType, diseasesList.toList(), allergiesList.toList())
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+            ) {
+                Text("Thêm Thành Viên")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Hủy")
+            }
+        }
+    )
 }
