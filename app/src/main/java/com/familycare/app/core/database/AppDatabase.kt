@@ -88,18 +88,24 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS alerts (
-                id TEXT PRIMARY KEY NOT NULL,
-                familyId TEXT NOT NULL,
-                targetUserId TEXT NOT NULL,
-                targetUserName TEXT NOT NULL,
-                type TEXT NOT NULL,
-                level TEXT NOT NULL,
-                title TEXT NOT NULL,
-                message TEXT NOT NULL,
-                timestamp INTEGER NOT NULL,
-                isRead INTEGER NOT NULL,
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                memberId TEXT NOT NULL DEFAULT '',
+                memberName TEXT NOT NULL DEFAULT '',
+                targetUserId TEXT NOT NULL DEFAULT '',
+                targetUserName TEXT NOT NULL DEFAULT '',
+                alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                alertLevel TEXT NOT NULL DEFAULT 'WARNING',
+                type TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED',
+                level TEXT NOT NULL DEFAULT 'WARNING',
+                title TEXT NOT NULL DEFAULT '',
+                message TEXT NOT NULL DEFAULT '',
+                address TEXT,
                 latitude REAL,
-                longitude REAL
+                longitude REAL,
+                timestamp INTEGER NOT NULL DEFAULT 0,
+                isRead INTEGER NOT NULL DEFAULT 0,
+                isResolved INTEGER NOT NULL DEFAULT 0,
+                familyId TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent()
         )
@@ -162,6 +168,14 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         } catch (_: Exception) {
             // Cột đã tồn tại
         }
+
+        // Đảm bảo các cột mới luôn tồn tại trong alerts
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN memberId TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN memberName TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED'") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN alertLevel TEXT NOT NULL DEFAULT 'WARNING'") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN address TEXT") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN isResolved INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
 
         db.execSQL(
             """
@@ -238,6 +252,14 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         } catch (_: Exception) {
             // Cột đã tồn tại
         }
+
+        // Đảm bảo các cột mới luôn tồn tại trong alerts
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN memberId TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN memberName TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN alertType TEXT NOT NULL DEFAULT 'THRESHOLD_EXCEEDED'") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN alertLevel TEXT NOT NULL DEFAULT 'WARNING'") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN address TEXT") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE alerts ADD COLUMN isResolved INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -543,8 +565,8 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         val cursor = db.query(
             "alerts",
             null,
-            "targetUserId = ? AND type = ? AND timestamp >= ?",
-            arrayOf(userId, type, sinceTimestamp.toString()),
+            "(memberId = ? OR targetUserId = ?) AND (alertType = ? OR type = ?) AND timestamp >= ?",
+            arrayOf(userId, userId, type, type, sinceTimestamp.toString()),
             null,
             null,
             "timestamp DESC"
@@ -558,9 +580,30 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         list
     }
 
-    override suspend fun getAlertById(alertId: String): AlertEntity? = withContext(Dispatchers.IO) {
+    override suspend fun getLatestAlertForMember(
+        memberId: String,
+        alertType: com.familycare.app.domain.model.AlertType,
+        alertTypeStr: String
+    ): AlertEntity? = withContext(Dispatchers.IO) {
         val db = dbHelper.readableDatabase
-        val cursor = db.query("alerts", null, "id = ?", arrayOf(alertId), null, null, null, "1")
+        val cursor = db.query(
+            "alerts",
+            null,
+            "(memberId = ? OR targetUserId = ?) AND (alertType = ? OR type = ?)",
+            arrayOf(memberId, memberId, alertType.name, alertType.name),
+            null,
+            null,
+            "timestamp DESC",
+            "1"
+        )
+        cursor.use { c ->
+            if (c.moveToNext()) cursorToAlert(c) else null
+        }
+    }
+
+    override suspend fun getAlertById(alertId: Long): AlertEntity? = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.query("alerts", null, "id = ?", arrayOf(alertId.toString()), null, null, null, "1")
         cursor.use { c ->
             if (c.moveToNext()) cursorToAlert(c) else null
         }
@@ -582,32 +625,56 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
         }
     }
 
-    override suspend fun insertAlert(alert: AlertEntity) = withContext(Dispatchers.IO) {
+    override suspend fun insertAlert(alert: AlertEntity): Long = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
         val values = ContentValues().apply {
-            put("id", alert.id)
-            put("familyId", alert.familyId)
-            put("targetUserId", alert.targetUserId)
-            put("targetUserName", alert.targetUserName)
-            put("type", alert.type)
-            put("level", alert.level)
+            if (alert.id > 0) {
+                put("id", alert.id)
+            }
+            put("memberId", alert.memberId)
+            put("memberName", alert.memberName)
+            put("targetUserId", alert.memberId)
+            put("targetUserName", alert.memberName)
+            put("alertType", alert.alertType.name)
+            put("type", alert.alertType.name)
+            put("alertLevel", alert.alertLevel.name)
+            put("level", alert.alertLevel.name)
             put("title", alert.title)
             put("message", alert.message)
+            put("address", alert.address)
             put("timestamp", alert.timestamp)
             put("isRead", if (alert.isRead) 1 else 0)
+            put("isResolved", if (alert.isResolved) 1 else 0)
+            put("familyId", alert.familyId)
             alert.latitude?.let { put("latitude", it) }
             alert.longitude?.let { put("longitude", it) }
         }
-        db.insertWithOnConflict("alerts", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        val insertedId = db.insertWithOnConflict("alerts", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        _signal.value = System.currentTimeMillis()
+        insertedId
+    }
+
+    override suspend fun updateReadStatus(alertId: Long, isRead: Boolean) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("isRead", if (isRead) 1 else 0)
+        }
+        db.update("alerts", values, "id = ?", arrayOf(alertId.toString()))
         _signal.value = System.currentTimeMillis()
     }
 
-    override suspend fun markAsRead(alertId: String) = withContext(Dispatchers.IO) {
+    override suspend fun updateResolvedStatus(alertId: Long, isResolved: Boolean) = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
         val values = ContentValues().apply {
-            put("isRead", 1)
+            put("isResolved", if (isResolved) 1 else 0)
         }
-        db.update("alerts", values, "id = ?", arrayOf(alertId))
+        db.update("alerts", values, "id = ?", arrayOf(alertId.toString()))
+        _signal.value = System.currentTimeMillis()
+    }
+
+    override suspend fun deleteAlert(alertId: Long) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.delete("alerts", "id = ?", arrayOf(alertId.toString()))
         _signal.value = System.currentTimeMillis()
     }
 
@@ -617,12 +684,6 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
             put("isRead", 1)
         }
         db.update("alerts", values, "familyId = ?", arrayOf(familyId))
-        _signal.value = System.currentTimeMillis()
-    }
-
-    override suspend fun deleteAlert(alertId: String) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        db.delete("alerts", "id = ?", arrayOf(alertId))
         _signal.value = System.currentTimeMillis()
     }
 
@@ -639,32 +700,59 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
     }
 
     private fun cursorToAlert(c: Cursor): AlertEntity {
-        val idCol = c.getColumnIndexOrThrow("id")
-        val famCol = c.getColumnIndexOrThrow("familyId")
-        val userCol = c.getColumnIndexOrThrow("targetUserId")
-        val nameCol = c.getColumnIndexOrThrow("targetUserName")
-        val typeCol = c.getColumnIndexOrThrow("type")
-        val lvlCol = c.getColumnIndexOrThrow("level")
-        val titleCol = c.getColumnIndexOrThrow("title")
-        val msgCol = c.getColumnIndexOrThrow("message")
-        val timeCol = c.getColumnIndexOrThrow("timestamp")
-        val readCol = c.getColumnIndexOrThrow("isRead")
-        val latCol = c.getColumnIndexOrThrow("latitude")
-        val lngCol = c.getColumnIndexOrThrow("longitude")
+        val idCol = c.getColumnIndex("id")
+        val famCol = c.getColumnIndex("familyId")
+        val userCol = c.getColumnIndex("memberId").takeIf { it != -1 } ?: c.getColumnIndex("targetUserId")
+        val nameCol = c.getColumnIndex("memberName").takeIf { it != -1 } ?: c.getColumnIndex("targetUserName")
+        val typeCol = c.getColumnIndex("alertType").takeIf { it != -1 } ?: c.getColumnIndex("type")
+        val lvlCol = c.getColumnIndex("alertLevel").takeIf { it != -1 } ?: c.getColumnIndex("level")
+        val titleCol = c.getColumnIndex("title")
+        val msgCol = c.getColumnIndex("message")
+        val addressCol = c.getColumnIndex("address")
+        val timeCol = c.getColumnIndex("timestamp")
+        val readCol = c.getColumnIndex("isRead")
+        val resolvedCol = c.getColumnIndex("isResolved")
+        val latCol = c.getColumnIndex("latitude")
+        val lngCol = c.getColumnIndex("longitude")
+
+        val idVal = if (idCol != -1) {
+            try { c.getLong(idCol) } catch (_: Exception) { c.getString(idCol).toLongOrNull() ?: 0L }
+        } else 0L
+
+        val memberIdVal = if (userCol != -1 && !c.isNull(userCol)) c.getString(userCol) else ""
+        val memberNameVal = if (nameCol != -1 && !c.isNull(nameCol)) c.getString(nameCol) else ""
+        val typeStr = if (typeCol != -1 && !c.isNull(typeCol)) c.getString(typeCol) else ""
+        val lvlStr = if (lvlCol != -1 && !c.isNull(lvlCol)) c.getString(lvlCol) else ""
+        val titleVal = if (titleCol != -1 && !c.isNull(titleCol)) c.getString(titleCol) else ""
+        val msgVal = if (msgCol != -1 && !c.isNull(msgCol)) c.getString(msgCol) else ""
+        val addressVal = if (addressCol != -1 && !c.isNull(addressCol)) c.getString(addressCol) else null
+        val timeVal = if (timeCol != -1) c.getLong(timeCol) else System.currentTimeMillis()
+        val isReadVal = if (readCol != -1) c.getInt(readCol) == 1 else false
+        val isResolvedVal = if (resolvedCol != -1) c.getInt(resolvedCol) == 1 else false
+        val latVal = if (latCol != -1 && !c.isNull(latCol)) c.getDouble(latCol) else null
+        val lngVal = if (lngCol != -1 && !c.isNull(lngCol)) c.getDouble(lngCol) else null
+        val famVal = if (famCol != -1 && !c.isNull(famCol)) c.getString(famCol) else ""
+
+        val alertTypeEnum = runCatching { com.familycare.app.domain.model.AlertType.valueOf(typeStr) }
+            .getOrDefault(com.familycare.app.domain.model.AlertType.THRESHOLD_EXCEEDED)
+        val alertLevelEnum = runCatching { com.familycare.app.domain.model.AlertLevel.valueOf(lvlStr) }
+            .getOrDefault(com.familycare.app.domain.model.AlertLevel.WARNING)
 
         return AlertEntity(
-            id = c.getString(idCol),
-            familyId = c.getString(famCol),
-            targetUserId = c.getString(userCol),
-            targetUserName = c.getString(nameCol),
-            type = c.getString(typeCol),
-            level = c.getString(lvlCol),
-            title = c.getString(titleCol),
-            message = c.getString(msgCol),
-            timestamp = c.getLong(timeCol),
-            isRead = c.getInt(readCol) == 1,
-            latitude = if (!c.isNull(latCol)) c.getDouble(latCol) else null,
-            longitude = if (!c.isNull(lngCol)) c.getDouble(lngCol) else null
+            id = idVal,
+            memberId = memberIdVal,
+            memberName = memberNameVal,
+            alertType = alertTypeEnum,
+            alertLevel = alertLevelEnum,
+            title = titleVal,
+            message = msgVal,
+            address = addressVal,
+            latitude = latVal,
+            longitude = lngVal,
+            timestamp = timeVal,
+            isRead = isReadVal,
+            isResolved = isResolvedVal,
+            familyId = famVal
         )
     }
 }

@@ -355,6 +355,8 @@ class EmergencyViewModel(
                     message = "Vị trí thực tế: $address. Đã phát cảnh báo khẩn cấp tới toàn bộ người thân.",
                     timestamp = payload.timestamp,
                     isRead = false,
+                    isResolved = false,
+                    address = address,
                     latitude = lat,
                     longitude = lng
                 )

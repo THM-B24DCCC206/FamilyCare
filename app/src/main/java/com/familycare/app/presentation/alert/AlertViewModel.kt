@@ -4,105 +4,136 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.familycare.app.core.database.AlertDao
+import com.familycare.app.core.database.AlertEntity
 import com.familycare.app.core.database.AppDatabase
-import com.familycare.app.data.repository.AlertRepositoryImpl
-import com.familycare.app.domain.model.Alert
 import com.familycare.app.domain.model.AlertLevel
 import com.familycare.app.domain.model.AlertType
-import com.familycare.app.domain.repository.AlertRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel quản lý danh sách cảnh báo (Alert Rules & History) của Thành viên 2
+ * ViewModel quản lý và điều phối Trung Tâm Cảnh Báo (Alert Center)
+ * Sử dụng toán tử combine(alertDao.getAllAlerts(), _selectedFilter) để tính toán chính xác
+ * số lượng tab (allCount, criticalCount, warningCount) và lọc danh sách tự động.
  */
 class AlertViewModel(
-    private val alertRepository: AlertRepository
+    private val alertDao: AlertDao
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AlertUiState())
-    val uiState: StateFlow<AlertUiState> = _uiState.asStateFlow()
+    private val _selectedFilter = MutableStateFlow(AlertFilter.ALL)
+    val selectedFilter: StateFlow<AlertFilter> = _selectedFilter.asStateFlow()
 
-    init {
-        observeAlerts("fam_123456")
+    val uiState: StateFlow<AlertUiState> = combine(
+        alertDao.getAllAlerts(),
+        _selectedFilter
+    ) { allAlertsList, filter ->
+        val allAlerts = if (allAlertsList.isEmpty()) seedDefaultAlertEntities() else allAlertsList
+
+        val allCount = allAlerts.size
+        val criticalCount = allAlerts.count { it.alertLevel == AlertLevel.CRITICAL }
+        val warningCount = allAlerts.count { it.alertLevel == AlertLevel.WARNING }
+
+        val filtered = when (filter) {
+            AlertFilter.ALL -> allAlerts
+            AlertFilter.CRITICAL -> allAlerts.filter { it.alertLevel == AlertLevel.CRITICAL }
+            AlertFilter.WARNING -> allAlerts.filter { it.alertLevel == AlertLevel.WARNING }
+        }
+
+        AlertUiState(
+            alerts = filtered,
+            selectedFilter = filter,
+            allCount = allCount,
+            criticalCount = criticalCount,
+            warningCount = warningCount,
+            isLoading = false
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = AlertUiState(isLoading = true)
+    )
+
+    fun onFilterSelected(filter: AlertFilter) {
+        _selectedFilter.value = filter
     }
 
-    fun observeAlerts(familyId: String) {
+    fun onMarkAsRead(alertId: Long) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            alertRepository.getAlertsByFamily(familyId).collect { alertList ->
-                val list = if (alertList.isEmpty()) seedDefaultAlerts() else alertList
-                _uiState.update {
-                    it.copy(
-                        alerts = list,
-                        isLoading = false,
-                        errorMessage = null
-                    )
-                }
-            }
+            alertDao.updateReadStatus(alertId, true)
         }
+    }
+
+    fun onResolveAlert(alertId: Long) {
+        viewModelScope.launch {
+            alertDao.updateResolvedStatus(alertId, true)
+        }
+    }
+
+    // Hàm tương thích ngược cho mã nguồn cũ
+    fun markAsRead(alertId: String) {
+        val idLong = alertId.toLongOrNull() ?: 0L
+        onMarkAsRead(idLong)
     }
 
     fun setFilter(level: AlertLevel?) {
-        _uiState.update { it.copy(selectedFilter = level) }
-    }
-
-    fun markAsRead(alertId: String) {
-        viewModelScope.launch {
-            alertRepository.markAlertAsRead(alertId)
-            _uiState.update { state ->
-                state.copy(
-                    alerts = state.alerts.map {
-                        if (it.id == alertId) it.copy(isRead = true) else it
-                    }
-                )
-            }
+        when (level) {
+            AlertLevel.CRITICAL -> onFilterSelected(AlertFilter.CRITICAL)
+            AlertLevel.WARNING -> onFilterSelected(AlertFilter.WARNING)
+            else -> onFilterSelected(AlertFilter.ALL)
         }
     }
 
-    private fun seedDefaultAlerts(): List<Alert> {
+    fun observeAlerts(familyId: String) {
+        // Luồng Reactive Flow đã được quản lý tự động bởi combine trong uiState
+    }
+
+    private fun seedDefaultAlertEntities(): List<AlertEntity> {
         val now = System.currentTimeMillis()
         return listOf(
-            Alert(
-                id = "alert_01",
-                familyId = "fam_123456",
-                targetUserId = "user_demo_01",
-                targetUserName = "Bác Nguyễn Văn Nam",
-                type = AlertType.THRESHOLD_EXCEEDED,
-                level = AlertLevel.CRITICAL,
+            AlertEntity(
+                id = 1,
+                memberId = "user_02",
+                memberName = "Hải Minh Trần",
+                alertType = AlertType.THRESHOLD_EXCEEDED,
+                alertLevel = AlertLevel.CRITICAL,
                 title = "⚠️ CẢNH BÁO ĐỎ: 3 LẦN ĐO VƯỢT NGƯỠNG LIÊN TIẾP",
-                message = "Huyết áp trung bình 148/95 mmHg đo trong 48h qua vượt ngưỡng an toàn. Cần kiểm tra cữ thuốc!",
+                message = "Huyết áp trung bình 148/95 mmHg và nhịp tim 104 BPM trong 48h qua vượt ngưỡng an toàn. Cần kiểm tra cữ thuốc!",
+                address = "Số 123 Đường Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM",
                 timestamp = now - 35 * 60 * 1000L,
-                isRead = false
+                isRead = false,
+                isResolved = false,
+                familyId = "fam_default"
             ),
-            Alert(
-                id = "alert_02",
-                familyId = "fam_123456",
-                targetUserId = "user_demo_01",
-                targetUserName = "Bác Nguyễn Văn Nam",
-                type = AlertType.SOS_EMERGENCY,
-                level = AlertLevel.CRITICAL,
+            AlertEntity(
+                id = 2,
+                memberId = "user_02",
+                memberName = "Hải Minh Trần",
+                alertType = AlertType.SOS_EMERGENCY,
+                alertLevel = AlertLevel.CRITICAL,
                 title = "🚨 BÁO ĐỘNG SOS KHẨN CẤP",
-                message = "Người thân đã kích hoạt còi cứu hộ tại tọa độ 10.7769, 106.7009",
+                message = "Hải Minh Trần đã kích hoạt còi cứu hộ tại tọa độ thực tế. Cần tiếp cận hỗ trợ khẩn cấp!",
+                address = "Số 45 Đường Lê Duẩn, Phường Bến Nghé, Quận 1, TP.HCM",
+                latitude = 10.77921,
+                longitude = 106.69934,
                 timestamp = now - 2 * 3600 * 1000L,
                 isRead = true,
-                latitude = 10.7769,
-                longitude = 106.7009
+                isResolved = true,
+                familyId = "fam_default"
             ),
-            Alert(
-                id = "alert_03",
-                familyId = "fam_123456",
-                targetUserId = "user_demo_01",
-                targetUserName = "Bác Nguyễn Văn Nam",
-                type = AlertType.MEDICATION_MISSED,
-                level = AlertLevel.WARNING,
-                title = "Nhắc nhở: Quên uống thuốc Amlodipine",
-                message = "Cữ thuốc lúc 08:00 sáng chưa được đánh dấu đã uống.",
-                timestamp = now - 6 * 3600 * 1000L,
-                isRead = true
+            AlertEntity(
+                id = 3,
+                memberId = "user_me",
+                memberName = "Ly Trần",
+                alertType = AlertType.MEDICATION_MISSED,
+                alertLevel = AlertLevel.WARNING,
+                title = "💊 BỎ LỠ CỮ THUỐC: QUÁ 30 PHÚT",
+                message = "Chưa uống thuốc Amlodipine 5mg theo lịch hẹn buổi sáng (08:00).",
+                address = null,
+                timestamp = now - 5 * 3600 * 1000L,
+                isRead = true,
+                isResolved = false,
+                familyId = "fam_default"
             )
         )
     }
@@ -112,8 +143,7 @@ class AlertViewModel(
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val db = AppDatabase.getInstance(context.applicationContext)
-                val repo = AlertRepositoryImpl(db.alertDao())
-                return AlertViewModel(repo) as T
+                return AlertViewModel(alertDao = db.alertDao()) as T
             }
         }
     }

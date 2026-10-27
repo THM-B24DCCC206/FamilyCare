@@ -1,11 +1,19 @@
 package com.familycare.app.presentation.alert
 
-import com.familycare.app.domain.model.Alert
-import com.familycare.app.domain.model.AlertLevel
+import com.familycare.app.core.database.AlertEntity
+
+enum class AlertFilter {
+    ALL,
+    CRITICAL,
+    WARNING
+}
 
 data class AlertUiState(
-    val alerts: List<Alert> = emptyList(),
+    val alerts: List<AlertEntity> = emptyList(),
+    val selectedFilter: AlertFilter = AlertFilter.ALL,
+    val allCount: Int = 0,
+    val criticalCount: Int = 0,
+    val warningCount: Int = 0,
     val isLoading: Boolean = false,
-    val selectedFilter: AlertLevel? = null, // null: Tất cả
     val errorMessage: String? = null
 )

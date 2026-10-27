@@ -1,15 +1,15 @@
 package com.familycare.app.domain.model
 
 enum class AlertLevel {
-    INFO,
+    CRITICAL,
     WARNING,
-    CRITICAL // Cảnh báo đỏ: 3 lần vượt ngưỡng hoặc SOS
+    INFO
 }
 
 enum class AlertType {
-    THRESHOLD_EXCEEDED,  // Vượt ngưỡng liên tiếp
-    SOS_EMERGENCY,       // Nút SOS khẩn cấp
-    MEDICATION_MISSED    // Bỏ lỡ uống thuốc
+    SOS_EMERGENCY,
+    THRESHOLD_EXCEEDED,
+    MEDICATION_MISSED
 }
 
 data class Alert(
@@ -17,12 +17,19 @@ data class Alert(
     val familyId: String = "",
     val targetUserId: String = "",
     val targetUserName: String = "",
-    val type: AlertType,
-    val level: AlertLevel,
-    val title: String,
-    val message: String,
+    val type: AlertType = AlertType.THRESHOLD_EXCEEDED,
+    val level: AlertLevel = AlertLevel.WARNING,
+    val title: String = "",
+    val message: String = "",
     val timestamp: Long = System.currentTimeMillis(),
     val isRead: Boolean = false,
-    val latitude: Double? = null,  // Tọa độ GPS nếu là SOS
+    val isResolved: Boolean = false,
+    val address: String? = null,
+    val latitude: Double? = null,
     val longitude: Double? = null
-)
+) {
+    val memberId: String get() = targetUserId
+    val memberName: String get() = targetUserName
+    val alertType: AlertType get() = type
+    val alertLevel: AlertLevel get() = level
+}

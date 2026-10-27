@@ -15,6 +15,7 @@ import com.familycare.app.core.emergency.EmergencySirenController
 import com.familycare.app.presentation.emergency.EmergencyAlertReceiverActivity
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.launch
 
 /**
  * Dịch vụ FCM chạy ngầm tiếp nhận thông báo khẩn cấp trên thiết bị người thân (Máy B).
@@ -132,6 +133,31 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             .build()
 
         notificationManager.notify(NOTIFICATION_ID_SOS, notification)
+
+        // 5. Lưu sự kiện khẩn cấp vào Room Database (Trung Tâm Cảnh Báo)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val db = com.familycare.app.core.database.AppDatabase.getInstance(applicationContext)
+                val alertEntity = com.familycare.app.core.database.AlertEntity(
+                    memberId = data["userId"] ?: "user_sos",
+                    memberName = senderName,
+                    alertType = com.familycare.app.domain.model.AlertType.SOS_EMERGENCY,
+                    alertLevel = com.familycare.app.domain.model.AlertLevel.CRITICAL,
+                    title = "🚨 BÁO ĐỘNG SOS KHẨN CẤP",
+                    message = "$senderName đã kích hoạt còi cứu hộ khẩn cấp tại: $address",
+                    address = address,
+                    latitude = latitude,
+                    longitude = longitude,
+                    timestamp = timestamp,
+                    isRead = false,
+                    isResolved = false,
+                    familyId = data["familyId"] ?: ""
+                )
+                db.alertDao().insertAlert(alertEntity)
+            } catch (e: Exception) {
+                Log.e(TAG, "Lỗi lưu cảnh báo SOS vào cơ sở dữ liệu", e)
+            }
+        }
     }
 
     private fun handleGeneralNotification(message: RemoteMessage) {
