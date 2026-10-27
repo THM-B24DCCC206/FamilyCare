@@ -6,14 +6,12 @@ import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,8 +19,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -32,11 +32,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -53,6 +53,8 @@ import java.util.Locale
 @Composable
 fun AiAssistantScreen(
     onNavigateBack: (() -> Unit)? = null,
+    onNavigateToVitals: ((memberId: String) -> Unit)? = null,
+    onNavigateToSchedule: ((memberId: String) -> Unit)? = null,
     viewModel: AiAssistantViewModel = viewModel(
         factory = AiAssistantViewModel.provideFactory(LocalContext.current)
     )
@@ -60,11 +62,13 @@ fun AiAssistantScreen(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    var expandedMemberMenu by remember { mutableStateOf(false) }
 
-    // Voice-to-Text Speech Recognition Launcher
+    // Launcher nhận diện giọng nói tiếng Việt (Google Speech Recognizer vi-VN)
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        viewModel.setRecordingVoice(false)
         if (result.resultCode == Activity.RESULT_OK) {
             val spokenText = result.data
                 ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
@@ -97,36 +101,125 @@ fun AiAssistantScreen(
                     }
                 },
                 title = {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center
+                    // Thanh chọn thành viên trực quan (Member Dropdown/Chip)
+                    val currentMember = uiState.familyMembers.find { it.id == uiState.selectedMemberId }
+                    val isCurrentMe = currentMember?.role == "Tôi" || currentMember?.initials == "Tôi"
+                    val memberDisplayName = if (currentMember != null) {
+                        if (isCurrentMe) "${currentMember.fullName} (Tôi)" else currentMember.fullName
+                    } else {
+                        uiState.healthContext?.let { "${it.fullName} (Tôi)" } ?: "Chọn thành viên"
+                    }
+
+                    val bpShort = uiState.healthContext?.latestBloodPressure?.let {
+                        "${it.valuePrimary.toInt()}/${it.valueSecondary?.toInt()} mmHg"
+                    } ?: "Chưa đo"
+                    val hrShort = uiState.healthContext?.latestHeartRate?.let {
+                        "${it.valuePrimary.toInt()} BPM"
+                    } ?: "--"
+
+                    Box {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFFEFF6FF),
+                            border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable { expandedMemberMenu = true }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF2563EB)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = memberDisplayName,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF1E293B),
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = "Chọn thành viên",
+                                            tint = Color(0xFF2563EB),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = "HA: $bpShort • $hrShort",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF64748B),
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = expandedMemberMenu,
+                            onDismissRequest = { expandedMemberMenu = false }
+                        ) {
+                            uiState.familyMembers.forEach { member ->
+                                val isSelected = member.id == uiState.selectedMemberId
+                                val isMe = member.role == "Tôi" || member.initials == "Tôi"
+                                val label = if (isMe) "${member.fullName} (Tôi)" else member.fullName
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = null,
+                                                tint = if (isSelected) Color(0xFF2563EB) else Color(0xFF64748B),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = label,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) Color(0xFF2563EB) else Color(0xFF1E293B),
+                                                fontSize = 14.sp
+                                            )
+                                            if (isSelected) {
+                                                Spacer(modifier = Modifier.weight(1f))
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF2563EB),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onClick = {
+                                        expandedMemberMenu = false
+                                        viewModel.onMemberSelected(member.id)
+                                    }
                                 )
                             }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "AI Health Copilot",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        // Badge hiển thị tóm tắt ngữ cảnh y tế của người bệnh đang được bảo vệ
-                        uiState.healthContext?.let { ctx ->
-                            Text(
-                                text = "${ctx.fullName} (${ctx.getDisplayAge()} tuổi) • Huyết áp: ${ctx.latestBloodPressure?.let { "${it.valuePrimary.toInt()}/${it.valueSecondary?.toInt()}" } ?: "--"}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                 },
@@ -136,7 +229,7 @@ fun AiAssistantScreen(
                         Icon(
                             Icons.Default.Info,
                             contentDescription = "Xem ngữ cảnh y tế đã tiêm",
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = Color(0xFF2563EB)
                         )
                     }
                     // Nút làm mới đoạn hội thoại
@@ -156,9 +249,11 @@ fun AiAssistantScreen(
             ChatBottomInputBar(
                 inputText = uiState.inputText,
                 isLoading = uiState.isLoading,
+                isRecordingVoice = uiState.isRecordingVoice,
                 onTextChanged = viewModel::onInputTextChanged,
                 onSendMessage = { viewModel.sendMessage() },
                 onStartVoiceInput = {
+                    viewModel.setRecordingVoice(true)
                     val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE, "vi-VN")
@@ -167,6 +262,7 @@ fun AiAssistantScreen(
                     try {
                         speechRecognizerLauncher.launch(intent)
                     } catch (_: Exception) {
+                        viewModel.setRecordingVoice(false)
                         Toast.makeText(context, "Thiết bị không hỗ trợ nhận diện giọng nói", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -178,15 +274,42 @@ fun AiAssistantScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Thanh hiển thị nhanh chip gợi ý câu hỏi y tế
-            if (uiState.messages.size <= 2) {
-                QuickQuestionsBar(
-                    questions = uiState.quickQuestions,
-                    onQuestionSelected = { viewModel.sendMessage(it) }
-                )
+            // Thanh hiển thị chip gợi ý câu hỏi thông minh dạng LazyRow cuộn ngang
+            if (uiState.quickQuestions.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(uiState.quickQuestions) { question ->
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFFEFF6FF),
+                            border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable { viewModel.sendMessage(question) }
+                        ) {
+                            Text(
+                                text = question,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF1D4ED8),
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
             }
 
             // Danh sách tin nhắn hội thoại (LazyColumn)
+            val currentMember = uiState.familyMembers.find { it.id == uiState.selectedMemberId }
+            val currentName = currentMember?.fullName ?: uiState.healthContext?.fullName ?: "Thành viên"
+
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -194,13 +317,33 @@ fun AiAssistantScreen(
                     .weight(1f)
                     .padding(horizontal = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(vertical = 12.dp)
+                contentPadding = PaddingValues(vertical = 10.dp)
             ) {
                 items(uiState.messages, key = { it.id }) { message ->
                     ChatMessageBubble(
                         message = message,
-                        onActionClick = { actionText ->
-                            Toast.makeText(context, "Đã chọn: $actionText", Toast.LENGTH_SHORT).show()
+                        currentMemberName = currentName,
+                        onActionClick = { actionType, targetMemberId ->
+                            val resolvedMemberId = targetMemberId ?: uiState.selectedMemberId
+                            when (actionType) {
+                                "NAV_VITALS" -> {
+                                    if (onNavigateToVitals != null) {
+                                        onNavigateToVitals(resolvedMemberId)
+                                    } else {
+                                        Toast.makeText(context, "Mở màn hình chỉ số sinh tồn", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                "NAV_SCHEDULE" -> {
+                                    if (onNavigateToSchedule != null) {
+                                        onNavigateToSchedule(resolvedMemberId)
+                                    } else {
+                                        Toast.makeText(context, "Mở màn hình lịch uống thuốc", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                else -> {
+                                    Toast.makeText(context, "Thao tác: $actionType", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                         }
                     )
                 }
@@ -241,7 +384,8 @@ fun AiAssistantScreen(
 @Composable
 fun ChatMessageBubble(
     message: ChatMessage,
-    onActionClick: (String) -> Unit
+    currentMemberName: String,
+    onActionClick: (actionType: String, targetMemberId: String?) -> Unit
 ) {
     val isUser = message.sender == MessageSender.USER
     val alignment = if (isUser) Alignment.End else Alignment.Start
@@ -253,7 +397,7 @@ fun ChatMessageBubble(
         Row(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
-            modifier = Modifier.fillMaxWidth(if (isUser) 0.92f else 0.95f)
+            modifier = Modifier.fillMaxWidth(if (isUser) 0.88f else 0.95f)
         ) {
             // Avatar AI
             if (!isUser) {
@@ -261,13 +405,13 @@ fun ChatMessageBubble(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
+                        .background(Color(0xFFEFF6FF)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.AutoAwesome,
                         contentDescription = "AI",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color(0xFF2563EB),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -282,14 +426,48 @@ fun ChatMessageBubble(
                     RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 4.dp, bottomEnd = 18.dp)
                 },
                 color = if (isUser) {
-                    MaterialTheme.colorScheme.primary
+                    Color(0xFF2563EB)
                 } else {
-                    MaterialTheme.colorScheme.surfaceVariant
+                    Color(0xFFF8FAFC)
                 },
+                border = if (!isUser) BorderStroke(1.dp, Color(0xFFE2E8F0)) else null,
                 tonalElevation = if (isUser) 2.dp else 1.dp,
-                modifier = Modifier.widthIn(min = 60.dp, max = 320.dp)
+                modifier = Modifier.widthIn(min = 60.dp, max = 340.dp)
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
+                    // Tag nhỏ trên đầu tin nhắn AI: Tư vấn cho: [Tên thành viên]
+                    if (!isUser) {
+                        val target = message.targetMemberName ?: currentMemberName
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFEFF6FF),
+                            border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = null,
+                                    tint = Color(0xFF1D4ED8),
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Tư vấn cho: $target",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1D4ED8),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
                     // Cảnh báo mức độ nguy hiểm nếu có
                     if (!isUser && message.warningLevel != ContextWarningLevel.NORMAL) {
                         WarningLevelBanner(warningLevel = message.warningLevel)
@@ -299,10 +477,10 @@ fun ChatMessageBubble(
                     // Nội dung tin nhắn chính với cỡ chữ dễ nhìn cho người lớn tuổi
                     Text(
                         text = message.text,
-                        color = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isUser) Color.White else Color(0xFF1E293B),
                         style = MaterialTheme.typography.bodyLarge.copy(
-                            lineHeight = 24.sp,
-                            fontSize = 16.sp
+                            lineHeight = 23.sp,
+                            fontSize = 15.sp
                         )
                     )
 
@@ -311,7 +489,7 @@ fun ChatMessageBubble(
                     // Thời gian gửi tin
                     Text(
                         text = formatTime(message.timestamp),
-                        color = if (isUser) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.outline,
+                        color = if (isUser) Color.White.copy(alpha = 0.7f) else Color(0xFF94A3B8),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.align(Alignment.End)
                     )
@@ -325,40 +503,68 @@ fun ChatMessageBubble(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                        .background(Color(0xFFE2E8F0)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.Person,
                         contentDescription = "User",
-                        tint = MaterialTheme.colorScheme.secondary,
+                        tint = Color(0xFF475569),
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
         }
 
-        // Các nút hành động gợi ý phía dưới phản hồi của AI
-        if (!isUser && message.suggestedActions.isNotEmpty()) {
+        // Dưới câu trả lời của AI: Nút tắt thao tác nhanh dẫn thẳng vào dữ liệu của thành viên đó
+        if (!isUser) {
             Spacer(modifier = Modifier.height(6.dp))
             Row(
                 modifier = Modifier
                     .padding(start = 40.dp)
                     .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                message.suggestedActions.forEach { action ->
-                    AssistChip(
-                        onClick = { onActionClick(action) },
-                        label = { Text(action, fontSize = 12.sp) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFEFF6FF),
+                    border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onActionClick("NAV_VITALS", message.targetMemberId) }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "🩺 Đo chỉ số",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF1D4ED8)
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFF0FDF4),
+                    border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onActionClick("NAV_SCHEDULE", message.targetMemberId) }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "💊 Xem lịch thuốc",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF15803D)
+                        )
+                    }
                 }
             }
         }
@@ -366,7 +572,7 @@ fun ChatMessageBubble(
 }
 
 /**
- * Hiệu ứng đang gõ / đang suy nghĩ của AI (Loading State)
+ * Hiệu ứng đang suy nghĩ của AI (Loading State)
  */
 @Composable
 fun AiTypingIndicator() {
@@ -389,13 +595,13 @@ fun AiTypingIndicator() {
             modifier = Modifier
                 .size(32.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
+                .background(Color(0xFFEFF6FF)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Default.AutoAwesome,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = Color(0xFF2563EB),
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -403,7 +609,7 @@ fun AiTypingIndicator() {
 
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
+            color = Color(0xFFF1F5F9),
             modifier = Modifier.padding(vertical = 4.dp)
         ) {
             Row(
@@ -413,14 +619,14 @@ fun AiTypingIndicator() {
                 Text(
                     text = "Bác sĩ ảo đang phân tích chỉ số sức khỏe...",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alphaAnim),
+                    color = Color(0xFF475569).copy(alpha = alphaAnim),
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
                     strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary
+                    color = Color(0xFF2563EB)
                 )
             }
         }
@@ -485,77 +691,51 @@ fun ErrorMessageCard(
 }
 
 /**
- * Thanh gợi ý câu hỏi nhanh nằm phía trên
- */
-@Composable
-fun QuickQuestionsBar(
-    questions: List<String>,
-    onQuestionSelected: (String) -> Unit
-) {
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        contentPadding = PaddingValues(horizontal = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(questions) { q ->
-            SuggestionChip(
-                onClick = { onQuestionSelected(q) },
-                label = { Text(q, fontSize = 13.sp, maxLines = 1) },
-                icon = {
-                    Icon(
-                        Icons.Default.QuestionAnswer,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            )
-        }
-    }
-}
-
-/**
  * Thanh nhập liệu dưới cùng gồm Ô nhập văn bản, Nút Gửi và Nút Ghi âm giọng nói (Voice-to-Text)
+ * Có hỗ trợ imePadding() đẩy bàn phím mượt mà
  */
 @Composable
 fun ChatBottomInputBar(
     inputText: String,
     isLoading: Boolean,
+    isRecordingVoice: Boolean,
     onTextChanged: (String) -> Unit,
     onSendMessage: () -> Unit,
     onStartVoiceInput: () -> Unit
 ) {
     Surface(
-        tonalElevation = 4.dp,
-        modifier = Modifier.fillMaxWidth()
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .imePadding()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .imePadding()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Nút Micro thu âm giọng nói (Voice-to-Text)
+            // Nút Micro thu âm giọng nói (Voice-to-Text vi-VN)
             IconButton(
                 onClick = onStartVoiceInput,
                 enabled = !isLoading,
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f))
+                    .background(if (isRecordingVoice) Color(0xFFDC2626) else Color(0xFFEFF6FF))
             ) {
                 Icon(
                     Icons.Default.Mic,
                     contentDescription = "Ghi âm giọng nói",
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    tint = if (isRecordingVoice) Color.White else Color(0xFF2563EB)
                 )
             }
 
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             // Ô nhập văn bản hỗ trợ nhiều dòng
             TextField(
@@ -564,42 +744,44 @@ fun ChatBottomInputBar(
                 placeholder = {
                     Text(
                         text = "Hỏi về huyết áp, cách dùng thuốc...",
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        color = Color(0xFF94A3B8)
                     )
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 44.dp, max = 120.dp),
+                    .heightIn(min = 44.dp, max = 110.dp),
                 shape = RoundedCornerShape(24.dp),
                 enabled = !isLoading,
                 colors = TextFieldDefaults.colors(
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent,
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    focusedContainerColor = Color(0xFFF1F5F9),
+                    unfocusedContainerColor = Color(0xFFF8FAFC)
                 ),
                 maxLines = 4
             )
 
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
-            // Nút gửi tin nhắn
-            val canSend = inputText.isNotBlank() && !isLoading
-            FilledIconButton(
+            // Nút gửi tin nhắn (Đổi màu sang xanh dương Color(0xFF2563EB) khi có chữ)
+            val hasText = inputText.isNotBlank()
+            IconButton(
                 onClick = onSendMessage,
-                enabled = canSend,
-                modifier = Modifier.size(44.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    disabledContentColor = MaterialTheme.colorScheme.outline
-                )
+                enabled = hasText && !isLoading,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (hasText) Color(0xFF2563EB) else Color(0xFFE2E8F0)
+                    )
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Gửi tin nhắn"
+                    contentDescription = "Gửi tin nhắn",
+                    tint = if (hasText) Color.White else Color(0xFF94A3B8),
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -653,7 +835,7 @@ fun WarningLevelBanner(warningLevel: ContextWarningLevel) {
 }
 
 /**
- * Hộp thoại hiển thị thông tin Context Injection từ Room Database
+ * Hộp thoại hiển thị thông tin Context Injection 100% từ Room Database
  */
 @Composable
 fun ContextInjectionDialog(
@@ -674,45 +856,82 @@ fun ContextInjectionDialog(
                 modifier = Modifier
                     .padding(20.dp)
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Default.Psychology,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color(0xFF2563EB),
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Ngữ cảnh được tiêm (Context Injection)",
+                        text = "Ngữ Cảnh Được Tiêm (100% Room DB)",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1E293B)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Trước khi gửi yêu cầu lên Gemini 1.5 Flash, hệ thống tự động đọc Room Database và tiêm dữ liệu sau vào System Instructions:",
+                    text = "Dữ liệu thực tế từ thiết bị và bệnh án được tiêm vào System Instructions của Gemini:",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color(0xFF64748B)
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    color = Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        ContextInfoRow("Họ tên:", context.fullName)
-                        ContextInfoRow("Độ tuổi:", "${context.getDisplayAge()} tuổi")
-                        ContextInfoRow("Nhóm máu:", context.bloodType.ifBlank { "O" })
-                        ContextInfoRow("Bệnh nền:", context.chronicDiseases.joinToString(", "))
-                        ContextInfoRow("Dị ứng thuốc:", context.drugAllergies.joinToString(", "))
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                        ContextInfoRow("Huyết áp mới nhất:", context.getBloodPressureSummary())
-                        ContextInfoRow("Nhịp tim mới nhất:", context.getHeartRateSummary())
+                        Text(
+                            text = "1. THÀNH VIÊN TRỌNG TÂM",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = Color(0xFF2563EB)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        ContextInfoRow("Họ tên:", "${context.fullName} (${context.getDisplayAge()} tuổi)")
+                        ContextInfoRow("Nhóm máu:", context.bloodType.ifBlank { "Chưa xác định" })
+                        ContextInfoRow("Bệnh nền:", if (context.chronicDiseases.isEmpty()) "Không có" else context.chronicDiseases.joinToString(", "))
+                        ContextInfoRow("Dị ứng:", if (context.drugAllergies.isEmpty()) "Không có" else context.drugAllergies.joinToString(", "))
+                        ContextInfoRow("Huyết áp:", context.getBloodPressureSummary())
+                        ContextInfoRow("Nhịp tim:", context.getHeartRateSummary())
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Thuốc hôm nay (${context.todayMedicines.size}):",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            color = Color(0xFF334155)
+                        )
+                        if (context.todayMedicines.isEmpty()) {
+                            Text("Chưa có thuốc hôm nay", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                        } else {
+                            context.todayMedicines.forEach { m ->
+                                Text("• ${m.name} (${m.dosage}) - ${m.scheduleStatus}", fontSize = 11.sp, color = Color(0xFF475569))
+                            }
+                        }
+
+                        if (context.otherFamilyMembers.isNotEmpty()) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            Text(
+                                text = "2. TỔ ẤM GIA ĐÌNH (${context.otherFamilyMembers.size} người)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFF2563EB)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            context.otherFamilyMembers.forEach { other ->
+                                Text("• ${other.fullName} (${other.age}t): HA ${other.bloodPressureSummary}, Tim ${other.heartRateSummary}", fontSize = 11.sp, color = Color(0xFF334155))
+                            }
+                        }
                     }
                 }
 
@@ -720,7 +939,8 @@ fun ContextInjectionDialog(
 
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End)
+                    modifier = Modifier.align(Alignment.End),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                 ) {
                     Text("Đóng")
                 }
@@ -736,12 +956,12 @@ fun ContextInfoRow(label: String, value: String) {
             text = "$label ",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
+            color = Color(0xFF2563EB)
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface
+            color = Color(0xFF334155)
         )
     }
 }

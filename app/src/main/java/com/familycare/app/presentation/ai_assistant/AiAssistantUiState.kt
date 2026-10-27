@@ -2,10 +2,11 @@ package com.familycare.app.presentation.ai_assistant
 
 import com.familycare.app.domain.model.ChatMessage
 import com.familycare.app.domain.model.UserHealthContext
+import com.familycare.app.presentation.home.Member
 
 /**
  * Trạng thái thực thi xử lý tin nhắn của AI Copilot
- * (Yêu cầu 4: Loading, Success, Error)
+ * (Loading, Success, Error)
  */
 sealed interface ChatUiStatus {
     object Idle : ChatUiStatus
@@ -26,10 +27,7 @@ data class AiAssistantUiState(
     val healthContext: UserHealthContext? = null,
     val isRecordingVoice: Boolean = false,
     val showContextDialog: Boolean = false,
-    val quickQuestions: List<String> = listOf(
-        "Huyết áp của tôi hôm nay 145/92 có đáng lo không bác sĩ?",
-        "Tôi bị cao huyết áp có uống được thuốc Panadol Extra không?",
-        "Nhịp tim 86 BPM sau khi đi bộ về có bình thường không?",
-        "Bác sĩ tư vấn chế độ ăn giảm muối cho người cao tuổi giúp tôi."
-    )
+    val familyMembers: List<Member> = emptyList(),
+    val selectedMemberId: String = "",
+    val quickQuestions: List<String> = emptyList()
 )

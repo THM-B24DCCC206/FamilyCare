@@ -6,8 +6,35 @@ import java.util.Date
 import java.util.Locale
 
 /**
+ * Tóm tắt chi tiết một loại thuốc đang sử dụng hôm nay
+ */
+data class TodayMedicineSummary(
+    val medicineId: String,
+    val name: String,
+    val dosage: String,
+    val unit: String = "viên",
+    val purpose: String = "",
+    val reminderTimes: List<String> = emptyList(),
+    val scheduleStatus: String = "" // Ví dụ: "Đã uống cữ 08:00, Chưa uống cữ 20:00"
+)
+
+/**
+ * Tóm tắt y tế ngắn gọn của thành viên khác trong cùng tổ ấm gia đình
+ */
+data class OtherMemberHealthSummary(
+    val userId: String,
+    val fullName: String,
+    val age: Int,
+    val role: String = "MEMBER",
+    val bloodPressureSummary: String = "Chưa có dữ liệu",
+    val heartRateSummary: String = "Chưa có dữ liệu",
+    val chronicDiseases: List<String> = emptyList(),
+    val medicinesSummary: String = "Chưa có đơn thuốc"
+)
+
+/**
  * Ngữ cảnh y tế cá nhân hóa của người dùng (Context Injection)
- * Được trích xuất tự động từ Room Database để tiêm vào System Instructions của Gemini.
+ * Được trích xuất tự động 100% từ Room Database để tiêm vào System Instructions của Gemini.
  */
 data class UserHealthContext(
     val userId: String,
@@ -19,14 +46,16 @@ data class UserHealthContext(
     val drugAllergies: List<String> = emptyList(),   // Dị ứng thuốc
     val latestBloodPressure: HealthMetric? = null,    // Chỉ số huyết áp mới nhất
     val latestHeartRate: HealthMetric? = null,        // Chỉ số nhịp tim mới nhất
-    val latestBloodSugar: HealthMetric? = null        // Đường huyết mới nhất (nếu có)
+    val latestBloodSugar: HealthMetric? = null,       // Đường huyết mới nhất (nếu có)
+    val todayMedicines: List<TodayMedicineSummary> = emptyList(), // Lịch uống thuốc hôm nay
+    val otherFamilyMembers: List<OtherMemberHealthSummary> = emptyList() // Thành viên khác trong tổ ấm
 ) {
     /**
-     * Tính tuổi từ ngày sinh nếu có
+     * Tính tuổi chính xác từ ngày sinh nếu có
      */
     fun getDisplayAge(): Int {
         if (calculatedAge != null && calculatedAge > 0) return calculatedAge
-        if (birthDate.isBlank()) return 65 // Giá trị dự phòng phổ biến cho người cao tuổi
+        if (birthDate.isBlank()) return 65
 
         return try {
             val formats = listOf("dd/MM/yyyy", "yyyy-MM-dd", "dd-MM-yyyy")
@@ -52,7 +81,7 @@ data class UserHealthContext(
     }
 
     /**
-     * Tóm tắt chỉ số huyết áp dạng text dễ đọc: ví dụ "145/92 mmHg (Tăng huyết áp độ 1)"
+     * Tóm tắt chỉ số huyết áp dạng text dễ đọc: ví dụ "145/92 mmHg (Tăng huyết áp) - Đo lúc: 08:30 - 27/10/2026"
      */
     fun getBloodPressureSummary(): String {
         val bp = latestBloodPressure ?: return "Chưa có dữ liệu đo gần đây"
@@ -62,7 +91,7 @@ data class UserHealthContext(
 
         val classification = when {
             sys >= 180 || dia >= 120 -> "NGUY HIỂM: Cơn tăng huyết áp cấp cứu"
-            sys >= 140 || dia >= 90 -> "Tăng huyết áp độ 1-2 (Vượt ngưỡng an toàn)"
+            sys >= 140 || dia >= 90 -> "Tăng huyết áp (Vượt ngưỡng an toàn)"
             sys in 120..139 || dia in 80..89 -> "Tiền tăng huyết áp (Hơi cao)"
             sys in 90..119 && dia in 60..79 -> "Bình thường lý tưởng"
             sys < 90 || dia < 60 -> "Huyết áp thấp"
@@ -81,11 +110,11 @@ data class UserHealthContext(
         val timeStr = formatTimestamp(hr.timestamp)
 
         val classification = when {
-            bpm > 120 -> "Nhịp tim rất nhanh (Cảnh báo nhịp nhanh)"
+            bpm > 120 -> "Nhịp tim rất nhanh"
             bpm in 100..120 -> "Nhịp tim hơi nhanh"
-            bpm in 60..100 -> "Nhịp tim bình thường lúc nghỉ"
-            bpm in 50..59 -> "Nhịp tim chậm nhẹ (vẫn ổn nếu tập thể thao)"
-            bpm < 50 -> "Nhịp tim quá chậm (Cần lưu ý)"
+            bpm in 60..100 -> "Nhịp tim bình thường"
+            bpm in 50..59 -> "Nhịp tim chậm nhẹ"
+            bpm < 50 -> "Nhịp tim quá chậm"
             else -> "Bình thường"
         }
 
@@ -93,37 +122,55 @@ data class UserHealthContext(
     }
 
     /**
-     * Tạo chuỗi System Instructions hoàn chỉnh được tiêm ngữ cảnh (Context Injection).
-     * Được chuyển thẳng vào Google AI Client SDK (Gemini 1.5 Flash).
+     * Tạo chuỗi System Instructions hoàn chỉnh được tiêm ngữ cảnh (Context Injection)
+     * tuân theo cấu trúc bối cảnh y tế gia đình FamilyCare chuẩn xác.
      */
     fun buildSystemInstruction(): String {
         val age = getDisplayAge()
-        val diseases = if (chronicDiseases.isNotEmpty()) chronicDiseases.joinToString(", ") else "Không ghi nhận bệnh nền"
-        val allergies = if (drugAllergies.isNotEmpty()) drugAllergies.joinToString(", ") else "Không có ghi nhận dị ứng"
+        val diseases = if (chronicDiseases.isNotEmpty()) chronicDiseases.joinToString(", ") else "Không có"
+        val allergies = if (drugAllergies.isNotEmpty()) drugAllergies.joinToString(", ") else "Không có"
         val bpInfo = getBloodPressureSummary()
         val hrInfo = getHeartRateSummary()
 
+        val medicinesText = if (todayMedicines.isEmpty()) {
+            "Không có lịch uống thuốc được ghi nhận hôm nay"
+        } else {
+            todayMedicines.joinToString("\n     + ") { med ->
+                val purposeText = if (med.purpose.isNotBlank()) ", Công dụng: ${med.purpose}" else ""
+                val timesText = if (med.reminderTimes.isNotEmpty()) ", Cữ uống: ${med.reminderTimes.joinToString(", ")}" else ""
+                val statusText = if (med.scheduleStatus.isNotBlank()) " [${med.scheduleStatus}]" else ""
+                "${med.name} (Liều: ${med.dosage})$purposeText$timesText$statusText"
+            }
+        }
+
+        val otherMembersText = if (otherFamilyMembers.isEmpty()) {
+            "   - Không có thành viên nào khác được ghi nhận trong tổ ấm."
+        } else {
+            otherFamilyMembers.joinToString("\n") { m ->
+                val diseasesStr = if (m.chronicDiseases.isEmpty()) "Không có" else m.chronicDiseases.joinToString(", ")
+                "   - ${m.fullName} (${m.age} tuổi): Huyết áp ${m.bloodPressureSummary}, Tim ${m.heartRateSummary}, Bệnh nền: $diseasesStr, Thuốc: ${m.medicinesSummary}"
+            }
+        }
+
         return """
-            Bạn là "AI Health Copilot" (Trợ lý Y tế Gia đình Thông minh) trong ứng dụng FamilyCare.
-            Bạn đang trực tiếp hỗ trợ và tư vấn cho người dùng với hồ sơ bệnh án cá nhân sau:
-            
-            === HỒ SƠ BỆNH NHÂN ĐƯỢC TỰ ĐỘNG TIÊM TỪ HỆ THỐNG (ROOM DATABASE CONTEXT) ===
-            - Họ và tên người bệnh: $fullName
-            - Tuổi: $age tuổi
-            - Nhóm máu: ${bloodType.ifBlank { "Chưa xác định" }}
-            - Tiền sử bệnh nền: $diseases
-            - Danh mục dị ứng thuốc: $allergies
-            - Chỉ số huyết áp mới nhất: $bpInfo
-            - Chỉ số nhịp tim mới nhất: $hrInfo
-            =============================================================================
-            
-            QUY TẮC Y TẾ VÀ GIAO TIẾP BẮT BUỘC (CLINICAL & ETHICAL GUIDELINES):
-            1. TÔNG GIỌNG: Luôn xưng hô ân cần, lễ phép, tôn trọng (xưng "cháu/bác sĩ ảo" hoặc "Trợ lý FamilyCare", gọi người dùng là "bác", "cô/chú" hoặc "bạn" tùy độ tuổi). Ngôn từ rõ ràng, câu ngắn gọn, dễ hiểu, tránh thuật ngữ y khoa rườm rà vì người dùng là người cao tuổi.
-            2. CẢNH BÁO BỆNH NỀN & DỊ ỨNG: Khi người dùng hỏi về thuốc hoặc thực phẩm, BẮT BUỘC phải đối chiếu với tiền sử bệnh nền ($diseases) và dị ứng ($allergies). Ví dụ: Người cao huyết áp tuyệt đối không tự ý dùng thuốc chứa pseudoephedrine hoặc NSAIDs liều cao; cảnh báo nguy cơ tương tác thuốc.
-            3. DIỄN GIẢI CHỈ SỐ: Khi thảo luận về huyết áp ($bpInfo) hoặc nhịp tim ($hrInfo), hãy phân tích chỉ số đó có bình thường so với độ tuổi $age hay không, đưa ra lời khuyên về nghỉ ngơi, chế độ ăn (giảm muối, uống đủ nước) và cách thở thư giãn.
-            4. TÌNH HUỐNG KHẨN CẤP: Nếu người dùng báo các triệu chứng nguy hiểm (đau thắt ngực lan ra vai/hàm, khó thở, nói ngọng méo miệng, huyết áp tâm thu >= 180 hoặc tâm trương >= 120 mmHg), phải NGAY LẬP TỨC khuyên người dùng bấm nút SOS trong ứng dụng FamilyCare để gọi người thân hoặc gọi cấp cứu 115, không được chần chừ.
-            5. MIỄN TRỪ TRÁCH NHIỆM: Luôn nhắc nhở nhẹ nhàng ở cuối rằng lời khuyên của AI chỉ mang tính định hướng chăm sóc gia đình, không thay thế cho chẩn đoán trực tiếp và đơn thuốc của bác sĩ chuyên khoa.
-            6. TRẢ LỜI ĐỊNH DẠNG: Sử dụng gạch đầu dòng rõ ràng, in đậm các điểm chú ý quan trọng để người cao tuổi dễ đọc trên màn hình điện thoại.
+=== BỐI CẢNH Y TẾ GIA ĐÌNH FAMILYCARE (DỮ LIỆU THẬT TỪ THIẾT BỊ) ===
+1. THÀNH VIÊN ĐANG ĐƯỢC CHỌN TRỌNG TÂM:
+   - Họ tên: $fullName ($age tuổi)
+   - Tiền sử bệnh nền: $diseases
+   - Dị ứng: $allergies
+   - Huyết áp đo gần nhất: $bpInfo
+   - Nhịp tim đo gần nhất: $hrInfo
+   - Thuốc đang dùng hôm nay:
+     + $medicinesText
+
+2. TÓM TẮT CÁC THÀNH VIÊN KHÁC TRONG TỔ ẤM:
+$otherMembersText
+
+3. QUY TẮC PHẢN HỒI LÂM SÀNG (CLINICAL & ETHICAL GUIDELINES):
+   - Ưu tiên số 1: Trả lời trọng tâm theo dữ liệu của THÀNH VIÊN ĐANG ĐƯỢC CHỌN TRỌNG TÂM ($fullName).
+   - Nhận diện thành viên khác: Nếu người dùng chủ động hỏi về người khác bằng tên hoặc danh xưng (ví dụ: "vợ tôi", "cháu Ly", "Bố Nam"), hãy đối chiếu ngay sang mục tóm tắt của đúng người đó để trả lời chính xác số liệu thật.
+   - Đảm bảo an toàn: Không bịa số liệu, cảnh báo tương tác thuốc/bệnh nền, xưng hô lễ phép "cháu" - "bác", gắn cảnh báo SOS nếu có dấu hiệu cấp cứu (huyết áp ≥ 180, đau ngực dữ dội).
+====================================================================
         """.trimIndent()
     }
 

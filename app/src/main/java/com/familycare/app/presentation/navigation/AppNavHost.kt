@@ -151,6 +151,24 @@ fun AppNavHost() {
                             launchSingleTop = true
                             restoreState = true
                         }
+                    },
+                    onNavigateToVitals = {
+                        navController.navigate(Screen.Biometrics.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToSchedule = {
+                        navController.navigate(Screen.Medication.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 )
             }

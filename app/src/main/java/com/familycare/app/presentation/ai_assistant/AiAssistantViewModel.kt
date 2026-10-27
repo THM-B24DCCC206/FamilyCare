@@ -5,42 +5,65 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.familycare.app.core.common.Resource
+import com.familycare.app.core.common.SessionManager
 import com.familycare.app.core.database.AppDatabase
+import com.familycare.app.core.database.UserDao
+import com.familycare.app.core.database.UserEntity
 import com.familycare.app.data.repository.HealthAiRepositoryImpl
 import com.familycare.app.domain.model.ChatMessage
 import com.familycare.app.domain.model.MessageSender
+import com.familycare.app.domain.model.UserHealthContext
 import com.familycare.app.domain.usecase.GetHealthContextUseCase
 import com.familycare.app.domain.usecase.SendChatMessageUseCase
+import com.familycare.app.presentation.home.Member
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * ViewModel quản lý luồng hội thoại của Trợ lý Ảo Sức khỏe (AI Health Copilot).
  * Tuân thủ Clean Architecture, quản lý trạng thái bằng StateFlow (Loading, Success, Error).
+ * Quản lý bối cảnh thành viên gia đình và tiêm 100% dữ liệu thực tế từ Room Database.
  */
 class AiAssistantViewModel(
     private val sendChatMessageUseCase: SendChatMessageUseCase,
-    private val getHealthContextUseCase: GetHealthContextUseCase
+    private val getHealthContextUseCase: GetHealthContextUseCase,
+    private val userDao: UserDao,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AiAssistantUiState())
+    private val currentUserId: String = sessionManager.userId.ifBlank { "user_me" }
+
+    // State mặc định cố định: Biến selectedMemberId được khởi tạo bằng currentUserId của tài khoản đăng nhập
+    private val _selectedMemberId = MutableStateFlow(currentUserId)
+    val selectedMemberId: StateFlow<String> = _selectedMemberId.asStateFlow()
+
+    private val _uiState = MutableStateFlow(
+        AiAssistantUiState(selectedMemberId = currentUserId)
+    )
     val uiState: StateFlow<AiAssistantUiState> = _uiState.asStateFlow()
 
     init {
-        loadHealthContextAndInitChat()
+        loadFamilyMembersAndInitChat()
     }
 
     /**
-     * Tải ngữ cảnh bệnh án từ Room Database và khởi tạo lời chào đầu tiên
+     * Tải danh sách thành viên gia đình và khởi tạo lời chào đầu tiên
      */
-    fun loadHealthContextAndInitChat() {
+    fun loadFamilyMembersAndInitChat() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val context = getHealthContextUseCase()
-            val initialGreeting = buildInitialGreeting(context)
+            val members = withContext(Dispatchers.IO) { loadFamilyMembersInternal() }
+            val targetMemberId = _selectedMemberId.value.ifBlank { currentUserId }
+
+            val context = getHealthContextUseCase(targetMemberId)
+            val isMe = (targetMemberId == currentUserId)
+            val initialGreeting = buildInitialGreeting(context, isMe)
+            val initialQuestions = generateQuickQuestions(context.fullName, isMe)
 
             _uiState.update { state ->
                 val currentMessages = if (state.messages.isEmpty()) {
@@ -48,15 +71,55 @@ class AiAssistantViewModel(
                         ChatMessage(
                             sender = MessageSender.AI,
                             text = initialGreeting,
-                            timestamp = System.currentTimeMillis()
+                            timestamp = System.currentTimeMillis(),
+                            targetMemberName = context.fullName,
+                            targetMemberId = context.userId
                         )
                     )
                 } else {
                     state.messages
                 }
                 state.copy(
+                    familyMembers = members,
+                    selectedMemberId = targetMemberId,
                     healthContext = context,
                     messages = currentMessages,
+                    quickQuestions = initialQuestions,
+                    isLoading = false
+                )
+            }
+        }
+    }
+
+    /**
+     * Chuyển đổi thành viên gia đình được chọn (Member Switcher)
+     * Tự động nạp lại ngữ cảnh Room Database và gửi thông báo chuyển hồ sơ của AI
+     */
+    fun onMemberSelected(memberId: String) {
+        if (memberId.isBlank() || memberId == _selectedMemberId.value) return
+        _selectedMemberId.value = memberId
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, selectedMemberId = memberId) }
+            val newContext = getHealthContextUseCase(memberId)
+            val isMe = (memberId == currentUserId)
+
+            val switchNotice = "Cháu đã chuyển sang theo dõi hồ sơ của bác ${newContext.fullName}. Cháu có thể hỗ trợ gì về sức khỏe của bác ấy ạ?"
+
+            val aiSwitchMessage = ChatMessage(
+                sender = MessageSender.AI,
+                text = switchNotice,
+                timestamp = System.currentTimeMillis(),
+                targetMemberName = newContext.fullName,
+                targetMemberId = newContext.userId
+            )
+
+            _uiState.update { state ->
+                state.copy(
+                    selectedMemberId = memberId,
+                    healthContext = newContext,
+                    messages = state.messages + aiSwitchMessage,
+                    quickQuestions = generateQuickQuestions(newContext.fullName, isMe),
                     isLoading = false
                 )
             }
@@ -72,11 +135,15 @@ class AiAssistantViewModel(
 
     /**
      * Gửi tin nhắn của người dùng lên Gemini
-     * (Tự động thực hiện Context Injection từ Room Database)
+     * (Tự động thực hiện Context Injection từ Room Database theo thành viên đang chọn)
      */
     fun sendMessage(customPrompt: String? = null) {
         val promptToSend = (customPrompt ?: _uiState.value.inputText).trim()
         if (promptToSend.isBlank() || _uiState.value.isLoading) return
+
+        val currentContext = _uiState.value.healthContext
+        val targetName = currentContext?.fullName ?: "Thành viên"
+        val targetId = currentContext?.userId ?: _selectedMemberId.value
 
         val userMessage = ChatMessage(
             sender = MessageSender.USER,
@@ -96,18 +163,22 @@ class AiAssistantViewModel(
         }
 
         viewModelScope.launch {
-            val history = _uiState.value.messages.dropLast(1) // Lịch sử trước câu hỏi vừa gửi
-            val context = _uiState.value.healthContext ?: getHealthContextUseCase()
+            val history = _uiState.value.messages.dropLast(1)
+            val context = getHealthContextUseCase(_selectedMemberId.value)
 
             when (val result = sendChatMessageUseCase(promptToSend, history, context)) {
                 is Resource.Success -> {
-                    val aiReply = result.data ?: return@launch
+                    val rawAiMessage = result.data ?: return@launch
+                    val enrichedAiMessage = rawAiMessage.copy(
+                        targetMemberName = targetName,
+                        targetMemberId = targetId
+                    )
                     _uiState.update { state ->
                         state.copy(
-                            messages = state.messages + aiReply,
+                            messages = state.messages + enrichedAiMessage,
                             isLoading = false,
                             errorMessage = null,
-                            chatStatus = ChatUiStatus.Success(aiReply.id)
+                            chatStatus = ChatUiStatus.Success(enrichedAiMessage.id)
                         )
                     }
                 }
@@ -138,6 +209,13 @@ class AiAssistantViewModel(
     }
 
     /**
+     * Cập nhật trạng thái đang thu âm giọng nói
+     */
+    fun setRecordingVoice(isRecording: Boolean) {
+        _uiState.update { it.copy(isRecordingVoice = isRecording) }
+    }
+
+    /**
      * Thử lại lượt gửi cuối cùng nếu bị lỗi
      */
     fun retryLastMessage() {
@@ -162,18 +240,26 @@ class AiAssistantViewModel(
     }
 
     /**
-     * Khởi tạo lại cuộc trò chuyện
+     * Khởi tạo lại cuộc trò chuyện cho thành viên đang chọn
      */
     fun clearConversation() {
         val context = _uiState.value.healthContext
-        val initialGreeting = if (context != null) buildInitialGreeting(context) else "Chào bác! Cháu là Trợ lý Sức khỏe AI."
+        val isMe = (_selectedMemberId.value == currentUserId)
+        val initialGreeting = if (context != null) {
+            buildInitialGreeting(context, isMe)
+        } else {
+            "Chào bác! Cháu là Trợ lý Sức khỏe AI."
+        }
+
         _uiState.update {
             it.copy(
                 messages = listOf(
                     ChatMessage(
                         sender = MessageSender.AI,
                         text = initialGreeting,
-                        timestamp = System.currentTimeMillis()
+                        timestamp = System.currentTimeMillis(),
+                        targetMemberName = context?.fullName,
+                        targetMemberId = context?.userId
                     )
                 ),
                 inputText = "",
@@ -183,21 +269,138 @@ class AiAssistantViewModel(
         }
     }
 
-    private fun buildInitialGreeting(context: com.familycare.app.domain.model.UserHealthContext): String {
+    private suspend fun loadFamilyMembersInternal(): List<Member> {
+        val currentUserName = sessionManager.userName.ifBlank { "Tôi" }
+        val currentUserEmail = sessionManager.userEmail
+        val currentRole = sessionManager.userRole
+
+        // Đảm bảo user hiện tại có trong DB
+        var currentUser = userDao.getUserById(currentUserId)
+        if (currentUser == null) {
+            val newCurr = UserEntity(
+                id = currentUserId,
+                fullName = currentUserName,
+                email = currentUserEmail,
+                role = currentRole,
+                birthDate = "15/04/1958",
+                bloodType = "O+",
+                chronicDiseasesJson = "[]",
+                drugAllergiesJson = "[]"
+            )
+            userDao.insertUser(newCurr)
+            currentUser = newCurr
+        }
+
+        var allDbUsers = userDao.getAllUsers()
+        val otherMembersInDb = allDbUsers.filter {
+            it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01"
+        }
+
+        if (otherMembersInDb.isEmpty()) {
+            val lyTran = UserEntity(
+                id = "member_ly_tran",
+                fullName = "Ly Trần",
+                email = "ly.tran@familycare.vn",
+                role = "MEMBER",
+                birthDate = "20/11/1992",
+                bloodType = "A+",
+                chronicDiseasesJson = "[]",
+                drugAllergiesJson = "[\"Dị ứng Kháng sinh\"]"
+            )
+            userDao.insertUser(lyTran)
+
+            val bacNam = UserEntity(
+                id = "member_bac_nam",
+                fullName = "Bác Nguyễn Văn Nam",
+                email = "nam.nguyen@familycare.vn",
+                role = "MEMBER",
+                birthDate = "15/04/1958",
+                bloodType = "O+",
+                chronicDiseasesJson = "[\"Cao huyết áp\", \"Đái tháo đường type 2\"]",
+                drugAllergiesJson = "[\"Dị ứng Aspirin\"]"
+            )
+            userDao.insertUser(bacNam)
+            allDbUsers = userDao.getAllUsers()
+        }
+
+        val membersList = mutableListOf<Member>()
+        val curDomain = currentUser.toDomainModel()
+        membersList.add(
+            Member(
+                id = currentUserId,
+                fullName = curDomain.fullName.ifBlank { "Tôi" },
+                avatarUrl = curDomain.avatarUrl.takeIf { it.isNotBlank() },
+                initials = "Tôi",
+                role = "Tôi"
+            )
+        )
+
+        allDbUsers
+            .filter { it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01" }
+            .forEach { u ->
+                val displayRole = when (u.role) {
+                    "ADMIN" -> "Trưởng gia đình"
+                    "MEMBER" -> "Thành viên"
+                    else -> u.role
+                }
+                membersList.add(
+                    Member(
+                        id = u.id,
+                        fullName = u.fullName,
+                        avatarUrl = u.avatarUrl.takeIf { it.isNotBlank() },
+                        initials = u.fullName.trim().take(1).uppercase(),
+                        role = displayRole
+                    )
+                )
+            }
+
+        return membersList
+    }
+
+    private fun buildInitialGreeting(context: UserHealthContext, isCurrentUser: Boolean): String {
         val bpSummary = context.latestBloodPressure?.let {
             "${it.valuePrimary.toInt()}/${it.valueSecondary?.toInt()} mmHg"
-        } ?: "145/92 mmHg"
+        } ?: "Chưa có lần đo mới"
+
+        val hrSummary = context.latestHeartRate?.let {
+            "${it.valuePrimary.toInt()} BPM"
+        } ?: "Chưa có"
+
+        val title = if (isCurrentUser) "bác ${context.fullName}" else "bác ${context.fullName}"
+        val diseasesStr = context.chronicDiseases.firstOrNull() ?: "Không có bệnh nền"
+
+        val medCount = context.todayMedicines.size
+        val medStr = if (medCount > 0) "$medCount loại thuốc" else "Chưa có đơn thuốc"
 
         return """
-            Dạ kính chào ${context.fullName}! Cháu là **Trợ lý Ảo Sức khỏe FamilyCare**.
+            Dạ kính chào $title! Cháu là **Trợ lý Ảo Sức khỏe FamilyCare**.
             
-            Hệ thống vừa cập nhật chỉ số sức khỏe mới nhất của bác từ thiết bị:
-            • **Huyết áp:** $bpSummary (Đo gần đây)
-            • **Nhịp tim:** ${context.latestHeartRate?.valuePrimary?.toInt() ?: 86} BPM
-            • **Tiền sử cần lưu ý:** ${context.chronicDiseases.firstOrNull() ?: "Cao huyết áp"}
+            Hệ thống vừa cập nhật chỉ số sức khỏe của ${if (isCurrentUser) "bác" else context.fullName} từ hồ sơ:
+            • **Huyết áp:** $bpSummary
+            • **Nhịp tim:** $hrSummary
+            • **Tiền sử cần lưu ý:** $diseasesStr
+            • **Lịch thuốc hôm nay:** $medStr
             
-            Hôm nay bác cảm thấy trong người thế nào ạ? Bác có thể gõ câu hỏi hoặc bấm nút **Micro** để nói chuyện trực tiếp với cháu nhé!
+            Bác cần cháu tư vấn hay hỗ trợ giải đáp điều gì về sức khỏe hôm nay ạ?
         """.trimIndent()
+    }
+
+    private fun generateQuickQuestions(memberName: String, isCurrentUser: Boolean): List<String> {
+        return if (isCurrentUser) {
+            listOf(
+                "📊 Huyết áp hôm nay của tôi thế nào?",
+                "💊 Lịch uống thuốc của tôi hôm nay",
+                "🩺 Khi nào đến lịch tái khám?",
+                "🍵 Tư vấn chế độ ăn giảm muối"
+            )
+        } else {
+            listOf(
+                "📊 Huyết áp hôm nay của $memberName thế nào?",
+                "💊 Lịch uống thuốc của $memberName",
+                "🩺 Lịch tái khám của $memberName",
+                "⚠️ Bệnh nền của $memberName cần chú ý gì?"
+            )
+        }
     }
 
     companion object {
@@ -208,11 +411,22 @@ class AiAssistantViewModel(
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val db = AppDatabase.getInstance(context.applicationContext)
-                val getContextUseCase = GetHealthContextUseCase(db.userDao(), db.healthMetricDao())
+                val sessionManager = SessionManager(context.applicationContext)
+                val getContextUseCase = GetHealthContextUseCase(
+                    userDao = db.userDao(),
+                    healthMetricDao = db.healthMetricDao(),
+                    medicineDao = db.medicineDao(),
+                    medicationLogDao = db.medicationLogDao()
+                )
                 val aiRepo = HealthAiRepositoryImpl()
                 val sendChatUseCase = SendChatMessageUseCase(aiRepo, getContextUseCase)
 
-                return AiAssistantViewModel(sendChatUseCase, getContextUseCase) as T
+                return AiAssistantViewModel(
+                    sendChatMessageUseCase = sendChatUseCase,
+                    getHealthContextUseCase = getContextUseCase,
+                    userDao = db.userDao(),
+                    sessionManager = sessionManager
+                ) as T
             }
         }
     }

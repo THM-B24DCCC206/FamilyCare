@@ -1,109 +1,221 @@
 package com.familycare.app.domain.usecase
 
-import com.familycare.app.core.database.dao.HealthMetricDao
-import com.familycare.app.core.database.dao.UserDao
-import com.familycare.app.core.database.entity.HealthMetricEntity
-import com.familycare.app.core.database.entity.UserEntity
+import com.familycare.app.core.database.HealthMetricDao
+import com.familycare.app.core.database.MedicationLogDao
+import com.familycare.app.core.database.MedicineDao
+import com.familycare.app.core.database.UserDao
+import com.familycare.app.core.database.UserEntity
 import com.familycare.app.domain.model.MetricType
+import com.familycare.app.domain.model.OtherMemberHealthSummary
+import com.familycare.app.domain.model.TodayMedicineSummary
 import com.familycare.app.domain.model.UserHealthContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 /**
- * UseCase truy xuất hồ sơ bệnh án và các chỉ số đo mới nhất từ Room Database
- * để chuẩn bị cho Context Injection vào Gemini AI.
+ * UseCase truy xuất 100% hồ sơ bệnh án, lịch uống thuốc và các chỉ số đo mới nhất từ Room Database
+ * của thành viên được chọn và tóm tắt các thành viên khác trong gia đình để tiêm ngữ cảnh vào Gemini AI.
  */
 class GetHealthContextUseCase(
     private val userDao: UserDao,
-    private val healthMetricDao: HealthMetricDao
+    private val healthMetricDao: HealthMetricDao,
+    private val medicineDao: MedicineDao? = null,
+    private val medicationLogDao: MedicationLogDao? = null
 ) {
 
     suspend operator fun invoke(targetUserId: String? = null): UserHealthContext = withContext(Dispatchers.IO) {
-        // 1. Lấy thông tin người dùng hiện tại từ Room
+        // 1. Lấy thông tin người dùng được chọn từ Room Database
         val userEntity = if (!targetUserId.isNullOrBlank()) {
             userDao.getUserById(targetUserId)
         } else {
             userDao.getCurrentUser()
-        } ?: seedDefaultDemoUser() // Dự phòng mẫu bệnh nhân nếu cơ sở dữ liệu trống
+        } ?: userDao.getAllUsers().firstOrNull() ?: seedDefaultDemoUser()
 
         val userId = userEntity.id
+        val userDomain = userEntity.toDomainModel()
+        val calculatedAge = calculateAgeFromBirthDate(userDomain.birthDate)
 
-        // 2. Lấy chỉ số huyết áp mới nhất từ Room
+        // 2. Lấy chỉ số sinh tồn mới nhất từ Room
         val bpEntity = healthMetricDao.getLatestMetricByType(userId, MetricType.BLOOD_PRESSURE.name)
-            ?: seedDefaultBloodPressure(userId)
-
-        // 3. Lấy chỉ số nhịp tim mới nhất từ Room
         val hrEntity = healthMetricDao.getLatestMetricByType(userId, MetricType.HEART_RATE.name)
-            ?: seedDefaultHeartRate(userId)
-
-        // 4. Lấy chỉ số đường huyết nếu có
         val bsEntity = healthMetricDao.getLatestMetricByType(userId, MetricType.BLOOD_SUGAR.name)
 
-        val userDomain = userEntity.toDomainModel()
+        // 3. Lấy lịch uống thuốc hôm nay & trạng thái đã uống / chưa uống
+        val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+        val rawMedicines = runCatching {
+            medicineDao?.getMedicinesByMember(userId)?.firstOrNull().orEmpty()
+        }.getOrDefault(emptyList())
+
+        val todayLogs = runCatching {
+            medicationLogDao?.getLogsForDate(userId, todayDate)?.firstOrNull().orEmpty()
+        }.getOrDefault(emptyList())
+
+        val todayMedicines = rawMedicines.map { med ->
+            val normalizedDosage = normalizeDosage(med.name, med.dosage)
+            val isLiquid = isLiquidOrPowder(med.name, med.dosage, med.instruction)
+            val unit = if (isLiquid) "gói" else "viên"
+
+            val medLogs = todayLogs.filter { it.medicineId == med.id }
+            val reminderTimes = med.reminderTimes
+
+            val scheduleStatus = if (reminderTimes.isEmpty()) {
+                "Chưa thiết lập giờ uống"
+            } else {
+                val takenTimes = reminderTimes.filter { time ->
+                    medLogs.any { it.scheduledTime == time && it.isTaken }
+                }
+                val pendingTimes = reminderTimes.filter { time ->
+                    !takenTimes.contains(time)
+                }
+
+                when {
+                    takenTimes.size == reminderTimes.size -> "Đã uống đủ các cữ (${takenTimes.joinToString(", ")})"
+                    takenTimes.isEmpty() -> "Chưa uống cữ nào (Cần uống lúc: ${pendingTimes.joinToString(", ")})"
+                    else -> "Đã uống ${takenTimes.size}/${reminderTimes.size} cữ (Đã uống: ${takenTimes.joinToString(", ")} • Còn lại: ${pendingTimes.joinToString(", ")})"
+                }
+            }
+
+            TodayMedicineSummary(
+                medicineId = med.id,
+                name = med.name,
+                dosage = normalizedDosage,
+                unit = unit,
+                purpose = med.purpose.ifBlank { "Điều trị theo đơn" },
+                reminderTimes = reminderTimes,
+                scheduleStatus = scheduleStatus
+            )
+        }
+
+        // 4. Lấy tóm tắt các thành viên khác trong cùng tổ ấm gia đình
+        val allUsers = runCatching { userDao.getAllUsers() }.getOrDefault(emptyList())
+        val otherUsers = allUsers.filter {
+            it.id != userId && it.id != "user_01" && it.id != "user_demo_01"
+        }
+
+        val otherMembers = otherUsers.map { other ->
+            val otherAge = calculateAgeFromBirthDate(other.birthDate)
+            val otherBp = healthMetricDao.getLatestMetricByType(other.id, MetricType.BLOOD_PRESSURE.name)
+            val otherHr = healthMetricDao.getLatestMetricByType(other.id, MetricType.HEART_RATE.name)
+            val otherMeds = runCatching {
+                medicineDao?.getMedicinesByMember(other.id)?.firstOrNull().orEmpty()
+            }.getOrDefault(emptyList())
+
+            val bpStr = if (otherBp != null) {
+                val dia = otherBp.valueSecondary?.toInt()
+                if (dia != null) "${otherBp.valuePrimary.toInt()}/$dia mmHg" else "${otherBp.valuePrimary.toInt()} mmHg"
+            } else "Chưa đo"
+
+            val hrStr = if (otherHr != null) "${otherHr.valuePrimary.toInt()} BPM" else "Chưa đo"
+
+            val medsStr = if (otherMeds.isEmpty()) {
+                "Không có đơn thuốc"
+            } else {
+                otherMeds.joinToString(", ") { "${it.name} (${it.dosage})" }
+            }
+
+            OtherMemberHealthSummary(
+                userId = other.id,
+                fullName = other.fullName,
+                age = otherAge,
+                role = other.role,
+                bloodPressureSummary = bpStr,
+                heartRateSummary = hrStr,
+                chronicDiseases = other.toDomainModel().chronicDiseases,
+                medicinesSummary = medsStr
+            )
+        }
 
         UserHealthContext(
             userId = userId,
             fullName = userDomain.fullName,
             birthDate = userDomain.birthDate,
-            calculatedAge = 68,
+            calculatedAge = calculatedAge,
             bloodType = userDomain.bloodType,
             chronicDiseases = userDomain.chronicDiseases,
             drugAllergies = userDomain.drugAllergies,
-            latestBloodPressure = bpEntity.toDomainModel(),
-            latestHeartRate = hrEntity.toDomainModel(),
-            latestBloodSugar = bsEntity?.toDomainModel()
+            latestBloodPressure = bpEntity?.toDomainModel(),
+            latestHeartRate = hrEntity?.toDomainModel(),
+            latestBloodSugar = bsEntity?.toDomainModel(),
+            todayMedicines = todayMedicines,
+            otherFamilyMembers = otherMembers
         )
     }
 
     /**
-     * Dữ liệu mẫu chuẩn lâm sàng dành cho người cao tuổi trong gia đình
+     * Chuẩn hóa liều lượng dùng rõ ràng, dễ hiểu cho người cao tuổi
      */
+    private fun normalizeDosage(name: String, rawDosage: String): String {
+        val trimmed = rawDosage.trim()
+        val isPowder = isLiquidOrPowder(name, rawDosage, "")
+        val defaultUnit = if (isPowder) "gói" else "viên"
+
+        if (trimmed.isBlank()) return "1 $defaultUnit"
+        if (trimmed.contains("viên", ignoreCase = true) ||
+            trimmed.contains("gói", ignoreCase = true) ||
+            trimmed.contains("ống", ignoreCase = true) ||
+            trimmed.contains("ml", ignoreCase = true)
+        ) {
+            return trimmed
+        }
+
+        return if (trimmed.matches("^\\d+$".toRegex())) {
+            "$trimmed $defaultUnit"
+        } else {
+            trimmed
+        }
+    }
+
+    private fun isLiquidOrPowder(vararg texts: String): Boolean {
+        val combined = texts.joinToString(" ").lowercase(Locale.ROOT)
+        return combined.contains("gói") ||
+                combined.contains("sủi") ||
+                combined.contains("bột") ||
+                combined.contains("cốm") ||
+                combined.contains("siro") ||
+                combined.contains("dung dịch") ||
+                combined.contains("nước") ||
+                combined.contains("ống")
+    }
+
+    private fun calculateAgeFromBirthDate(birthDate: String): Int {
+        if (birthDate.isBlank()) return 65
+        val formats = listOf("dd/MM/yyyy", "yyyy-MM-dd", "dd-MM-yyyy")
+        for (fmt in formats) {
+            try {
+                val parsed = SimpleDateFormat(fmt, Locale.getDefault()).parse(birthDate)
+                if (parsed != null) {
+                    val dob = Calendar.getInstance().apply { time = parsed }
+                    val today = Calendar.getInstance()
+                    var age = today.get(Calendar.YEAR) - dob.get(Calendar.YEAR)
+                    if (today.get(Calendar.DAY_OF_YEAR) < dob.get(Calendar.DAY_OF_YEAR)) {
+                        age--
+                    }
+                    if (age in 1..120) return age
+                }
+            } catch (_: Exception) {}
+        }
+        return 65
+    }
+
     private suspend fun seedDefaultDemoUser(): UserEntity {
         val defaultUser = UserEntity(
-            id = "user_demo_01",
+            id = "user_me",
             fullName = "Bác Nguyễn Văn Nam",
             email = "nam.nguyen@familycare.vn",
             avatarUrl = "",
             familyId = "fam_123456",
-            role = "MEMBER",
+            role = "ADMIN",
             birthDate = "15/04/1958",
-            bloodType = "O",
-            chronicDiseasesJson = "[\"Cao huyết áp vô căn (10 năm)\", \"Rối loạn lipid máu\", \"Đái tháo đường type 2\"]",
+            bloodType = "O+",
+            chronicDiseasesJson = "[\"Cao huyết áp\", \"Đái tháo đường type 2\"]",
             drugAllergiesJson = "[\"Dị ứng nhóm Sulfamid\", \"Dị ứng Aspirin\"]"
         )
         userDao.insertUser(defaultUser)
         return defaultUser
-    }
-
-    private suspend fun seedDefaultBloodPressure(userId: String): HealthMetricEntity {
-        val bp = HealthMetricEntity(
-            id = "metric_bp_01",
-            userId = userId,
-            type = MetricType.BLOOD_PRESSURE.name,
-            valuePrimary = 145.0,  // Tâm thu 145 mmHg
-            valueSecondary = 92.0, // Tâm trương 92 mmHg
-            unit = "mmHg",
-            timestamp = System.currentTimeMillis() - 25 * 60 * 1000L, // Đo cách đây 25 phút
-            notes = "Đo lúc vừa đi bộ về, cảm thấy hơi nóng mặt",
-            isFromCameraPpg = false
-        )
-        healthMetricDao.insertMetric(bp)
-        return bp
-    }
-
-    private suspend fun seedDefaultHeartRate(userId: String): HealthMetricEntity {
-        val hr = HealthMetricEntity(
-            id = "metric_hr_01",
-            userId = userId,
-            type = MetricType.HEART_RATE.name,
-            valuePrimary = 86.0,   // 86 BPM
-            valueSecondary = null,
-            unit = "BPM",
-            timestamp = System.currentTimeMillis() - 25 * 60 * 1000L,
-            notes = "Đo qua Camera PPG quang học",
-            isFromCameraPpg = true
-        )
-        healthMetricDao.insertMetric(hr)
-        return hr
     }
 }
