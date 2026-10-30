@@ -9,7 +9,8 @@ enum class AlertLevel {
 enum class AlertType {
     SOS_EMERGENCY,
     THRESHOLD_EXCEEDED,
-    MEDICATION_MISSED
+    MEDICATION_MISSED,
+    APPOINTMENT_REMINDER
 }
 
 data class Alert(

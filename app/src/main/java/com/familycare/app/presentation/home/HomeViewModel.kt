@@ -341,22 +341,75 @@ class HomeViewModel(
         // Bắt đầu quan sát reactive flow từ Room DB
         observeMedicationFlow(memberId, todayStr)
 
-        // 4. Lịch khám / Cuộc hẹn y tế sắp tới của thành viên (nếu có)
-        var nextApptItem: AppointmentItem? = null
+        // 4. Lịch khám / Cuộc hẹn y tế của thành viên (Phân biệt Hôm nay vs Sắp tới)
+        var todayApptItem: AppointmentItem? = null
+        var nextUpcomingApptItem: AppointmentItem? = null
         if (appointmentDao != null) {
             try {
                 val apptList = appointmentDao.getAppointmentsByMember(memberId).firstOrNull() ?: emptyList()
                 val upcoming = apptList.filter { !it.isCompleted && it.appointmentTime >= System.currentTimeMillis() - 3600_000L }
                     .minByOrNull { it.appointmentTime }
                 if (upcoming != null) {
-                    val dateFmt = SimpleDateFormat("EEE, dd/MM", Locale("vi", "VN")).format(Date(upcoming.appointmentTime))
+                    val calNow = Calendar.getInstance()
+                    val calAppt = Calendar.getInstance().apply { timeInMillis = upcoming.appointmentTime }
+                    val isToday = calNow.get(Calendar.YEAR) == calAppt.get(Calendar.YEAR) &&
+                            calNow.get(Calendar.DAY_OF_YEAR) == calAppt.get(Calendar.DAY_OF_YEAR)
+
+                    val isTomorrow = run {
+                        val calTomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
+                        calTomorrow.get(Calendar.YEAR) == calAppt.get(Calendar.YEAR) &&
+                                calTomorrow.get(Calendar.DAY_OF_YEAR) == calAppt.get(Calendar.DAY_OF_YEAR)
+                    }
+
+                    val dateFmt = when {
+                        isToday -> "Hôm nay, " + SimpleDateFormat("HH:mm", Locale("vi", "VN")).format(Date(upcoming.appointmentTime))
+                        isTomorrow -> "Ngày mai, " + SimpleDateFormat("HH:mm", Locale("vi", "VN")).format(Date(upcoming.appointmentTime))
+                        else -> SimpleDateFormat("EEE, dd/MM", Locale("vi", "VN")).format(Date(upcoming.appointmentTime))
+                    }
                     val docOrDept = if (upcoming.doctorName.isNotBlank()) "Bác sĩ ${upcoming.doctorName}" else upcoming.department
-                    nextApptItem = AppointmentItem(
+                    val item = AppointmentItem(
                         id = upcoming.id,
                         title = if (upcoming.hospitalName.isNotBlank()) upcoming.hospitalName else "Khám định kỳ",
                         timeFormatted = dateFmt,
-                        doctorOrDepartment = docOrDept
+                        doctorOrDepartment = docOrDept,
+                        isToday = isToday
                     )
+
+                    if (isToday) {
+                        todayApptItem = item
+                    } else {
+                        nextUpcomingApptItem = item
+                    }
+
+                    // Tự động kiểm tra và tạo thông báo chuông (AlertDao) nhắc nhở lịch khám nếu chưa có
+                    val now = System.currentTimeMillis()
+                    val diffHours = (upcoming.appointmentTime - now) / (1000 * 3600)
+                    if (diffHours in -1..168) { // Trong vòng 7 ngày tới
+                        val currentMember = userDao.getUserById(memberId)
+                        val memberName = currentMember?.fullName ?: "Thành viên"
+                        val alertTitle = "🗓 Sắp đến lịch khám: ${item.title}"
+                        val alertMsg = "Lịch khám tại ${item.title} ($dateFmt) của $memberName. Bác sĩ/Khoa: $docOrDept."
+                        val existingAlerts = alertDao.getAllAlerts().firstOrNull() ?: emptyList()
+                        val alreadyAlerted = existingAlerts.any {
+                            it.memberId == memberId && it.message.contains(item.title)
+                        }
+                        if (!alreadyAlerted) {
+                            alertDao.insertAlert(
+                                AlertEntity(
+                                    familyId = currentMember?.familyId ?: "FAM-8606",
+                                    memberId = memberId,
+                                    memberName = memberName,
+                                    alertType = AlertType.APPOINTMENT_REMINDER,
+                                    alertLevel = AlertLevel.WARNING,
+                                    title = alertTitle,
+                                    message = alertMsg,
+                                    timestamp = now,
+                                    isRead = false,
+                                    isResolved = false
+                                )
+                            )
+                        }
+                    }
                 }
             } catch (_: Exception) {}
         }
@@ -367,7 +420,8 @@ class HomeViewModel(
                 alertStatus = alert,
                 latestVitals = vitals,
                 todayMedications = initialSchedules,
-                upcomingAppointment = nextApptItem,
+                todayAppointment = todayApptItem,
+                upcomingAppointment = nextUpcomingApptItem,
                 isLoading = false,
                 errorMessage = null
             )

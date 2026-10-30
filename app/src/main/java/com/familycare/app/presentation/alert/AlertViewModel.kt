@@ -72,8 +72,8 @@ class AlertViewModel(
             AlertFilter.WARNING -> validAlerts.filter { it.alertLevel != AlertLevel.CRITICAL }
         }
 
-        val critCount = validAlerts.count { it.alertLevel == AlertLevel.CRITICAL }
-        val warnCount = validAlerts.count { it.alertLevel != AlertLevel.CRITICAL }
+        val critCount = validAlerts.count { it.alertLevel == AlertLevel.CRITICAL && !it.isRead && !it.isResolved }
+        val warnCount = validAlerts.count { it.alertLevel != AlertLevel.CRITICAL && !it.isRead && !it.isResolved }
 
         AlertUiState(
             alerts = filtered,
@@ -96,12 +96,19 @@ class AlertViewModel(
     fun onMarkAsRead(alertId: Long) {
         viewModelScope.launch {
             alertDao.updateReadStatus(alertId, true)
+            alertDao.updateResolvedStatus(alertId, true)
         }
     }
 
     fun onResolveAlert(alertId: Long) {
         viewModelScope.launch {
             alertDao.updateResolvedStatus(alertId, true)
+        }
+    }
+
+    fun onDeleteAlert(alertId: Long) {
+        viewModelScope.launch {
+            alertDao.deleteAlert(alertId)
         }
     }
 

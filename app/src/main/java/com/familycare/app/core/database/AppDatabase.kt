@@ -1059,6 +1059,8 @@ class AlertDaoImpl(private val dbHelper: DatabaseHelper) : AlertDao {
                 .getOrDefault(
                     if (typeStr.contains("SOS", ignoreCase = true) || titleVal.contains("SOS", ignoreCase = true) || titleVal.contains("CẤP CỨU", ignoreCase = true)) {
                         com.familycare.app.domain.model.AlertType.SOS_EMERGENCY
+                    } else if (typeStr.contains("APPOINTMENT", ignoreCase = true) || titleVal.contains("lịch khám", ignoreCase = true)) {
+                        com.familycare.app.domain.model.AlertType.APPOINTMENT_REMINDER
                     } else {
                         com.familycare.app.domain.model.AlertType.THRESHOLD_EXCEEDED
                     }

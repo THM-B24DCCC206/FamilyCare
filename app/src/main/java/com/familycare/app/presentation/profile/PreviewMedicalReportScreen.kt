@@ -39,6 +39,19 @@ import com.familycare.app.core.database.HealthMetricEntity
 import com.familycare.app.core.database.MedicineEntity
 import com.familycare.app.domain.model.User
 import com.familycare.app.domain.model.UserRole
+import com.familycare.app.presentation.common.FamilyCareAmbientBackground
+import com.familycare.app.ui.theme.SosRed
+import com.familycare.app.ui.theme.SosRedBorder
+import com.familycare.app.ui.theme.SosRedLight
+import com.familycare.app.ui.theme.WarmCreamBackground
+import com.familycare.app.ui.theme.WarmCreamSecondary
+import com.familycare.app.ui.theme.WarmCreamSurface
+import com.familycare.app.ui.theme.WarmDivider
+import com.familycare.app.ui.theme.WarmPrimaryLight
+import com.familycare.app.ui.theme.WarmPrimaryTeal
+import com.familycare.app.ui.theme.WarmTextMuted
+import com.familycare.app.ui.theme.WarmTextPrimary
+import com.familycare.app.ui.theme.WarmTextSecondary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -224,119 +237,122 @@ fun PreviewMedicalReportScreen(
     val displayMemberName = memberUser?.fullName.orEmpty().ifBlank { sessionManager.userName }
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", locale) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Xem Trước Báo Cáo Y Tế",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = Color(0xFF1E293B),
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Quay lại",
-                            tint = Color(0xFF1E293B)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        },
-        bottomBar = {
-            // THANH HÀNH ĐỘNG ĐÁY CỐ ĐỊNH (BOTTOM ACTION BAR)
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
-                shadowElevation = 8.dp,
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Nút chính: Tải PDF (Chỉ 1 icon duy nhất, không lặp emoji)
-                    Button(
-                        onClick = {
-                            val sanitizedName = displayMemberName.replace("\\s+".toRegex(), "_")
-                            val cleanMonth = selectedMonthText.replace("/", "_")
-                            pdfLauncher.launch("Bao_cao_y_te_${sanitizedName}_$cleanMonth.pdf")
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+    FamilyCareAmbientBackground {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
                         Text(
-                            text = "Tải Về Báo Cáo PDF",
-                            fontSize = 15.sp,
+                            text = "Xem Trước Báo Cáo Y Tế",
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = WarmTextPrimary,
                             maxLines = 1,
                             softWrap = false
                         )
-                    }
-
-                    // Nút phụ: Chia sẻ Báo Cáo (Chỉ 1 icon duy nhất, không lặp emoji)
-                    OutlinedButton(
-                        onClick = { shareReport() },
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Quay lại",
+                                tint = WarmTextPrimary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent
+                    )
+                )
+            },
+            bottomBar = {
+                // THANH HÀNH ĐỘNG ĐÁY CỐ ĐỊNH (BOTTOM ACTION BAR)
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = WarmCreamSurface,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 6.dp,
+                    border = BorderStroke(1.dp, WarmDivider)
+                ) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(46.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.5.dp, Color(0xFF2563EB)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF2563EB))
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = Color(0xFF2563EB)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Chia Sẻ Báo Cáo",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF2563EB),
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                        // Nút chính: Tải PDF (Màu xanh lá thương hiệu WarmPrimaryTeal)
+                        Button(
+                            onClick = {
+                                val sanitizedName = displayMemberName.replace("\\s+".toRegex(), "_")
+                                val cleanMonth = selectedMonthText.replace("/", "_")
+                                pdfLauncher.launch("Bao_cao_y_te_${sanitizedName}_$cleanMonth.pdf")
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = WarmPrimaryTeal)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Tải Về Báo Cáo PDF",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+
+                        // Nút phụ: Chia sẻ Báo Cáo
+                        OutlinedButton(
+                            onClick = { shareReport() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.5.dp, WarmPrimaryTeal),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = WarmPrimaryTeal)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = WarmPrimaryTeal
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Chia Sẻ Báo Cáo",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = WarmPrimaryTeal,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { paddingValues ->
-        if (isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = Color(0xFF2563EB))
-            }
-        } else {
+            },
+            containerColor = Color.Transparent
+        ) { paddingValues ->
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = WarmPrimaryTeal)
+                }
+            } else {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -349,8 +365,8 @@ fun PreviewMedicalReportScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-                    border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                    colors = CardDefaults.cardColors(containerColor = WarmPrimaryLight),
+                    border = BorderStroke(1.dp, WarmPrimaryTeal.copy(alpha = 0.35f))
                 ) {
                     Column(
                         modifier = Modifier
@@ -362,7 +378,7 @@ fun PreviewMedicalReportScreen(
                             text = "BÁO CÁO Y TẾ CÁ NHÂN",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1E40AF),
+                            color = WarmPrimaryTeal,
                             letterSpacing = 0.5.sp,
                             maxLines = 1,
                             softWrap = false
@@ -375,7 +391,7 @@ fun PreviewMedicalReportScreen(
                             Text(
                                 text = "Họ và tên: ",
                                 fontSize = 14.sp,
-                                color = Color(0xFF475569),
+                                color = WarmTextSecondary,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 softWrap = false
@@ -384,7 +400,7 @@ fun PreviewMedicalReportScreen(
                                 text = displayMemberName,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B),
+                                color = WarmTextPrimary,
                                 maxLines = 1,
                                 softWrap = false,
                                 overflow = TextOverflow.Ellipsis
@@ -399,7 +415,7 @@ fun PreviewMedicalReportScreen(
                             Text(
                                 text = "Tháng báo cáo: ",
                                 fontSize = 14.sp,
-                                color = Color(0xFF475569),
+                                color = WarmTextSecondary,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 softWrap = false
@@ -407,8 +423,8 @@ fun PreviewMedicalReportScreen(
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFDBEAFE),
-                                border = BorderStroke(1.dp, Color(0xFF93C5FD)),
+                                color = WarmCreamSurface,
+                                border = BorderStroke(1.dp, WarmPrimaryTeal.copy(alpha = 0.3f)),
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable { showMonthPicker = true }
@@ -421,14 +437,14 @@ fun PreviewMedicalReportScreen(
                                         imageVector = Icons.Default.CalendarMonth,
                                         contentDescription = "Chọn tháng",
                                         modifier = Modifier.size(15.dp),
-                                        tint = Color(0xFF1D4ED8)
+                                        tint = WarmPrimaryTeal
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = selectedMonthText,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF1D4ED8),
+                                        color = WarmPrimaryTeal,
                                         maxLines = 1,
                                         softWrap = false
                                     )
@@ -437,7 +453,7 @@ fun PreviewMedicalReportScreen(
                                         imageVector = Icons.Default.ArrowDropDown,
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
-                                        tint = Color(0xFF1D4ED8)
+                                        tint = WarmPrimaryTeal
                                     )
                                 }
                             }
@@ -450,7 +466,7 @@ fun PreviewMedicalReportScreen(
                             Text(
                                 text = "Thời điểm lập: ",
                                 fontSize = 13.sp,
-                                color = Color(0xFF64748B),
+                                color = WarmTextSecondary,
                                 maxLines = 1,
                                 softWrap = false
                             )
@@ -458,7 +474,7 @@ fun PreviewMedicalReportScreen(
                                 text = dateFormat.format(Date()),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = Color(0xFF334155),
+                                color = WarmTextPrimary,
                                 maxLines = 1,
                                 softWrap = false
                             )
@@ -470,9 +486,9 @@ fun PreviewMedicalReportScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(1.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    colors = CardDefaults.cardColors(containerColor = WarmCreamSurface),
+                    elevation = CardDefaults.cardElevation(0.dp),
+                    border = BorderStroke(1.dp, WarmDivider)
                 ) {
                     Column(
                         modifier = Modifier
@@ -484,7 +500,7 @@ fun PreviewMedicalReportScreen(
                             text = "Thông Tin Y Bạ & Bệnh Nền",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B),
+                            color = WarmTextPrimary,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -499,14 +515,14 @@ fun PreviewMedicalReportScreen(
                                 Icon(
                                     imageVector = Icons.Default.WaterDrop,
                                     contentDescription = null,
-                                    tint = Color(0xFFE11D48),
+                                    tint = SosRed,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Nhóm máu",
                                     fontSize = 13.sp,
-                                    color = Color(0xFF475569),
+                                    color = WarmTextSecondary,
                                     maxLines = 1,
                                     softWrap = false
                                 )
@@ -514,13 +530,13 @@ fun PreviewMedicalReportScreen(
                             val blood = memberUser?.bloodType?.ifBlank { "Chưa xác định" } ?: "Chưa xác định"
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFFFFF1F2)
+                                color = SosRedLight
                             ) {
                                 Text(
                                     text = blood,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFBE123C),
+                                    color = SosRed,
                                     maxLines = 1,
                                     softWrap = false,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -528,7 +544,7 @@ fun PreviewMedicalReportScreen(
                             }
                         }
 
-                        HorizontalDivider(color = Color(0xFFF1F5F9))
+                        HorizontalDivider(color = WarmDivider.copy(alpha = 0.6f))
 
                         // Bệnh nền
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -536,7 +552,7 @@ fun PreviewMedicalReportScreen(
                                 text = "Bệnh nền mãn tính:",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF334155),
+                                color = WarmTextPrimary,
                                 maxLines = 1,
                                 softWrap = false
                             )
@@ -545,7 +561,7 @@ fun PreviewMedicalReportScreen(
                                 Text(
                                     text = "Chưa ghi nhận bệnh nền",
                                     fontSize = 13.sp,
-                                    color = Color(0xFF94A3B8),
+                                    color = WarmTextMuted,
                                     maxLines = 1,
                                     softWrap = false
                                 )
@@ -557,13 +573,13 @@ fun PreviewMedicalReportScreen(
                                     diseases.forEach { d ->
                                         Surface(
                                             shape = RoundedCornerShape(6.dp),
-                                            color = Color(0xFFEFF6FF),
-                                            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                                            color = WarmPrimaryLight,
+                                            border = BorderStroke(1.dp, WarmPrimaryTeal.copy(alpha = 0.3f))
                                         ) {
                                             Text(
                                                 text = d,
                                                 fontSize = 12.sp,
-                                                color = Color(0xFF1D4ED8),
+                                                color = WarmPrimaryTeal,
                                                 fontWeight = FontWeight.Medium,
                                                 maxLines = 1,
                                                 softWrap = false,
@@ -576,7 +592,7 @@ fun PreviewMedicalReportScreen(
                             }
                         }
 
-                        HorizontalDivider(color = Color(0xFFF1F5F9))
+                        HorizontalDivider(color = WarmDivider.copy(alpha = 0.6f))
 
                         // Dị ứng
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -584,7 +600,7 @@ fun PreviewMedicalReportScreen(
                                 text = "Dị ứng thuốc & thức ăn:",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF334155),
+                                color = WarmTextPrimary,
                                 maxLines = 1,
                                 softWrap = false
                             )
@@ -593,7 +609,7 @@ fun PreviewMedicalReportScreen(
                                 Text(
                                     text = "Chưa ghi nhận dị ứng",
                                     fontSize = 13.sp,
-                                    color = Color(0xFF94A3B8),
+                                    color = WarmTextMuted,
                                     maxLines = 1,
                                     softWrap = false
                                 )
@@ -605,13 +621,13 @@ fun PreviewMedicalReportScreen(
                                     allergies.forEach { a ->
                                         Surface(
                                             shape = RoundedCornerShape(6.dp),
-                                            color = Color(0xFFFEF2F2),
-                                            border = BorderStroke(1.dp, Color(0xFFFECACA))
+                                            color = SosRedLight,
+                                            border = BorderStroke(1.dp, SosRedBorder)
                                         ) {
                                             Text(
                                                 text = a,
                                                 fontSize = 12.sp,
-                                                color = Color(0xFFB91C1C),
+                                                color = SosRed,
                                                 fontWeight = FontWeight.Medium,
                                                 maxLines = 1,
                                                 softWrap = false,
@@ -630,9 +646,9 @@ fun PreviewMedicalReportScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(1.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    colors = CardDefaults.cardColors(containerColor = WarmCreamSurface),
+                    elevation = CardDefaults.cardElevation(0.dp),
+                    border = BorderStroke(1.dp, WarmDivider)
                 ) {
                     Column(
                         modifier = Modifier
@@ -644,7 +660,7 @@ fun PreviewMedicalReportScreen(
                             text = "Lịch Uống Thuốc Đang Dùng",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B),
+                            color = WarmTextPrimary,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -653,7 +669,7 @@ fun PreviewMedicalReportScreen(
                             Text(
                                 text = "Chưa có danh sách thuốc đang sử dụng",
                                 fontSize = 13.sp,
-                                color = Color(0xFF94A3B8),
+                                color = WarmTextMuted,
                                 maxLines = 1,
                                 softWrap = false
                             )
@@ -667,26 +683,26 @@ fun PreviewMedicalReportScreen(
                                         .padding(vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Icon đổi theo dạng thuốc (Ly nước / Gói hòa tan hoặc Viên thuốc)
+                                    // Icon đổi theo dạng thuốc (Tông màu xanh lá thương hiệu WarmPrimaryTeal/WarmPrimaryLight)
                                     Box(
                                         modifier = Modifier
                                             .size(36.dp)
                                             .clip(CircleShape)
-                                            .background(if (isLiquidOrPowder) Color(0xFFE0F2FE) else Color(0xFFEFF6FF)),
+                                            .background(WarmPrimaryLight),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         if (isLiquidOrPowder) {
                                             Icon(
                                                 imageVector = Icons.Default.LocalDrink,
                                                 contentDescription = "Thuốc gói/hòa tan",
-                                                tint = Color(0xFF0284C7),
+                                                tint = WarmPrimaryTeal,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                         } else {
                                             Icon(
                                                 imageVector = Icons.Default.Medication,
                                                 contentDescription = "Thuốc viên",
-                                                tint = Color(0xFF2563EB),
+                                                tint = WarmPrimaryTeal,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                         }
@@ -704,7 +720,7 @@ fun PreviewMedicalReportScreen(
                                                 text = med.name,
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF1E293B),
+                                                color = WarmTextPrimary,
                                                 maxLines = 1,
                                                 softWrap = false,
                                                 overflow = TextOverflow.Ellipsis,
@@ -713,12 +729,12 @@ fun PreviewMedicalReportScreen(
                                             if (med.purpose.isNotBlank()) {
                                                 Surface(
                                                     shape = RoundedCornerShape(4.dp),
-                                                    color = Color(0xFFF1F5F9)
+                                                    color = WarmCreamSecondary
                                                 ) {
                                                     Text(
                                                         text = med.purpose,
                                                         fontSize = 10.sp,
-                                                        color = Color(0xFF475569),
+                                                        color = WarmTextSecondary,
                                                         maxLines = 1,
                                                         softWrap = false,
                                                         overflow = TextOverflow.Ellipsis,
@@ -739,7 +755,7 @@ fun PreviewMedicalReportScreen(
                                             Text(
                                                 text = subDetails,
                                                 fontSize = 12.sp,
-                                                color = Color(0xFF64748B),
+                                                color = WarmTextSecondary,
                                                 maxLines = 1,
                                                 softWrap = false,
                                                 overflow = TextOverflow.Ellipsis
@@ -749,7 +765,7 @@ fun PreviewMedicalReportScreen(
                                 }
 
                                 if (index < medicines.lastIndex) {
-                                    HorizontalDivider(color = Color(0xFFF8FAFC))
+                                    HorizontalDivider(color = WarmDivider.copy(alpha = 0.6f))
                                 }
                             }
                         }
@@ -760,9 +776,9 @@ fun PreviewMedicalReportScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(1.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    colors = CardDefaults.cardColors(containerColor = WarmCreamSurface),
+                    elevation = CardDefaults.cardElevation(0.dp),
+                    border = BorderStroke(1.dp, WarmDivider)
                 ) {
                     Column(
                         modifier = Modifier
@@ -779,7 +795,7 @@ fun PreviewMedicalReportScreen(
                                 text = "Chỉ Số Sinh Tồn ($selectedMonthText)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B),
+                                color = WarmTextPrimary,
                                 maxLines = 1,
                                 softWrap = false,
                                 overflow = TextOverflow.Ellipsis,
@@ -790,13 +806,13 @@ fun PreviewMedicalReportScreen(
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFF1F5F9)
+                                color = WarmPrimaryLight
                             ) {
                                 Text(
                                     text = "${monthlyMetrics.size} lần đo",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF475569),
+                                    color = WarmPrimaryTeal,
                                     maxLines = 1,
                                     softWrap = false,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -808,7 +824,7 @@ fun PreviewMedicalReportScreen(
                             Text(
                                 text = "Chưa có lượt đo sinh tồn nào trong tháng $selectedMonthText.",
                                 fontSize = 13.sp,
-                                color = Color(0xFF94A3B8),
+                                color = WarmTextMuted,
                                 maxLines = 1,
                                 softWrap = false,
                                 overflow = TextOverflow.Ellipsis
@@ -840,7 +856,7 @@ fun PreviewMedicalReportScreen(
                                             text = "${index + 1}. $typeName",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF1E293B),
+                                            color = WarmTextPrimary,
                                             maxLines = 1,
                                             softWrap = false,
                                             overflow = TextOverflow.Ellipsis
@@ -848,7 +864,7 @@ fun PreviewMedicalReportScreen(
                                         Text(
                                             text = dateFormat.format(Date(metric.timestamp)),
                                             fontSize = 11.sp,
-                                            color = Color(0xFF94A3B8),
+                                            color = WarmTextMuted,
                                             maxLines = 1,
                                             softWrap = false
                                         )
@@ -860,14 +876,14 @@ fun PreviewMedicalReportScreen(
                                         text = value,
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = Color(0xFF2563EB),
+                                        color = WarmPrimaryTeal,
                                         maxLines = 1,
                                         softWrap = false
                                     )
                                 }
 
                                 if (index < monthlyMetrics.lastIndex) {
-                                    HorizontalDivider(color = Color(0xFFF8FAFC))
+                                    HorizontalDivider(color = WarmDivider.copy(alpha = 0.6f))
                                 }
                             }
                         }
@@ -878,7 +894,7 @@ fun PreviewMedicalReportScreen(
                 Text(
                     text = "Lưu ý: Báo cáo tổng hợp dữ liệu cá nhân trên ứng dụng FamilyCare, không thay thế chẩn đoán chuyên môn của bác sĩ.",
                     fontSize = 12.sp,
-                    color = Color(0xFF94A3B8),
+                    color = WarmTextMuted,
                     modifier = Modifier.padding(horizontal = 4.dp)
                 )
 
@@ -897,6 +913,7 @@ fun PreviewMedicalReportScreen(
                 showMonthPicker = false
             }
         )
+    }
     }
 }
 
@@ -943,11 +960,13 @@ private fun MonthYearPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = WarmCreamSurface,
         title = {
             Text(
                 text = "Chọn Tháng Báo Cáo",
                 fontWeight = FontWeight.Bold,
                 fontSize = 17.sp,
+                color = WarmTextPrimary,
                 maxLines = 1,
                 softWrap = false
             )
@@ -960,7 +979,7 @@ private fun MonthYearPickerDialog(
                 Text(
                     text = "Dữ liệu chỉ số sức khỏe sẽ được lọc tự động theo tháng được chọn:",
                     fontSize = 13.sp,
-                    color = Color(0xFF64748B)
+                    color = WarmTextSecondary
                 )
 
                 LazyVerticalGrid(
@@ -975,7 +994,7 @@ private fun MonthYearPickerDialog(
 
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) Color(0xFF2563EB) else Color(0xFFF1F5F9),
+                            color = if (isSelected) WarmPrimaryTeal else WarmCreamSecondary,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(44.dp)
@@ -987,7 +1006,7 @@ private fun MonthYearPickerDialog(
                                     text = monthLabel,
                                     fontSize = 13.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else Color(0xFF1E293B),
+                                    color = if (isSelected) Color.White else WarmTextPrimary,
                                     maxLines = 1,
                                     softWrap = false
                                 )
@@ -999,7 +1018,7 @@ private fun MonthYearPickerDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Đóng")
+                Text("Đóng", color = WarmPrimaryTeal, fontWeight = FontWeight.Bold)
             }
         }
     )

@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -716,9 +717,9 @@ fun HomeScreen(
 
                 // F. VIỆC CẦN LÀM HÔM NAY (DANH SÁCH DÒNG VỚI DIVIDER MẢNH)
                 item {
-                    val appointments = uiState.upcomingAppointment
+                    val todayAppt = uiState.todayAppointment
                     val medications = uiState.todayMedications
-                    val totalTasks = medications.size + (if (appointments != null) 1 else 0)
+                    val totalTasks = medications.size + (if (todayAppt != null) 1 else 0)
                     val pendingCount = medications.count { !it.isTaken && !it.isSkipped }
                     val allDone = medications.isNotEmpty() && pendingCount == 0
 
@@ -794,7 +795,7 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(2.dp))
                                 Icon(
-                                    imageVector = Icons.Default.ArrowForward,
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                     contentDescription = null,
                                     tint = WarmPrimaryTeal,
                                     modifier = Modifier.size(13.dp)
@@ -862,8 +863,8 @@ fun HomeScreen(
                                     )
                                 }
 
-                                // 2. Lịch khám định kỳ (nếu có cuộc hẹn)
-                                if (appointments != null) {
+                                // 2. Lịch khám định kỳ diễn ra TRONG NGÀY HÔM NAY (nếu có)
+                                if (todayAppt != null) {
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
                                         color = WarmCreamSurface,
@@ -903,7 +904,7 @@ fun HomeScreen(
 
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        text = appointments.title,
+                                                        text = todayAppt.title,
                                                         fontSize = 14.5.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = WarmTextPrimary,
@@ -912,7 +913,7 @@ fun HomeScreen(
                                                     )
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(
-                                                        text = "${appointments.timeFormatted} · ${appointments.doctorOrDepartment}",
+                                                        text = "${todayAppt.timeFormatted} · ${todayAppt.doctorOrDepartment}",
                                                         fontSize = 12.sp,
                                                         color = WarmTextSecondary,
                                                         maxLines = 1,
@@ -929,6 +930,137 @@ fun HomeScreen(
                                             )
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // G. LỊCH HẸN KHÁM SẮP TỚI (Tương lai / Ngày mai - Tách riêng khối độc lập)
+                if (uiState.upcomingAppointment != null) {
+                    item {
+                        val upcoming = uiState.upcomingAppointment!!
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                ) {
+                                    Text(
+                                        text = "Lịch hẹn sắp tới",
+                                        fontSize = 15.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = WarmTextPrimary,
+                                        maxLines = 1
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = WarmPrimaryLight,
+                                        border = BorderStroke(0.8.dp, WarmPrimaryTeal.copy(alpha = 0.3f))
+                                    ) {
+                                        Text(
+                                            text = upcoming.timeFormatted.split(",").firstOrNull()?.trim() ?: "Sắp tới",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = WarmPrimaryTeal,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable { onNavigateToMedication() }
+                                        .padding(vertical = 4.dp, horizontal = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "Chi tiết",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = WarmPrimaryTeal,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        tint = WarmPrimaryTeal,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = WarmCreamSurface,
+                                border = BorderStroke(1.dp, WarmDivider),
+                                shadowElevation = 0.5.dp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onNavigateToMedication() }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(CircleShape)
+                                                .background(WarmPrimaryLight),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.CalendarMonth,
+                                                contentDescription = null,
+                                                tint = WarmPrimaryTeal,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = upcoming.title,
+                                                fontSize = 14.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = WarmTextPrimary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "${upcoming.timeFormatted} · ${upcoming.doctorOrDepartment}",
+                                                fontSize = 12.sp,
+                                                color = WarmTextSecondary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = null,
+                                        tint = WarmTextSecondary.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
                             }
                         }
@@ -1237,7 +1369,7 @@ fun GroupedSessionCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 46.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 groupedDoses.forEach { (dosage, items) ->
                     val names = items.map {
@@ -1250,7 +1382,7 @@ fun GroupedSessionCard(
                     }.filter { it.isNotBlank() }.distinct().joinToString(", ")
 
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.Top,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -1258,23 +1390,25 @@ fun GroupedSessionCard(
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (allTaken) WarmPrimaryTeal else WarmAccent,
-                            modifier = Modifier.padding(end = 6.dp)
+                            modifier = Modifier.padding(top = 1.dp, end = 6.dp)
                         )
-                        Text(
-                            text = "Thuốc $names",
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (allTaken) WarmTextSecondary else WarmTextPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        Text(
-                            text = ": $dosage",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = WarmTextSecondary
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Thuốc $names",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (allTaken) WarmTextSecondary else WarmTextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Liều dùng: $dosage",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = WarmTextSecondary
+                            )
+                        }
                     }
                 }
             }

@@ -220,6 +220,7 @@ fun AlertCenterScreen(
                             AlertItemCard(
                                 alert = alert,
                                 onMarkAsRead = { viewModel.onMarkAsRead(alert.id) },
+                                onDelete = { viewModel.onDeleteAlert(alert.id) },
                                 onOpenMap = { lat, lng ->
                                     openNavigationMap(context, lat, lng)
                                 }
@@ -236,15 +237,20 @@ fun AlertCenterScreen(
 fun AlertItemCard(
     alert: AlertEntity,
     onMarkAsRead: () -> Unit,
+    onDelete: () -> Unit,
     onOpenMap: (Double, Double) -> Unit
 ) {
     val isCritical = alert.alertLevel == AlertLevel.CRITICAL
     val isWarning = alert.alertLevel == AlertLevel.WARNING
+    val isAppointment = alert.alertType == com.familycare.app.domain.model.AlertType.APPOINTMENT_REMINDER ||
+            alert.title.contains("lịch khám", ignoreCase = true)
 
-    val cardBg = if (alert.isRead) WarmCreamSecondary.copy(alpha = 0.45f) else WarmCreamSurface
-    // Viền bo tròn trực tiếp trên Card: đỏ tươi cho khẩn cấp chưa đọc, cam hổ phách cho nhắc nhở chưa đọc, viền be nhẹ khi đã đọc
+    // Giải pháp 1: Khi đã xem, dùng nền ngà đặc 100% Color(0xFFF9F7F1) (không dùng alpha)
+    // và triệt tiêu hoàn toàn bóng RenderNode (0.dp) để chống vệt đen viền lem nhem
+    val cardBg = if (alert.isRead) Color(0xFFF9F7F1) else WarmCreamSurface
     val cardBorder = when {
         !alert.isRead && isCritical -> BorderStroke(1.5.dp, SosRedBorder)
+        !alert.isRead && isAppointment -> BorderStroke(1.2.dp, WarmPrimaryTeal.copy(alpha = 0.4f))
         !alert.isRead && isWarning -> BorderStroke(1.5.dp, HealthWarningBorder)
         else -> BorderStroke(1.dp, WarmDivider)
     }
@@ -253,7 +259,7 @@ fun AlertItemCard(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = cardBg),
         border = cardBorder,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (alert.isRead) 0.5.dp else 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (alert.isRead) 0.dp else 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -261,7 +267,7 @@ fun AlertItemCard(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
-            // 1. Dòng thông tin trên cùng: "Tên thành viên • Giờ - Ngày" và Huy hiệu [ MỚI ]
+            // 1. Dòng thông tin trên cùng: "Tên thành viên • Giờ - Ngày", Huy hiệu [ MỚI ] và Nút Xóa
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -277,19 +283,34 @@ fun AlertItemCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                if (!alert.isRead) {
-                    val badgeBg = if (isCritical) SosRedLight else HealthWarningLight
-                    val badgeTextColor = if (isCritical) SosRed else HealthWarning
-                    Surface(
-                        color = badgeBg,
-                        shape = RoundedCornerShape(6.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!alert.isRead) {
+                        val badgeBg = if (isCritical) SosRedLight else if (isAppointment) WarmPrimaryLight else HealthWarningLight
+                        val badgeTextColor = if (isCritical) SosRed else if (isAppointment) WarmPrimaryTeal else HealthWarning
+                        Surface(
+                            color = badgeBg,
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = if (isAppointment) "LỊCH KHÁM" else "MỚI",
+                                color = badgeTextColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(24.dp)
                     ) {
-                        Text(
-                            text = "MỚI",
-                            color = badgeTextColor,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Xóa thông báo này",
+                            tint = WarmTextSecondary.copy(alpha = 0.6f),
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                 }
@@ -297,26 +318,37 @@ fun AlertItemCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // 2. Tiêu đề cảnh báo chống rớt dòng: "🚨 Báo động SOS: [Tên]"
+            // 2. Tiêu đề cảnh báo
             val displayTitle = when {
+                isAppointment -> alert.title
                 isCritical -> "🚨 Báo động SOS: ${alert.memberName.ifBlank { "Người thân" }}"
                 alert.title.trim() == "🚨" || alert.title.isBlank() -> "🚨 Báo động SOS: ${alert.memberName.ifBlank { "Người thân" }}"
                 else -> alert.title
+            }
+
+            val titleColor = when {
+                alert.isRead -> WarmTextSecondary
+                isCritical -> SosRed
+                isAppointment -> WarmPrimaryTeal
+                isWarning -> HealthWarning
+                else -> WarmTextPrimary
             }
 
             Text(
                 text = displayTitle,
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isCritical) SosRed else if (isWarning) HealthWarning else WarmTextPrimary,
+                color = titleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // 3. Nội dung mô tả: Loại bỏ hoàn toàn "Vị trí thực tế: ...", chỉ giữ thông báo ngắn gọn
-            val displayMessage = if (isCritical) {
+            // 3. Nội dung mô tả
+            val displayMessage = if (isAppointment) {
+                alert.message
+            } else if (isCritical) {
                 "Đã phát cảnh báo khẩn cấp tới toàn bộ người thân."
             } else {
                 val cleaned = alert.message
@@ -330,7 +362,7 @@ fun AlertItemCard(
             Text(
                 text = displayMessage,
                 fontSize = 13.5.sp,
-                color = WarmTextPrimary.copy(alpha = 0.85f),
+                color = if (alert.isRead) WarmTextSecondary else WarmTextPrimary.copy(alpha = 0.85f),
                 lineHeight = 19.sp
             )
 
@@ -375,25 +407,50 @@ fun AlertItemCard(
                 val lat = alert.latitude
                 val lng = alert.longitude
                 if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
-                    val mapBtnBg = if (!alert.isRead) SosRed else WarmTextSecondary
-                    Button(
-                        onClick = { onOpenMap(lat, lng) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(36.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = mapBtnBg),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Xem Bản Đồ",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                    if (!alert.isRead) {
+                        Button(
+                            onClick = { onOpenMap(lat, lng) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isCritical) SosRed else WarmPrimaryTeal
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Xem Bản Đồ",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { onOpenMap(lat, lng) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            border = BorderStroke(1.dp, WarmDivider),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = WarmTextSecondary)
+                        ) {
+                            Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(14.dp), tint = WarmTextSecondary)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Xem Bản Đồ",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = WarmTextSecondary,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 } else {
                     Spacer(modifier = Modifier.weight(1f))

@@ -54,6 +54,7 @@ import com.familycare.app.domain.model.ContextWarningLevel
 import com.familycare.app.domain.model.MessageSender
 import com.familycare.app.domain.model.UserHealthContext
 import com.familycare.app.presentation.home.Member
+import com.familycare.app.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -284,18 +285,18 @@ fun AiAssistantTopBar(
                         .clickable { expandedMemberMenu = true }
                         .padding(vertical = 4.dp)
                 ) {
-                    // Avatar tròn: Kích thước 38.dp với nền xanh nhạt
+                    // Avatar tròn: Kích thước 38.dp với nền xanh lá nhạt
                     Box(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFEFF6FF)),
+                            .background(WarmPrimaryLight),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Person,
                             contentDescription = null,
-                            tint = Color(0xFF2563EB),
+                            tint = WarmPrimaryTeal,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -351,14 +352,14 @@ fun AiAssistantTopBar(
                                     Icon(
                                         imageVector = Icons.Default.Person,
                                         contentDescription = null,
-                                        tint = if (isSelected) Color(0xFF2563EB) else Color(0xFF64748B),
+                                        tint = if (isSelected) WarmPrimaryTeal else Color(0xFF64748B),
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = label,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) Color(0xFF2563EB) else Color(0xFF0F172A),
+                                        color = if (isSelected) WarmPrimaryTeal else Color(0xFF0F172A),
                                         fontSize = 14.sp
                                     )
                                     if (isSelected) {
@@ -366,7 +367,7 @@ fun AiAssistantTopBar(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
-                                            tint = Color(0xFF2563EB),
+                                            tint = WarmPrimaryTeal,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -387,7 +388,7 @@ fun AiAssistantTopBar(
                 Icon(
                     imageVector = Icons.Default.VpnKey,
                     contentDescription = "Cấu hình Google Gemini API Key",
-                    tint = Color(0xFF2563EB)
+                    tint = WarmPrimaryTeal
                 )
             }
             // Nút xem chi tiết Context Injection
@@ -395,7 +396,7 @@ fun AiAssistantTopBar(
                 Icon(
                     imageVector = Icons.Default.Info,
                     contentDescription = "Xem ngữ cảnh y tế đã tiêm",
-                    tint = Color(0xFF2563EB)
+                    tint = WarmPrimaryTeal
                 )
             }
             // Nút làm mới đoạn hội thoại
@@ -445,14 +446,14 @@ fun AiAssistantBottomBar(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(if (isRecordingVoice) Color(0xFFDC2626) else Color(0xFFEFF6FF))
+                    .background(if (isRecordingVoice) Color(0xFFDC2626) else WarmPrimaryLight)
                     .clickable(enabled = !isLoading, onClick = onStartVoiceInput),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Mic,
                     contentDescription = "Ghi âm giọng nói",
-                    tint = if (isRecordingVoice) Color.White else Color(0xFF2563EB),
+                    tint = if (isRecordingVoice) Color.White else WarmPrimaryTeal,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -501,7 +502,7 @@ fun AiAssistantBottomBar(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(if (hasText) Color(0xFF2563EB) else Color(0xFFF1F5F9))
+                    .background(if (hasText) WarmPrimaryTeal else Color(0xFFF1F5F9))
                     .clickable(
                         enabled = hasText && !isLoading,
                         onClick = onSendMessage
@@ -538,8 +539,8 @@ fun QuickPromptRow(
         items(questions) { prompt ->
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = Color(0xFFEFF6FF),
-                border = BorderStroke(1.dp, Color(0xFFDBEAFE)),
+                color = WarmPrimaryLight,
+                border = BorderStroke(1.dp, WarmPrimaryTeal.copy(alpha = 0.3f)),
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
                     .clickable { onQuestionClick(prompt) }
@@ -548,7 +549,7 @@ fun QuickPromptRow(
                     text = prompt,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF1D4ED8),
+                    color = WarmPrimaryTeal,
                     maxLines = 1,
                     softWrap = false,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
@@ -603,13 +604,13 @@ fun ChatMessageBubble(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFEFF6FF)),
+                        .background(WarmPrimaryLight),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.AutoAwesome,
                         contentDescription = "AI",
-                        tint = Color(0xFF2563EB),
+                        tint = WarmPrimaryTeal,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -624,7 +625,7 @@ fun ChatMessageBubble(
                     RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 4.dp, bottomEnd = 18.dp)
                 },
                 color = if (isUser) {
-                    Color(0xFF2563EB)
+                    WarmPrimaryTeal
                 } else {
                     Color.White
                 },
@@ -638,8 +639,8 @@ fun ChatMessageBubble(
                         val target = message.targetMemberName ?: currentMemberName
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFFEFF6FF),
-                            border = BorderStroke(1.dp, Color(0xFFDBEAFE)),
+                            color = WarmPrimaryLight,
+                            border = BorderStroke(1.dp, WarmPrimaryTeal.copy(alpha = 0.3f)),
                             modifier = Modifier.padding(bottom = 8.dp)
                         ) {
                             Row(
@@ -649,7 +650,7 @@ fun ChatMessageBubble(
                                 Icon(
                                     imageVector = Icons.Default.Shield,
                                     contentDescription = null,
-                                    tint = Color(0xFF1D4ED8),
+                                    tint = WarmPrimaryTeal,
                                     modifier = Modifier.size(11.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -657,7 +658,7 @@ fun ChatMessageBubble(
                                     text = "Tư vấn cho: $target",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1D4ED8),
+                                    color = WarmPrimaryTeal,
                                     maxLines = 1,
                                     softWrap = false,
                                     overflow = TextOverflow.Ellipsis
@@ -736,8 +737,8 @@ fun ChatMessageBubble(
             ) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFFEFF6FF),
-                    border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                    color = WarmPrimaryLight,
+                    border = BorderStroke(1.dp, WarmPrimaryTeal.copy(alpha = 0.3f)),
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { onActionClick("NAV_VITALS", message.targetMemberId) }
@@ -750,7 +751,7 @@ fun ChatMessageBubble(
                             text = "🩺 Đo chỉ số",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1D4ED8)
+                            color = WarmPrimaryTeal
                         )
                     }
                 }
@@ -804,13 +805,13 @@ fun AiTypingIndicator() {
             modifier = Modifier
                 .size(32.dp)
                 .clip(CircleShape)
-                .background(Color(0xFFEFF6FF)),
+                .background(WarmPrimaryLight),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Default.AutoAwesome,
                 contentDescription = null,
-                tint = Color(0xFF2563EB),
+                tint = WarmPrimaryTeal,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -835,7 +836,7 @@ fun AiTypingIndicator() {
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
                     strokeWidth = 2.dp,
-                    color = Color(0xFF2563EB)
+                    color = WarmPrimaryTeal
                 )
             }
         }
@@ -895,7 +896,7 @@ fun ErrorMessageCard(
             if (isApiKeyError) {
                 Button(
                     onClick = onOpenApiKeyDialog,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    colors = ButtonDefaults.buttonColors(containerColor = WarmPrimaryTeal),
                     shape = RoundedCornerShape(10.dp),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                 ) {
@@ -995,13 +996,13 @@ fun GeminiApiKeyDialog(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFEFF6FF)),
+                            .background(WarmPrimaryLight),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.VpnKey,
                             contentDescription = null,
-                            tint = Color(0xFF2563EB),
+                            tint = WarmPrimaryTeal,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -1065,7 +1066,7 @@ fun GeminiApiKeyDialog(
                     Button(
                         onClick = { onSave(apiKeyInput.trim()) },
                         enabled = apiKeyInput.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        colors = ButtonDefaults.buttonColors(containerColor = WarmPrimaryTeal),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Text("Lưu Khóa API")
@@ -1102,7 +1103,7 @@ fun ContextInjectionDialog(
                     Icon(
                         Icons.Default.Psychology,
                         contentDescription = null,
-                        tint = Color(0xFF2563EB),
+                        tint = WarmPrimaryTeal,
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
@@ -1134,7 +1135,7 @@ fun ContextInjectionDialog(
                             text = "1. THÀNH VIÊN TRỌNG TÂM",
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
-                            color = Color(0xFF2563EB)
+                            color = WarmPrimaryTeal
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         ContextInfoRow("Họ tên:", "${context.fullName} (${context.getDisplayAge()} tuổi)")
@@ -1165,7 +1166,7 @@ fun ContextInjectionDialog(
                                 text = "2. TỔ ẤM GIA ĐÌNH (${context.otherFamilyMembers.size} người)",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
-                                color = Color(0xFF2563EB)
+                                color = WarmPrimaryTeal
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             context.otherFamilyMembers.forEach { other ->
@@ -1181,7 +1182,7 @@ fun ContextInjectionDialog(
                     onClick = onDismiss,
                     modifier = Modifier.align(Alignment.End),
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                    colors = ButtonDefaults.buttonColors(containerColor = WarmPrimaryTeal)
                 ) {
                     Text("Đóng")
                 }
@@ -1197,7 +1198,7 @@ fun ContextInfoRow(label: String, value: String) {
             text = "$label ",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF2563EB)
+            color = WarmPrimaryTeal
         )
         Text(
             text = value,

@@ -100,7 +100,8 @@ data class AppointmentItem(
     val id: String,
     val title: String,
     val timeFormatted: String,
-    val doctorOrDepartment: String
+    val doctorOrDepartment: String,
+    val isToday: Boolean = false
 )
 
 data class BleDevice(
@@ -118,6 +119,7 @@ data class HomeUiState(
     val alertStatus: HealthAlert? = null,
     val latestVitals: VitalSummary? = null,
     val todayMedications: List<MedicationSchedule> = emptyList(),
+    val todayAppointment: AppointmentItem? = null,
     val upcomingAppointment: AppointmentItem? = null,
     val connectedDevice: BleDevice? = null,
     val unreadNotificationCount: Int = 0,

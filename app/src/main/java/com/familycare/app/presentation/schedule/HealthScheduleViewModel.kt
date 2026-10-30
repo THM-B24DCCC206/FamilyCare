@@ -4,11 +4,14 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.familycare.app.core.common.SessionManager
+import com.familycare.app.core.database.AlertEntity
 import com.familycare.app.core.database.AppDatabase
 import com.familycare.app.core.database.AppointmentEntity
 import com.familycare.app.core.database.MedicationLogEntity
 import com.familycare.app.core.database.MedicineEntity
 import com.familycare.app.core.database.UserEntity
+import com.familycare.app.domain.model.AlertLevel
+import com.familycare.app.domain.model.AlertType
 import com.familycare.app.domain.model.Appointment
 import com.familycare.app.domain.model.Medicine
 import com.familycare.app.presentation.appointment.AppointmentAlarmScheduler
@@ -34,6 +37,7 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
     private val medicineDao = db.medicineDao
     private val medicationLogDao = db.medicationLogDao
     private val appointmentDao = db.appointmentDao
+    private val alertDao = db.alertDao()
     private val sessionManager = SessionManager(application)
 
     private val medicationAlarmScheduler = MedicationAlarmScheduler(application)
@@ -482,6 +486,26 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
                 appointmentId = appointment.id,
                 hospitalName = appointment.hospitalName,
                 appointmentTime = appointment.appointmentTime
+            )
+
+            // Thêm thông báo chuông (AlertDao) nhắc nhở lịch khám
+            val currentMember = _uiState.value.familyMembers.find { it.id == memberId }
+            val memberName = currentMember?.fullName ?: "Thành viên"
+            val dateFmt = SimpleDateFormat("HH:mm - EEE, dd/MM", Locale("vi", "VN")).format(Date(appointmentTime))
+            val docOrDept = if (doctorName.isNotBlank()) "Bác sĩ $doctorName" else department
+            alertDao.insertAlert(
+                AlertEntity(
+                    familyId = sessionManager.familyId.ifBlank { "FAM-8606" },
+                    memberId = memberId,
+                    memberName = memberName,
+                    alertType = AlertType.APPOINTMENT_REMINDER,
+                    alertLevel = AlertLevel.WARNING,
+                    title = "🗓 Sắp đến lịch khám: ${appointment.hospitalName}",
+                    message = "Lịch khám tại ${appointment.hospitalName} ($dateFmt) của $memberName. Bác sĩ/Khoa: $docOrDept.",
+                    timestamp = System.currentTimeMillis(),
+                    isRead = false,
+                    isResolved = false
+                )
             )
         }
     }

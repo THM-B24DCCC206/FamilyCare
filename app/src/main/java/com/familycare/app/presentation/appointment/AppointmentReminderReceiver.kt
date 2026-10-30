@@ -12,6 +12,13 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import com.familycare.app.FamilyCareApp
 import com.familycare.app.R
+import com.familycare.app.core.database.AlertEntity
+import com.familycare.app.core.database.AppDatabase
+import com.familycare.app.domain.model.AlertLevel
+import com.familycare.app.domain.model.AlertType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class AppointmentReminderReceiver : BroadcastReceiver() {
 
@@ -64,5 +71,27 @@ class AppointmentReminderReceiver : BroadcastReceiver() {
             appointmentId.hashCode(),
             notification
         )
+
+        // Đồng bộ lưu cảnh báo vào chuông thông báo (AlertDao)
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val db = AppDatabase.getInstance(context)
+                val alertDao = db.alertDao()
+                alertDao.insertAlert(
+                    AlertEntity(
+                        familyId = "FAM-8606",
+                        memberId = "user_me",
+                        memberName = "Người thân",
+                        alertType = AlertType.APPOINTMENT_REMINDER,
+                        alertLevel = AlertLevel.WARNING,
+                        title = "🗓 Sắp đến giờ khám: $hospitalName",
+                        message = "Bạn có lịch khám tại $hospitalName sau khoảng 1 giờ. Vui lòng chuẩn bị giấy tờ và đến đúng giờ.",
+                        timestamp = System.currentTimeMillis(),
+                        isRead = false,
+                        isResolved = false
+                    )
+                )
+            } catch (_: Exception) {}
+        }
     }
 }

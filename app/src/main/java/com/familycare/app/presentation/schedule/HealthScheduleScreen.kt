@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -551,7 +552,7 @@ fun MedicationTabContent(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "+ Thêm theo cữ", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Thêm theo cữ", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             } else {
                 FilledTonalButton(
@@ -571,7 +572,7 @@ fun MedicationTabContent(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "+ Thêm thuốc lẻ", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Thêm thuốc lẻ", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -641,7 +642,7 @@ fun MedicationTabContent(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Dùng '+ Thêm theo cữ' để tạo nhanh một cữ nhiều loại thuốc hoặc dùng Quét đơn AI.",
+                            text = "Dùng 'Thêm theo cữ' để tạo nhanh một cữ nhiều loại thuốc hoặc dùng Quét đơn AI.",
                             fontSize = 13.sp,
                             color = Color(0xFF64748B),
                             lineHeight = 18.sp,
@@ -877,7 +878,7 @@ fun MedicationSessionCard(
                 medicines.groupBy { formatDosageString(it.dosage) }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 groupedMedicines.forEach { (dosage, medsInGroup) ->
                     var showGroupMenu by remember { mutableStateOf(false) }
                     val names = medsInGroup.map {
@@ -891,34 +892,42 @@ fun MedicationSessionCard(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.Top,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            verticalAlignment = Alignment.Top,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         ) {
                             Text(
                                 text = "•",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (allSessionTaken) Color(0xFF16A34A) else WarmPrimaryTeal,
-                                modifier = Modifier.padding(end = 8.dp)
+                                modifier = Modifier.padding(top = 1.dp, end = 8.dp)
                             )
-                            Text(
-                                text = "Thuốc $names",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF0F172A)
-                            )
-                            Text(
-                                text = ": $dosage",
-                                fontSize = 14.sp,
-                                color = Color(0xFF64748B)
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Thuốc $names",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF0F172A),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Liều dùng: $dosage",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF64748B)
+                                )
+                            }
                         }
 
-                        Box {
+                        Box(modifier = Modifier.padding(top = 2.dp)) {
                             IconButton(
                                 onClick = { showGroupMenu = true },
                                 modifier = Modifier.size(24.dp)
@@ -1713,10 +1722,11 @@ fun AddEditMedicineDialog(
             ) {
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = { if (it.length <= 35) name = it },
                     label = { Text("Tên thuốc *") },
                     placeholder = { Text("Ví dụ: Bột sủi thanh nhiệt Livecool") },
                     singleLine = true,
+                    maxLines = 1,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -2281,9 +2291,23 @@ fun AddMedicineSessionDialog(
 
                             OutlinedTextField(
                                 value = name,
-                                onValueChange = { newName -> items[index] = Pair(newName, dosage) },
-                                placeholder = { Text("Tên thuốc *") },
+                                onValueChange = { newName ->
+                                    if (newName.length <= 35) {
+                                        items[index] = Pair(newName, dosage)
+                                    }
+                                },
+                                placeholder = {
+                                    Text(
+                                        text = "Tên thuốc",
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                },
                                 singleLine = true,
+                                maxLines = 1,
+                                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1f)
                             )
@@ -2292,11 +2316,25 @@ fun AddMedicineSessionDialog(
 
                             OutlinedTextField(
                                 value = dosage,
-                                onValueChange = { newDosage -> items[index] = Pair(name, newDosage) },
-                                placeholder = { Text("Liều") },
+                                onValueChange = { newDosage ->
+                                    if (newDosage.length <= 15) {
+                                        items[index] = Pair(name, newDosage)
+                                    }
+                                },
+                                placeholder = {
+                                    Text(
+                                        text = "1 viên",
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        color = Color(0xFF94A3B8),
+                                        textAlign = TextAlign.Center
+                                    )
+                                },
                                 singleLine = true,
+                                maxLines = 1,
+                                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp, textAlign = TextAlign.Center),
                                 shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.width(86.dp)
+                                modifier = Modifier.width(82.dp)
                             )
 
                             if (items.size > 1) {
@@ -2328,7 +2366,7 @@ fun AddMedicineSessionDialog(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "+ Thêm viên nữa vào cữ này", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                    Text(text = "Thêm viên nữa vào cữ này", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         },
