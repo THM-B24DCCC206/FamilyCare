@@ -38,6 +38,7 @@ import com.familycare.app.core.database.HealthMetricEntity
 import com.familycare.app.domain.model.MetricType
 import com.familycare.app.presentation.biometrics.chart.BiometricsLineChart
 import com.familycare.app.presentation.biometrics.dialog.AddMetricDialog
+import com.familycare.app.presentation.biometrics.ppg.HeartRateClassifier
 import com.familycare.app.presentation.schedule.MemberSwitcherRow
 import com.familycare.app.ui.theme.*
 import kotlinx.coroutines.launch
@@ -1075,19 +1076,15 @@ private fun MetricHistoryCard(
         }
         else -> { // HEART_RATE
             val bpm = metric.valuePrimary.toInt()
-            val (badge, color) = when {
-                bpm < 60 -> Pair("Nhịp chậm", Color(0xFF0288D1))
-                bpm in 60..100 -> Pair("Bình thường", Color(0xFF15803D))
-                else -> Pair("Nhịp nhanh", Color(0xFFDC2626))
-            }
+            val hrLevel = HeartRateClassifier.classify(bpm)
             Tuple7(
                 Icons.Default.Favorite,
                 Color(0xFFE11D48),
                 Color(0xFFFFF1F2),
                 if (metric.isFromCameraPpg) "Nhịp tim PPG" else "Nhịp tim",
                 "$bpm BPM",
-                badge,
-                color
+                hrLevel.badgeLabel,
+                hrLevel.color
             )
         }
     }

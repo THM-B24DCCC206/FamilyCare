@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.familycare.app.core.database.HealthMetricEntity
 import com.familycare.app.domain.model.MetricType
+import com.familycare.app.presentation.biometrics.ppg.HeartRateClassifier
 import java.util.UUID
 
 /**
@@ -170,29 +171,16 @@ fun evaluateTemperature(temp: Double): HealthEvaluation {
 }
 
 /**
- * Đánh giá Nhịp tim
+ * Đánh giá Nhịp tim theo 5 dải mức độ chuẩn y tế
  */
 fun evaluateHeartRate(bpm: Int): HealthEvaluation {
-    return when {
-        bpm < 60 -> HealthEvaluation(
-            title = "Nhịp tim chậm (< 60 BPM)",
-            containerColor = Color(0xFFFFFBEB),
-            borderColor = Color(0xFFFDE68A),
-            contentColor = Color(0xFFB45309)
-        )
-        bpm in 60..100 -> HealthEvaluation(
-            title = "Nhịp tim bình thường",
-            containerColor = Color(0xFFF0FDF4),
-            borderColor = Color(0xFFBBF7D0),
-            contentColor = Color(0xFF2E7D32)
-        )
-        else -> HealthEvaluation(
-            title = "Nhịp tim nhanh (> 100 BPM)",
-            containerColor = Color(0xFFFEE2E2),
-            borderColor = Color(0xFFFCA5A5),
-            contentColor = Color(0xFFB91C1C)
-        )
-    }
+    val level = HeartRateClassifier.classify(bpm)
+    return HealthEvaluation(
+        title = "${level.title} (${level.rangeText})",
+        containerColor = level.containerColor,
+        borderColor = level.borderColor,
+        contentColor = level.color
+    )
 }
 
 @Composable

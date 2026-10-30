@@ -46,7 +46,9 @@ class CameraPpgAnalyzer(
                     val yIndex = row * yRowStride + col * yPixelStride
                     val vIndex = (row / 2) * vRowStride + (col / 2) * vPixelStride
 
-                    if (yIndex < yBuffer.remaining() && vIndex < vBuffer.remaining()) {
+                    val yLimit = yBuffer.limit()
+                    val vLimit = vBuffer.limit()
+                    if (yIndex < yLimit && vIndex < vLimit) {
                         val y = yBuffer.get(yIndex).toInt() and 0xFF
                         val v = vBuffer.get(vIndex).toInt() and 0xFF
 
@@ -65,8 +67,8 @@ class CameraPpgAnalyzer(
                 val redIntensity = avgY + 1.402 * (avgV - 128)
 
                 // Kiểm tra xem ngón tay có đang che kín camera & flash hay không
-                // Khi có ngón tay và flash bật: Kênh đỏ V rất cao (> 140) và độ sáng Y đủ lớn (> 30)
-                val isFingerDetected = avgV > 135 && avgY > 25
+                // Khi có ngón tay và flash bật: Kênh đỏ V rất cao (> 130) và độ sáng Y đủ lớn (> 20)
+                val isFingerDetected = avgV > 130 && avgY > 20
 
                 if (isFingerDetected) {
                     val bpm = signalProcessor.addSample(timestamp, redIntensity)
