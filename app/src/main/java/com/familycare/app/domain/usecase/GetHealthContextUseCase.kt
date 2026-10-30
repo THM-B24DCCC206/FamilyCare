@@ -92,10 +92,17 @@ class GetHealthContextUseCase(
         }
 
         // 4. Lấy tóm tắt các thành viên khác trong cùng tổ ấm gia đình
+        val currentFamilyId = userDomain.familyId.trim()
+        val fakeIds = setOf("user_01", "user_demo_01", "member_bac_nam", "member_bo", "member_me", "member_anhtrai", "user_02", "member_ly_tran")
         val allUsers = runCatching { userDao.getAllUsers() }.getOrDefault(emptyList())
-        val otherUsers = allUsers.filter {
-            it.id != userId && it.id != "user_01" && it.id != "user_demo_01"
-        }
+        val otherUsers = if (currentFamilyId.isNotBlank()) {
+            allUsers.filter {
+                it.id != userId &&
+                it.id !in fakeIds &&
+                it.familyId.isNotBlank() &&
+                it.familyId == currentFamilyId
+            }
+        } else emptyList()
 
         val otherMembers = otherUsers.map { other ->
             val otherAge = calculateAgeFromBirthDate(other.birthDate)

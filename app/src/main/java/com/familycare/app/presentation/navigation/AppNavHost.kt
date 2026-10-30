@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +25,8 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.familycare.app.core.common.SessionManager
+import com.familycare.app.presentation.common.FamilyCareAmbientBackground
+import com.familycare.app.ui.theme.*
 import com.familycare.app.presentation.ai_assistant.AiAssistantScreen
 import com.familycare.app.presentation.alert.AlertListScreen
 import com.familycare.app.presentation.appointment.AppointmentScreen
@@ -66,7 +69,9 @@ fun AppNavHost() {
 
     val showBottomBar = currentRoute in mainTabRoutes
 
-    Scaffold(
+    FamilyCareAmbientBackground {
+        Scaffold(
+            containerColor = Color.Transparent,
         bottomBar = {
             if (showBottomBar) {
                 FamilyCareBottomBar(
@@ -261,9 +266,10 @@ fun AppNavHost() {
         }
     }
 }
+}
 
 /**
- * Thanh điều hướng đáy 5 tab với nút Trợ lý AI (Sparkles/AutoAwesome) nhô cao ở trung tâm
+ * Thanh điều hướng đáy 5 tab chuẩn phong cách Warm Cream Editorial Wellness
  */
 @Composable
 fun FamilyCareBottomBar(
@@ -271,23 +277,21 @@ fun FamilyCareBottomBar(
     onNavigateToTab: (String) -> Unit
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(84.dp),
+        modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // Nền thanh điều hướng
+        // 1. Thanh nền trắng kem chính
         Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(68.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp,
-            shadowElevation = 8.dp
+            modifier = Modifier.fillMaxWidth(),
+            color = WarmCreamSurface,
+            shadowElevation = 3.dp,
+            border = BorderStroke(1.dp, WarmDivider)
         ) {
             Row(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .height(60.dp)
                     .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -303,19 +307,34 @@ fun FamilyCareBottomBar(
                 // 2. Chỉ số
                 BottomTabItem(
                     title = "Chỉ số",
-                    icon = Icons.Default.Favorite,
+                    icon = Icons.Default.ShowChart,
                     isSelected = currentRoute == Screen.Biometrics.route,
                     onClick = { onNavigateToTab(Screen.Biometrics.route) },
                     modifier = Modifier.weight(1f)
                 )
 
-                // 3. Vị trí trung tâm (dành chỗ cho nút AI nhô cao)
-                Spacer(modifier = Modifier.weight(1f))
+                // 3. Khe cắm AI giữa (nhãn AI căn đáy cùng hàng với các tab khác)
+                Box(
+                    modifier = Modifier
+                        .weight(1.1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onNavigateToTab(Screen.AiAssistant.route) },
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Text(
+                        text = "AI",
+                        fontSize = 10.5.sp,
+                        fontWeight = if (currentRoute == Screen.AiAssistant.route) FontWeight.Bold else FontWeight.Medium,
+                        color = if (currentRoute == Screen.AiAssistant.route) WarmPrimaryTeal else WarmTextSecondary,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
 
                 // 4. Kế hoạch
                 BottomTabItem(
                     title = "Kế hoạch",
-                    icon = Icons.Default.EventNote,
+                    icon = Icons.Default.CalendarMonth,
                     isSelected = currentRoute == Screen.Medication.route,
                     onClick = { onNavigateToTab(Screen.Medication.route) },
                     modifier = Modifier.weight(1f)
@@ -332,41 +351,30 @@ fun FamilyCareBottomBar(
             }
         }
 
-        // Nút Trợ lý AI nhô cao ở chính giữa (Màu xanh #2563EB, icon lấp lánh AutoAwesome)
-        val isAiSelected = currentRoute == Screen.AiAssistant.route
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // 2. Nút AI tròn nhô lên khỏi mép trên thanh menu (~12dp)
+        Surface(
+            shape = CircleShape,
+            color = WarmPrimaryTeal,
+            shadowElevation = 6.dp,
+            border = BorderStroke(3.dp, WarmCreamSurface),
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-4).dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp)
+                .size(48.dp)
+                .clip(CircleShape)
                 .clickable { onNavigateToTab(Screen.AiAssistant.route) }
         ) {
-            Surface(
-                shape = CircleShape,
-                color = Color(0xFF2563EB),
-                shadowElevation = 8.dp,
-                border = BorderStroke(3.dp, MaterialTheme.colorScheme.surface),
-                modifier = Modifier.size(54.dp)
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "Trợ lý AI Copilot",
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = "Trợ lý AI",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
             }
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = "Trợ lý AI",
-                fontSize = 11.sp,
-                fontWeight = if (isAiSelected) FontWeight.Bold else FontWeight.Medium,
-                color = if (isAiSelected) Color(0xFF2563EB) else MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
@@ -379,36 +387,29 @@ fun BottomTabItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    Box(
         modifier = modifier
             .fillMaxHeight()
             .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(width = 44.dp, height = 28.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(
-                    if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-                ),
-            contentAlignment = Alignment.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
+                tint = if (isSelected) WarmPrimaryTeal else WarmTextSecondary,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = title,
+                fontSize = 11.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) WarmPrimaryTeal else WarmTextSecondary
             )
         }
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 11.sp
-        )
     }
 }

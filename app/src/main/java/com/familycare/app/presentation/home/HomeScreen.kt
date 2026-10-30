@@ -1,6 +1,11 @@
 package com.familycare.app.presentation.home
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,21 +21,38 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.res.painterResource
+import com.familycare.app.R
 import com.familycare.app.core.common.SessionManager
+import com.familycare.app.presentation.common.FamilyCareAmbientBackground
+import com.familycare.app.presentation.schedule.formatDosageString
+import com.familycare.app.presentation.schedule.formatMedicineSummaryList
+import com.familycare.app.presentation.schedule.getTimeSessionLabel
+import com.familycare.app.ui.theme.*
+import androidx.compose.material.icons.outlined.Circle
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToVitals: () -> Unit,
     onNavigateToMedication: () -> Unit,
     onNavigateToSos: () -> Unit,
-    onNavigateToSmartwatch: () -> Unit,
+    onNavigateToSmartwatch: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToPpg: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(
@@ -40,161 +62,391 @@ fun HomeScreen(
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    var showAddMemberDialog by remember { mutableStateOf(false) }
 
-    Scaffold(
-        floatingActionButton = {
-            // Nút Nổi Cấp Cứu SOS tròn màu đỏ tươi (#DC2626) cố định góc dưới bên phải
-            FloatingActionButton(
-                onClick = onNavigateToSos,
-                containerColor = Color(0xFFDC2626),
-                contentColor = Color.White,
-                shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
-                modifier = Modifier.size(60.dp)
-            ) {
-                Text(
-                    text = "SOS",
-                    fontWeight = FontWeight.Black,
-                    fontSize = 17.sp,
-                    color = Color.White,
-                    letterSpacing = 1.sp
-                )
+    LaunchedEffect(sessionManager.userId, sessionManager.familyId) {
+        viewModel.refreshHomeData()
+    }
+
+    // Tự động kiểm tra và làm mới dữ liệu thuốc nếu đã sang ngày mới khi người dùng mở lại app
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshHomeData()
+                viewModel.checkAndRefreshIfDayChanged()
             }
-        },
-        floatingActionButtonPosition = FabPosition.End,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = "FamilyCare",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (sessionManager.hasFamily) "Tổ ấm: ${sessionManager.familyName}" else "Không gian gia đình thông minh",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF475569)
-                        )
-                    }
-                },
-                actions = {
-                    // 1. Icon Đồng hồ thông minh (Watch)
-                    IconButton(onClick = onNavigateToSmartwatch) {
-                        val isConnected = uiState.connectedDevice?.isConnected == true
-                        Icon(
-                            imageVector = Icons.Default.Watch,
-                            contentDescription = "Đồng hồ thông minh",
-                            tint = if (isConnected) Color(0xFF16A34A) else MaterialTheme.colorScheme.primary
-                        )
-                    }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
-                    // 2. Nút Chuông thông báo (Notifications) có Badge màu đỏ
-                    IconButton(onClick = onNavigateToNotifications) {
-                        BadgedBox(
-                            badge = {
-                                if (uiState.unreadNotificationCount > 0) {
-                                    Badge(
-                                        containerColor = Color(0xFFDC2626),
-                                        contentColor = Color.White
-                                    ) {
-                                        Text(
-                                            text = if (uiState.unreadNotificationCount > 99) "99+" else "${uiState.unreadNotificationCount}",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = "Thông báo",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+    // Đồng bộ tên tổ ấm an toàn tuyệt đối
+    val familyName = uiState.familyName.ifBlank {
+        sessionManager.familyName.ifBlank { "Tổ ấm của chúng ta" }
+    }
+
+    // Lời chào động theo thời gian thực của thiết bị
+    val greetingText = remember {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        when {
+            hour < 12 -> "Chào buổi sáng!"
+            hour < 18 -> "Chào buổi chiều!"
+            else -> "Chào buổi tối!"
+        }
+    }
+
+    FamilyCareAmbientBackground {
+        Scaffold(
+            containerColor = Color.Transparent,
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.padding(bottom = 76.dp)
+                ) { data ->
+                    Snackbar(
+                        snackbarData = data,
+                        containerColor = WarmTextPrimary,
+                        contentColor = WarmCreamSurface,
+                        actionColor = WarmAccent,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
+            floatingActionButton = {
+                Surface(
+                    shape = CircleShape,
+                    color = SosRed,
+                    shadowElevation = 6.dp,
+                    border = BorderStroke(2.5.dp, Color.White),
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(CircleShape)
+                        .clickable { onNavigateToSos() }
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Text(
+                            text = "SOS",
+                            color = Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                            letterSpacing = 0.5.sp
+                        )
                     }
                 }
-            )
-        }
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
-        ) {
-            // 1. Thanh Avatar Thành Viên (Family Switcher dạng cuộn ngang)
-            if (uiState.familyMembers.isNotEmpty()) {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Góc nhìn thành viên",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            val currentMember = uiState.familyMembers.firstOrNull { it.id == uiState.selectedMemberId }
-                            if (currentMember != null) {
+            },
+            topBar = {
+                // A. HEADER THƯƠNG HIỆU
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Cụm trái: Logo FamilyCare + Tổ ấm
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Spa,
+                                    contentDescription = null,
+                                    tint = WarmPrimaryTeal,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = currentMember.fullName,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold
+                                    text = "FamilyCare",
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = WarmTextPrimary
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable { onNavigateToNotifications() }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = null,
+                                    tint = WarmTextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (familyName.startsWith("Tổ ấm")) familyName else "Tổ ấm $familyName",
+                                    color = WarmTextSecondary,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = WarmTextSecondary,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
 
+                        // Cụm phải: Nút chuông thông báo tròn
+                        Surface(
+                            shape = CircleShape,
+                            color = WarmCreamSurface,
+                            border = BorderStroke(1.dp, WarmDivider),
+                            shadowElevation = 0.5.dp,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .clickable { onNavigateToNotifications() }
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                BadgedBox(
+                                    badge = {
+                                        if (uiState.unreadNotificationCount > 0) {
+                                            Badge(
+                                                containerColor = SosRed,
+                                                contentColor = Color.White
+                                            ) {
+                                                Text(
+                                                    text = if (uiState.unreadNotificationCount > 99) "99+" else "${uiState.unreadNotificationCount}",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.NotificationsNone,
+                                        contentDescription = "Thông báo",
+                                        tint = WarmTextPrimary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        ) { innerPadding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
+            ) {
+                // B. LỜI CHÀO & MINH HỌA NGÔI NHÀ TINH TẾ
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = greetingText,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = WarmTextPrimary,
+                                letterSpacing = (-0.3).sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Cùng nhau chăm sóc sức khỏe\ncho gia đình nhé.",
+                                fontSize = 14.sp,
+                                color = WarmTextSecondary,
+                                lineHeight = 20.sp
+                            )
+                        }
+
+                        // Họa tiết trang trí ngôi nhà & mặt trời dịu nhẹ (Editorial Vector)
+                        Box(
+                            modifier = Modifier
+                                .size(width = 110.dp, height = 75.dp)
+                                .padding(start = 8.dp)
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val w = size.width
+                                val h = size.height
+
+                                // Mặt trời vàng ấm mờ
+                                drawCircle(
+                                    color = WarmAccent.copy(alpha = 0.35f),
+                                    radius = 14.dp.toPx(),
+                                    center = Offset(w * 0.45f, h * 0.28f)
+                                )
+
+                                // Tán cây xanh mờ phía sau
+                                drawCircle(
+                                    color = WarmPrimaryLight.copy(alpha = 0.8f),
+                                    radius = 20.dp.toPx(),
+                                    center = Offset(w * 0.22f, h * 0.65f)
+                                )
+                                drawCircle(
+                                    color = WarmPrimaryLight.copy(alpha = 0.9f),
+                                    radius = 18.dp.toPx(),
+                                    center = Offset(w * 0.85f, h * 0.55f)
+                                )
+
+                                // Mái nhà
+                                val roofPath = androidx.compose.ui.graphics.Path().apply {
+                                    moveTo(w * 0.38f, h * 0.52f)
+                                    lineTo(w * 0.64f, h * 0.36f)
+                                    lineTo(w * 0.86f, h * 0.52f)
+                                    close()
+                                }
+                                drawPath(roofPath, color = WarmPrimaryTeal.copy(alpha = 0.85f))
+
+                                // Tường nhà
+                                drawRect(
+                                    color = WarmCreamSurface,
+                                    topLeft = Offset(w * 0.42f, h * 0.52f),
+                                    size = androidx.compose.ui.geometry.Size(w * 0.40f, h * 0.36f)
+                                )
+                                // Cửa nhà
+                                drawRect(
+                                    color = WarmPrimaryTeal.copy(alpha = 0.6f),
+                                    topLeft = Offset(w * 0.56f, h * 0.65f),
+                                    size = androidx.compose.ui.geometry.Size(w * 0.12f, h * 0.23f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // C. DANH SÁCH THÀNH VIÊN TRONG GIA ĐÌNH
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Thành viên trong gia đình",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = WarmTextPrimary
+                        )
+
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             items(uiState.familyMembers, key = { it.id }) { member ->
                                 val isSelected = member.id == uiState.selectedMemberId
                                 Surface(
-                                    onClick = { viewModel.onMemberSelect(member.id) },
-                                    shape = RoundedCornerShape(20.dp),
-                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isSelected) WarmPrimaryLight else WarmCreamSurface,
                                     border = BorderStroke(
-                                        width = if (isSelected) 2.dp else 1.dp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                        1.dp,
+                                        if (isSelected) WarmPrimaryTeal.copy(alpha = 0.4f) else WarmDivider
                                     ),
-                                    modifier = Modifier.height(44.dp)
+                                    shadowElevation = if (isSelected) 0.5.dp else 0.dp,
+                                    modifier = Modifier
+                                        .height(56.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable { viewModel.onMemberSelect(member.id) }
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        modifier = Modifier.padding(horizontal = 12.dp)
                                     ) {
+                                        // Avatar hình tròn thon gọn
                                         Box(
                                             modifier = Modifier
-                                                .size(28.dp)
+                                                .size(32.dp)
                                                 .clip(CircleShape)
                                                 .background(
-                                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                    if (isSelected) Color.White else WarmPrimaryLight
                                                 ),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
                                                 text = member.initials,
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 12.sp,
-                                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.primary
+                                                fontSize = 12.5.sp,
+                                                color = WarmPrimaryTeal
                                             )
                                         }
-                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        Spacer(modifier = Modifier.width(9.dp))
+
+                                        Column(
+                                            verticalArrangement = Arrangement.Center,
+                                            modifier = Modifier.fillMaxHeight()
+                                        ) {
+                                            Text(
+                                                text = member.fullName,
+                                                fontSize = 13.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = WarmTextPrimary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(1.dp))
+                                            Text(
+                                                text = member.role,
+                                                fontSize = 11.sp,
+                                                color = WarmTextSecondary,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Ô Thêm thành viên thon gọn
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color.Transparent,
+                                    border = BorderStroke(1.dp, WarmDivider),
+                                    modifier = Modifier
+                                        .height(56.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable { showAddMemberDialog = true }
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 12.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .clip(CircleShape)
+                                                .background(WarmCreamSecondary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Add,
+                                                contentDescription = "Thêm thành viên",
+                                                tint = WarmTextSecondary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(7.dp))
                                         Text(
-                                            text = member.fullName,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                            text = "Thêm",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = WarmTextSecondary
                                         )
                                     }
                                 }
@@ -202,465 +454,479 @@ fun HomeScreen(
                         }
                     }
                 }
-            }
 
-            // 2. Banner Tình Trạng Sức Khỏe (Conditional Rendering: Có cảnh báo vs Ổn định)
-            item {
-                val alert = uiState.alertStatus
-                if (alert != null) {
-                    // Banner Cảnh báo đỏ khi có chỉ số bất thường thực tế
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFFFEF2F2)
-                        ),
-                        border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToSos() }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFFEE2E2)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = "Cảnh báo nguy cơ",
-                                    tint = Color(0xFFDC2626),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = alert.title,
-                                    color = Color(0xFF991B1B),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = alert.message,
-                                    color = Color(0xFF7F1D1D),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.Default.ChevronRight,
-                                contentDescription = null,
-                                tint = Color(0xFFDC2626)
-                            )
-                        }
-                    }
-                } else {
-                    // Banner Trạng thái ổn định (nền xanh lá nhạt #F0FDF4, viền #BBF7D0)
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFFF0FDF4)
-                        ),
-                        border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFDCFCE7)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.VerifiedUser,
-                                    contentDescription = "Sức khỏe an toàn",
-                                    tint = Color(0xFF16A34A),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Sức khỏe hôm nay ổn định",
-                                    color = Color(0xFF166534),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Chưa ghi nhận bất thường nào. Các chỉ số sinh tồn của thành viên đều an toàn.",
-                                    color = Color(0xFF15803D),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 3. Chỉ Số Sức Khỏe Gần Nhất (Lưới 2 cột: Huyết áp & Nhịp tim)
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Chỉ số sinh tồn gần nhất",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Chi tiết",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable { onNavigateToVitals() }
-                        )
-                    }
-
+                // D. TỔNG QUAN SỨC KHỎE (VÙNG NỀN XANH SAGE NHẠT NHẸ NHÀNG)
+                item {
+                    val alert = uiState.alertStatus
                     val vitals = uiState.latestVitals
                     val hasMeasuredBp = vitals?.hasMeasuredBp == true
                     val hasMeasuredHr = vitals?.hasMeasuredHr == true
+                    val hasAnyMeasurement = hasMeasuredBp || hasMeasuredHr
+                    val isDataStale = vitals != null && hasAnyMeasurement &&
+                            (System.currentTimeMillis() - vitals.lastUpdated > 24 * 60 * 60 * 1000L)
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = if (alert != null) SosRedLight else WarmPrimaryLight,
+                        border = BorderStroke(
+                            1.dp,
+                            if (alert != null) SosRedBorder else Color(0xFFD6E4D2)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToVitals() }
                     ) {
-                        // Cột 1: Huyết áp
-                        Card(
+                        Row(
                             modifier = Modifier
-                                .weight(1f)
-                                .clickable { onNavigateToVitals() },
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (alert != null) SosRed else WarmPrimaryTeal
+                                        ),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFFEE2E2)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.WaterDrop,
-                                            contentDescription = "Huyết áp",
-                                            tint = Color(0xFFDC2626),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    if (hasMeasuredBp) {
-                                        val isBpWarning = vitals?.isBloodPressureWarning == true
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = if (isBpWarning) Color(0xFFFEE2E2) else Color(0xFFDCFCE7)
-                                        ) {
-                                            Text(
-                                                text = if (isBpWarning) "Tăng HA" else "Bình thường",
-                                                color = if (isBpWarning) Color(0xFFDC2626) else Color(0xFF16A34A),
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = Color(0xFFF1F5F9)
-                                        ) {
-                                            Text(
-                                                text = "Chưa đo",
-                                                color = Color(0xFF64748B),
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "Huyết áp",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                if (hasMeasuredBp) {
-                                    val sys = vitals?.bloodPressureSystolic ?: 0
-                                    val dia = vitals?.bloodPressureDiastolic ?: 0
-                                    Text(
-                                        text = "$sys/$dia",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (vitals?.isBloodPressureWarning == true) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurface
-                                    )
-                                } else {
-                                    Text(
-                                        text = "--/--",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    Icon(
+                                        imageVector = if (alert != null) Icons.Default.Warning else Icons.Default.Favorite,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(19.dp)
                                     )
                                 }
-                                Text(
-                                    text = "mmHg",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
 
-                        // Cột 2: Nhịp tim
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { onNavigateToVitals() },
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFFFE4E6)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Favorite,
-                                            contentDescription = "Nhịp tim",
-                                            tint = Color(0xFFE11D48),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    if (hasMeasuredHr) {
-                                        val isHrWarning = vitals?.isHeartRateWarning == true
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = if (isHrWarning) Color(0xFFFEE2E2) else Color(0xFFDCFCE7)
-                                        ) {
-                                            Text(
-                                                text = if (isHrWarning) "Bất thường" else "Bình thường",
-                                                color = if (isHrWarning) Color(0xFFDC2626) else Color(0xFF16A34A),
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = Color(0xFFF1F5F9)
-                                        ) {
-                                            Text(
-                                                text = "Chưa đo",
-                                                color = Color(0xFF64748B),
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "Nhịp tim lúc nghỉ",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                if (hasMeasuredHr) {
-                                    val hr = vitals?.heartRateBpm ?: 0
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "$hr",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (vitals?.isHeartRateWarning == true) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurface
+                                        text = "Tổng quan sức khỏe",
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (alert != null) SosRed else WarmTextSecondary
                                     )
-                                } else {
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "--",
-                                        style = MaterialTheme.typography.titleLarge,
+                                        text = when {
+                                            alert != null -> alert.title
+                                            !hasAnyMeasurement -> "Chưa có đủ dữ liệu hôm nay"
+                                            isDataStale -> "Số đo chưa được cập nhật hôm nay"
+                                            else -> "Sức khỏe ghi nhận ổn định"
+                                        },
+                                        fontSize = 14.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                        color = if (alert != null) SosRed else WarmTextPrimary
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = when {
+                                            alert != null -> alert.message
+                                            !hasAnyMeasurement -> "Hãy cập nhật chỉ số để theo dõi tình trạng sức khỏe chính xác hơn."
+                                            isDataStale -> "Lần đo gần nhất đã hơn 24 giờ. Cần đo lại để theo dõi chuẩn xác."
+                                            else -> "Chỉ số sinh tồn của thành viên trong ngưỡng an toàn."
+                                        },
+                                        fontSize = 12.sp,
+                                        color = if (alert != null) SosRed.copy(alpha = 0.85f) else WarmTextSecondary,
+                                        lineHeight = 17.sp,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
-                                Text(
-                                    text = "BPM",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            // Nút mũi tên tròn
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(if (alert != null) SosRed else WarmPrimaryTeal),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowForward,
+                                    contentDescription = "Xem chi tiết",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
                     }
                 }
-            }
 
-            // 4. Thẻ Lịch Thuốc Hôm Nay (todayMedications)
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Lịch uống thuốc hôm nay",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Quản lý",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable { onNavigateToMedication() }
-                        )
-                    }
-
-                    if (uiState.todayMedications.isEmpty()) {
-                        Card(
+                // E. BỐN CHỈ SỐ SỨC KHỎE — BẢNG EDITORIAL 2×2 NẰM TRỰC TIẾP TRÊN NỀN (KHÔNG CARD RIÊNG)
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Text(
+                                text = "Chỉ số sức khỏe",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = WarmTextPrimary
+                            )
                             Row(
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { onNavigateToVitals() }
+                                    .padding(4.dp)
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Chưa có lịch uống thuốc hôm nay",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
+                                Text(
+                                    text = "Xem lịch sử",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = WarmPrimaryTeal
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Icon(
+                                    imageVector = Icons.Default.ArrowForward,
+                                    contentDescription = null,
+                                    tint = WarmPrimaryTeal,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+
+                        val vitals = uiState.latestVitals
+                        val hasBp = vitals?.hasMeasuredBp == true
+                        val hasHr = vitals?.hasMeasuredHr == true
+                        val hasTemp = vitals?.hasMeasuredTemp == true
+                        val hasSugar = vitals?.hasMeasuredSugar == true
+
+                        val lastTimeFormatted = remember(vitals?.lastUpdated) {
+                            vitals?.lastUpdated?.let {
+                                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(it))
+                            } ?: ""
+                        }
+
+                        // Khối bảng Editorial 2x2 ngăn cách bằng đường kẻ mảnh
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = WarmCreamSurface,
+                            border = BorderStroke(1.dp, WarmDivider),
+                            shadowElevation = 0.5.dp,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                // HÀNG 1: HUYẾT ÁP (Trái) & NHỊP TIM (Phải)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Min)
+                                ) {
+                                    // 1. Huyết áp
+                                    EditorialMetricCell(
+                                        title = "Huyết áp",
+                                        value = if (hasBp) "${vitals?.bloodPressureSystolic}/${vitals?.bloodPressureDiastolic}" else "--/--",
+                                        unit = "mmHg",
+                                        status = if (hasBp) (if (vitals?.isBloodPressureWarning == true) "Tăng HA" else "Bình thường") else "Chưa đo hôm nay",
+                                        isWarning = vitals?.isBloodPressureWarning == true,
+                                        icon = Icons.Default.Speed,
+                                        iconBg = Color(0xFFF9EAE1),
+                                        iconTint = WarmAccent,
+                                        onClick = onNavigateToVitals,
+                                        modifier = Modifier.weight(1f)
                                     )
-                                    Text(
-                                        text = "Thêm thuốc hoặc quét đơn thuốc AI",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                                    // Vạch kẻ dọc 1
+                                    Box(
+                                        modifier = Modifier
+                                            .width(1.dp)
+                                            .fillMaxHeight()
+                                            .background(WarmDivider)
+                                    )
+
+                                    // 2. Nhịp tim
+                                    EditorialMetricCell(
+                                        title = "Nhịp tim",
+                                        value = if (hasHr) "${vitals?.heartRateBpm}" else "--",
+                                        unit = "BPM",
+                                        status = if (hasHr) (if (lastTimeFormatted.isNotBlank()) "Dữ liệu gần nhất: $lastTimeFormatted" else "Bình thường") else "Chưa đo hôm nay",
+                                        isWarning = vitals?.isHeartRateWarning == true,
+                                        icon = Icons.Default.Favorite,
+                                        iconBg = Color(0xFFFCEAEB),
+                                        iconTint = HeartRateAccent,
+                                        onClick = onNavigateToPpg,
+                                        modifier = Modifier.weight(1f)
                                     )
                                 }
-                                OutlinedButton(
-                                    onClick = onNavigateToMedication,
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(34.dp)
+
+                                // Vạch kẻ ngang giữa 2 hàng
+                                HorizontalDivider(color = WarmDivider, thickness = 1.dp)
+
+                                // HÀNG 2: NHIỆT ĐỘ CƠ THỂ (Trái) & ĐƯỜNG HUYẾT (Phải)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Min)
                                 ) {
-                                    Text("Thêm", fontSize = 12.sp)
+                                    // 3. Nhiệt độ cơ thể
+                                    EditorialMetricCell(
+                                        title = "Nhiệt độ cơ thể",
+                                        value = if (hasTemp) String.format(Locale.US, "%.1f", vitals?.temperature ?: 0.0) else "--,-",
+                                        unit = "°C",
+                                        status = if (hasTemp) "Lúc $lastTimeFormatted" else "Chưa có dữ liệu",
+                                        isWarning = false,
+                                        icon = Icons.Default.Thermostat,
+                                        iconBg = Color(0xFFF8EEDF),
+                                        iconTint = TemperatureAccent,
+                                        onClick = onNavigateToVitals,
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    // Vạch kẻ dọc 2
+                                    Box(
+                                        modifier = Modifier
+                                            .width(1.dp)
+                                            .fillMaxHeight()
+                                            .background(WarmDivider)
+                                    )
+
+                                    // 4. Đường huyết
+                                    EditorialMetricCell(
+                                        title = "Đường huyết",
+                                        value = if (hasSugar) String.format(Locale.US, "%.1f", vitals?.bloodSugar ?: 0.0) else "--,-",
+                                        unit = "mmol/L",
+                                        status = if (hasSugar) "Lúc $lastTimeFormatted" else "Chưa có dữ liệu",
+                                        isWarning = false,
+                                        icon = Icons.Default.WaterDrop,
+                                        iconBg = Color(0xFFE8EEF8),
+                                        iconTint = BloodGlucoseAccent,
+                                        onClick = onNavigateToVitals,
+                                        modifier = Modifier.weight(1f)
+                                    )
                                 }
                             }
                         }
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            uiState.todayMedications.forEach { schedule ->
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(14.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                    }
+                }
+
+                // F. VIỆC CẦN LÀM HÔM NAY (DANH SÁCH DÒNG VỚI DIVIDER MẢNH)
+                item {
+                    val appointments = uiState.upcomingAppointment
+                    val medications = uiState.todayMedications
+                    val totalTasks = medications.size + (if (appointments != null) 1 else 0)
+                    val pendingCount = medications.count { !it.isTaken && !it.isSkipped }
+                    val allDone = medications.isNotEmpty() && pendingCount == 0
+
+                    val groupedSessions = remember(medications) {
+                        medications.groupBy { it.scheduledTime }.toList().sortedBy { it.first }
+                    }
+                    val pendingSessionsCount = groupedSessions.count { (_, doses) ->
+                        doses.any { it.status == DoseStatus.DUE || it.status == DoseStatus.OVERDUE }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
+                                Text(
+                                    text = "Việc cần làm hôm nay",
+                                    fontSize = 15.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = WarmTextPrimary,
+                                    maxLines = 1
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                if (allDone) {
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = WarmPrimaryLight,
+                                        border = BorderStroke(0.8.dp, WarmPrimaryTeal.copy(alpha = 0.3f))
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Surface(
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    color = MaterialTheme.colorScheme.primaryContainer
-                                                ) {
-                                                    Text(
-                                                        text = schedule.scheduledTime,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = schedule.medicineName,
-                                                    fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.bodyMedium
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = WarmPrimaryTeal,
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(3.dp))
                                             Text(
-                                                text = "${schedule.dosage} • ${schedule.instruction}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                text = "Hoàn thành",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = WarmPrimaryTeal
                                             )
                                         }
+                                    }
+                                }
+                            }
 
-                                        Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
 
-                                        if (schedule.isTaken) {
-                                            Surface(
-                                                shape = RoundedCornerShape(8.dp),
-                                                color = Color(0xFFDCFCE7)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { onNavigateToMedication() }
+                                    .padding(vertical = 4.dp, horizontal = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Xem tất cả",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = WarmPrimaryTeal,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Icon(
+                                    imageVector = Icons.Default.ArrowForward,
+                                    contentDescription = null,
+                                    tint = WarmPrimaryTeal,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+
+                        if (totalTasks == 0) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = WarmCreamSurface,
+                                border = BorderStroke(1.dp, WarmDivider),
+                                shadowElevation = 0.5.dp,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(18.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Chưa có việc cần làm hôm nay",
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = WarmTextPrimary
+                                        )
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Text(
+                                            text = "Thêm thuốc hoặc đặt lịch khám để nhận lời nhắc",
+                                            fontSize = 12.5.sp,
+                                            color = WarmTextSecondary,
+                                            lineHeight = 17.sp
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Button(
+                                        onClick = onNavigateToMedication,
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = WarmPrimaryTeal),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                    ) {
+                                        Text("+ Thêm thuốc", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                // 1. Danh sách các cữ thuốc hôm nay (Mỗi cữ là 1 Card độc lập, tinh gọn)
+                                groupedSessions.forEach { (scheduledTime, doses) ->
+                                    GroupedSessionCard(
+                                        scheduledTime = scheduledTime,
+                                        doses = doses,
+                                        onTakeSession = {
+                                            viewModel.onTakeSession(scheduledTime)
+                                        },
+                                        onUndoTakeSession = {
+                                            viewModel.onUndoTakeSession(scheduledTime)
+                                        }
+                                    )
+                                }
+
+                                // 2. Lịch khám định kỳ (nếu có cuộc hẹn)
+                                if (appointments != null) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = WarmCreamSurface,
+                                        border = BorderStroke(1.dp, WarmDivider),
+                                        shadowElevation = 0.5.dp,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { onNavigateToMedication() }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
                                             ) {
-                                                Row(
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(38.dp)
+                                                        .clip(CircleShape)
+                                                        .background(WarmPrimaryLight),
+                                                    contentAlignment = Alignment.Center
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Default.Check,
+                                                        imageVector = Icons.Default.CalendarMonth,
                                                         contentDescription = null,
-                                                        tint = Color(0xFF16A34A),
-                                                        modifier = Modifier.size(14.dp)
+                                                        tint = WarmPrimaryTeal,
+                                                        modifier = Modifier.size(20.dp)
                                                     )
-                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                }
+
+                                                Spacer(modifier = Modifier.width(12.dp))
+
+                                                Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        text = "Đã uống",
-                                                        fontSize = 11.sp,
+                                                        text = appointments.title,
+                                                        fontSize = 14.5.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = Color(0xFF166534)
+                                                        color = WarmTextPrimary,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = "${appointments.timeFormatted} · ${appointments.doctorOrDepartment}",
+                                                        fontSize = 12.sp,
+                                                        color = WarmTextSecondary,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
                                                     )
                                                 }
                                             }
-                                        } else {
-                                            Button(
-                                                onClick = { viewModel.onTakeMedicine(schedule.id) },
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                                shape = RoundedCornerShape(8.dp),
-                                                modifier = Modifier.height(34.dp)
-                                            ) {
-                                                Text("Uống ngay", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                            }
+
+                                            Icon(
+                                                imageVector = Icons.Default.ChevronRight,
+                                                contentDescription = null,
+                                                tint = WarmTextSecondary.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -670,5 +936,594 @@ fun HomeScreen(
                 }
             }
         }
+
+        if (showAddMemberDialog) {
+            AddMemberHomeDialog(
+                onDismiss = { showAddMemberDialog = false },
+                onAdd = { fullName, relationship ->
+                    viewModel.addNewMember(fullName, relationship)
+                },
+                inviteCode = uiState.inviteCode.ifBlank { "FAM-8606" }
+            )
+        }
     }
+}
+
+/**
+ * Ô thành phần chỉ số trong bảng Editorial 2x2 (Phong cách A)
+ * Nằm trực tiếp trên bề mặt bảng, ngăn cách bằng đường kẻ mảnh, touch target >= 48dp
+ */
+@Composable
+private fun EditorialMetricCell(
+    title: String,
+    value: String,
+    unit: String,
+    status: String,
+    isWarning: Boolean,
+    icon: ImageVector,
+    iconBg: Color,
+    iconTint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .clickable(onClick = onClick)
+            .padding(14.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Hàng 1: Icon tròn + Mũi tên góc phải
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(iconBg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = WarmTextSecondary.copy(alpha = 0.4f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Hàng 2: Tên chỉ số
+            Text(
+                text = title,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = WarmTextPrimary
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            // Hàng 3: Giá trị lớn & đơn vị
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = value,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (isWarning) SosRed else WarmTextPrimary
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = unit,
+                    fontSize = 11.5.sp,
+                    color = WarmTextSecondary,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Hàng 4: Trạng thái đo / thời gian
+            Text(
+                text = status,
+                fontSize = 11.sp,
+                color = if (isWarning) SosRed else WarmTextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/**
+ * Thẻ Cữ Gộp: Hiển thị một cữ uống gồm các loại thuốc trong cùng cữ giờ.
+ * Thiết kế phẳng, độc lập, tự động gom nhóm các thuốc có cùng liều dùng (ví dụ: "abc, abcd (1 viên)"),
+ * hiển thị thẳng dưới giờ cữ và có 1 nút bấm "Đã uống cả cữ".
+ */
+@Composable
+fun GroupedSessionCard(
+    scheduledTime: String,
+    doses: List<MedicationSchedule>,
+    onTakeSession: () -> Unit,
+    onUndoTakeSession: () -> Unit
+) {
+    val sessionLabel = getTimeSessionLabel(scheduledTime)
+    val allTaken = doses.all { it.status == DoseStatus.TAKEN }
+    val anyOverdue = doses.any { it.status == DoseStatus.OVERDUE }
+    val anyDue = doses.any { it.status == DoseStatus.DUE }
+    val allSkipped = doses.all { it.status == DoseStatus.SKIPPED }
+
+    val sessionStatus = when {
+        allTaken -> DoseStatus.TAKEN
+        anyOverdue -> DoseStatus.OVERDUE
+        anyDue -> DoseStatus.DUE
+        allSkipped -> DoseStatus.SKIPPED
+        else -> DoseStatus.UPCOMING
+    }
+
+    val (iconBg, iconTint) = when (sessionStatus) {
+        DoseStatus.TAKEN -> Pair(WarmPrimaryLight, WarmPrimaryTeal)
+        DoseStatus.OVERDUE -> Pair(Color(0xFFFDF4E7), WarmAccent)
+        DoseStatus.DUE -> Pair(Color(0xFFE8F3EE), WarmPrimaryTeal)
+        DoseStatus.UPCOMING -> Pair(WarmCreamSecondary, WarmTextSecondary)
+        DoseStatus.SKIPPED -> Pair(Color(0xFFF1EFEA), WarmTextSecondary.copy(alpha = 0.6f))
+    }
+
+    // Tự động gom các thuốc có cùng liều lượng: ví dụ "Thuốc A, B (1 viên)"
+    val groupedDoses = remember(doses) {
+        doses.groupBy { formatDosageString(it.dosage) }
+    }
+
+    val commonInstruction = remember(doses) {
+        doses.map { it.instruction.trim() }.firstOrNull { it.isNotBlank() } ?: ""
+    }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (allTaken) Color(0xFFFBFDFB) else WarmCreamSurface,
+        border = BorderStroke(
+            1.dp,
+            if (allTaken) WarmPrimaryTeal.copy(alpha = 0.35f) else WarmDivider
+        ),
+        shadowElevation = 0.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            // TẦNG 1: HEADER (Icon + Giờ + Badge Quá giờ/Đến giờ --- Nút [✓ Đã uống])
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(iconBg),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (sessionStatus == DoseStatus.TAKEN) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = iconTint,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        } else {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_pill),
+                                contentDescription = "Cữ thuốc",
+                                tint = iconTint,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "$scheduledTime ($sessionLabel)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (sessionStatus == DoseStatus.SKIPPED) WarmTextSecondary else WarmTextPrimary,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        if (sessionStatus == DoseStatus.DUE) {
+                            Surface(shape = RoundedCornerShape(4.dp), color = WarmPrimaryLight) {
+                                Text(
+                                    text = "Đến giờ",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = WarmPrimaryTeal,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        } else if (sessionStatus == DoseStatus.OVERDUE) {
+                            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFDF4E7)) {
+                                Text(
+                                    text = "Quá giờ",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = WarmAccent,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Nút thao tác nhanh
+                if (anyDue || anyOverdue || sessionStatus == DoseStatus.UPCOMING) {
+                    Button(
+                        onClick = onTakeSession,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (anyOverdue) WarmAccent else WarmPrimaryTeal,
+                            contentColor = Color.White
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Đã uống",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                } else if (allTaken) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(6.dp), color = WarmPrimaryLight) {
+                            Text(
+                                text = "✅ Đã uống",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = WarmPrimaryTeal,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Hoàn tác",
+                            fontSize = 11.5.sp,
+                            color = WarmTextSecondary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable { onUndoTakeSession() }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // TẦNG 2: DANH SÁCH THUỐC (100% BỀ NGANG, MỖI NHÓM LIỀU 1 DÒNG RÕ RÀNG)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 46.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                groupedDoses.forEach { (dosage, items) ->
+                    val names = items.map {
+                        val clean = it.medicineName.trim()
+                        if (clean.startsWith("Thuốc ", ignoreCase = true)) {
+                            clean.substring(6).trim()
+                        } else if (clean.startsWith("thuốc ", ignoreCase = true)) {
+                            clean.substring(6).trim()
+                        } else clean
+                    }.filter { it.isNotBlank() }.distinct().joinToString(", ")
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "•",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (allTaken) WarmPrimaryTeal else WarmAccent,
+                            modifier = Modifier.padding(end = 6.dp)
+                        )
+                        Text(
+                            text = "Thuốc $names",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (allTaken) WarmTextSecondary else WarmTextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Text(
+                            text = ": $dosage",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = WarmTextSecondary
+                        )
+                    }
+                }
+            }
+
+            // TẦNG 3: LỜI DẶN CHUNG (NẾU CÓ)
+            if (commonInstruction.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 46.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(WarmCreamSecondary.copy(alpha = 0.6f))
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = WarmPrimaryTeal,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = "Lời dặn: $commonInstruction",
+                        fontSize = 12.sp,
+                        color = WarmTextSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Hộp thoại thêm thành viên gia đình trực tiếp tại Dashboard:
+ * Hỗ trợ 2 chế độ:
+ * 1. Thêm hồ sơ trực tiếp (Bà Nội, Con nhỏ...)
+ * 2. Mời qua Mã tổ ấm
+ */
+@Composable
+fun AddMemberHomeDialog(
+    onDismiss: () -> Unit,
+    onAdd: (fullName: String, relationship: String) -> Unit,
+    inviteCode: String
+) {
+    val context = LocalContext.current
+    var selectedTab by remember { mutableStateOf(0) } // 0: Thêm trực tiếp, 1: Mời qua mã
+    var name by remember { mutableStateOf("") }
+    var relationship by remember { mutableStateOf("Thành viên") }
+
+    val relationshipOptions = listOf("Vợ / Chồng", "Bố", "Mẹ", "Con cái", "Thành viên")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(20.dp),
+        containerColor = WarmCreamSurface,
+        title = {
+            Column {
+                Text(
+                    text = "Thành Viên Gia Đình",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = WarmTextPrimary
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                // Tab chuyển đổi 2 chế độ
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = WarmCreamSecondary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (selectedTab == 0) WarmCreamSurface else Color.Transparent,
+                            shadowElevation = if (selectedTab == 0) 1.dp else 0.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { selectedTab = 0 }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "Thêm trực tiếp",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (selectedTab == 0) WarmPrimaryTeal else WarmTextSecondary
+                                )
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (selectedTab == 1) WarmCreamSurface else Color.Transparent,
+                            shadowElevation = if (selectedTab == 1) 1.dp else 0.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { selectedTab = 1 }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "Mời qua mã",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (selectedTab == 1) WarmPrimaryTeal else WarmTextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        text = {
+            if (selectedTab == 0) {
+                // Tùy chọn 1: Thêm trực tiếp hồ sơ người thân
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Tạo hồ sơ theo dõi sức khỏe cho người thân (ông bà, con nhỏ không có điện thoại riêng):",
+                        fontSize = 12.sp,
+                        color = WarmTextSecondary,
+                        lineHeight = 16.sp
+                    )
+
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Họ và tên *") },
+                        placeholder = { Text("Ví dụ: Bà Nội, Bé Bắp...") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text(
+                        text = "Mối quan hệ:",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = WarmTextPrimary
+                    )
+
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(relationshipOptions) { rel ->
+                            FilterChip(
+                                selected = relationship == rel,
+                                onClick = { relationship = rel },
+                                label = { Text(rel, fontSize = 11.5.sp) }
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Tùy chọn 2: Mời qua mã tổ ấm
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Gửi mã này cho người thân có điện thoại riêng. Khi tải app xong, chọn 'Tham gia tổ ấm bằng mã':",
+                        fontSize = 12.sp,
+                        color = WarmTextSecondary,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = WarmPrimaryLight,
+                        border = BorderStroke(1.dp, WarmPrimaryTeal.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(vertical = 14.dp)
+                        ) {
+                            Text(
+                                text = "MÃ TỔ ẤM CỦA BẠN",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = WarmPrimaryTeal.copy(alpha = 0.8f)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = inviteCode,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 2.sp,
+                                color = WarmPrimaryTeal
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            val clip = ClipData.newPlainText("Mã tổ ấm FamilyCare", inviteCode)
+                            clipboard?.setPrimaryClip(clip)
+                            Toast.makeText(context, "Đã sao chép mã: $inviteCode", Toast.LENGTH_SHORT).show()
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = WarmPrimaryTeal),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Sao chép mã mời", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (selectedTab == 0) {
+                Button(
+                    onClick = {
+                        if (name.isBlank()) {
+                            Toast.makeText(context, "Vui lòng nhập họ và tên", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        onAdd(name.trim(), relationship)
+                        onDismiss()
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = WarmPrimaryTeal)
+                ) {
+                    Text("Lưu thành viên", fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Đóng", color = WarmTextSecondary)
+            }
+        }
+    )
 }

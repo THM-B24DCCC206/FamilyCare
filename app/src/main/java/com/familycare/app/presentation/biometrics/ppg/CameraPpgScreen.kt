@@ -356,8 +356,9 @@ fun CameraPpgScreen(
                 Button(
                     onClick = {
                         val sessionManager = SessionManager(context)
-                        viewModel.saveResult(sessionManager.userId.ifEmpty { "user_me" })
-                        onBack()
+                        viewModel.saveResult(sessionManager.userId.ifEmpty { "user_me" }) {
+                            onBack()
+                        }
                     }
                 ) {
                     Text("Lưu kết quả & Đóng")

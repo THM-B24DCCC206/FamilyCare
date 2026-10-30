@@ -107,14 +107,27 @@ class EmergencyViewModel(
                     }
                 }
 
-                allUsers = userDao.getAllUsers()
+                // Dọn dẹp sạch sẽ toàn bộ các ID mẫu / dữ liệu ảo cũ nếu có trong DB
+                val fakeIds = setOf("user_01", "user_demo_01", "member_bac_nam", "member_bo", "member_me", "member_anhtrai", "user_02", "member_ly_tran")
+                fakeIds.forEach { id ->
+                    runCatching { userDao.deleteUserById(id) }
+                }
 
-                val otherMembers = allUsers.filter { it.id != currentUser.id && it.id != "user_01" && it.id != "user_demo_01" }
+                val currentFamilyId = currentUser.familyId.trim().ifBlank { sessionManager.familyId.trim() }
+                allUsers = userDao.getAllUsers().filter { it.id !in fakeIds }
+
+                val otherMembers = if (currentFamilyId.isNotBlank()) {
+                    allUsers.filter {
+                        it.id != currentUser.id &&
+                        it.familyId.isNotBlank() &&
+                        it.familyId == currentFamilyId
+                    }
+                } else emptyList()
 
                 val recipientUser: UserEntity? = if (isCurrentOwner) {
                     otherMembers.firstOrNull()
                 } else {
-                    allUsers.firstOrNull { it.role.uppercase() == "ADMIN" } ?: otherMembers.firstOrNull()
+                    allUsers.firstOrNull { it.role.uppercase() == "ADMIN" && (currentFamilyId.isNotBlank() && it.familyId == currentFamilyId) } ?: otherMembers.firstOrNull()
                 }
 
                 val recipientName = recipientUser?.fullName?.ifBlank {
@@ -127,7 +140,7 @@ class EmergencyViewModel(
                     "Trưởng gia đình"
                 }
 
-                val recipientPhone = extractPhoneOrFallback(recipientUser)
+                val recipientPhone = extractRealPhone(recipientUser)
 
                 val cardTitle = if (isCurrentOwner) "NGƯỜI THÂN TIẾP NHẬN SOS" else "CHỦ GIA ĐÌNH TIẾP NHẬN SOS"
                 val cardTitleActive = if (isCurrentOwner) "ĐÃ BÁO CHO NGƯỜI THÂN" else "ĐÃ BÁO CHO CHỦ GIA ĐÌNH"
@@ -144,14 +157,22 @@ class EmergencyViewModel(
                 val callBtnText = if (isCurrentOwner) "Gọi Người Thân" else "Gọi Chủ Hộ"
 
                 val targetName = currentUser.fullName.ifBlank { currentLoggedInName }
-                val targetPhone = extractPhoneOrFallback(currentUser)
+                val targetPhone = extractRealPhone(currentUser)
                 val blood = currentUser.bloodType.ifBlank { "--" }
                 val diseases = formatJsonList(currentUser.chronicDiseasesJson)
                 val allergies = formatJsonList(currentUser.drugAllergiesJson)
 
-                val contacts = mutableListOf<String>()
+                val contacts = mutableListOf<EmergencyContactItem>()
                 val myRoleTag = if (isCurrentOwner) "Tôi - Trưởng gia đình" else "Tôi - Thành viên"
-                contacts.add("$targetName ($myRoleTag) • $targetPhone")
+                contacts.add(
+                    EmergencyContactItem(
+                        id = currentUser.id,
+                        name = targetName,
+                        role = myRoleTag,
+                        phone = targetPhone,
+                        isMe = true
+                    )
+                )
 
                 otherMembers.forEach { member ->
                     val memberRoleTag = if (!isCurrentOwner && member.role.uppercase() == "ADMIN") {
@@ -159,8 +180,16 @@ class EmergencyViewModel(
                     } else {
                         "Thành viên"
                     }
-                    val phone = extractPhoneOrFallback(member)
-                    contacts.add("${member.fullName} ($memberRoleTag) • $phone")
+                    val memberRealPhone = extractRealPhone(member)
+                    contacts.add(
+                        EmergencyContactItem(
+                            id = member.id,
+                            name = member.fullName.ifBlank { "Thành viên" },
+                            role = memberRoleTag,
+                            phone = memberRealPhone,
+                            isMe = false
+                        )
+                    )
                 }
 
                 _uiState.update {
@@ -191,10 +220,10 @@ class EmergencyViewModel(
     }
 
     /**
-     * Làm mới hoặc tự động định vị ngầm thời gian thực.
-     * Kiểm tra trạng thái cấp quyền và GPS để cập nhật UI chính xác.
+     * Làm mới dữ liệu người thân từ hồ sơ và tự động định vị ngầm thời gian thực.
      */
     fun refreshLocation() {
+        loadFamilyAndUserData()
         loadRealtimeLocationAndHospitals()
     }
 
@@ -427,14 +456,8 @@ class EmergencyViewModel(
         emergencyManager.stopSirenAlarm()
     }
 
-    private fun extractPhoneOrFallback(user: UserEntity?): String {
-        if (user == null) return "0912.345.678"
-        return if (user.email.contains("@")) {
-            val lastDigits = user.id.filter { it.isDigit() }.takeLast(6)
-            if (lastDigits.length >= 6) "09$lastDigits" else "0912.345.678"
-        } else {
-            user.email.ifBlank { "0912.345.678" }
-        }
+    private fun extractRealPhone(user: UserEntity?): String {
+        return user?.phoneNumber?.trim().orEmpty()
     }
 
     private fun formatJsonList(json: String?): String {

@@ -127,7 +127,10 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
                 birthDate TEXT NOT NULL DEFAULT '',
                 bloodType TEXT NOT NULL DEFAULT '',
                 chronicDiseasesJson TEXT NOT NULL DEFAULT '[]',
-                drugAllergiesJson TEXT NOT NULL DEFAULT '[]'
+                drugAllergiesJson TEXT NOT NULL DEFAULT '[]',
+                gender TEXT NOT NULL DEFAULT '',
+                phoneNumber TEXT NOT NULL DEFAULT '',
+                address TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent()
         )
@@ -178,6 +181,11 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
         try { db.execSQL("ALTER TABLE alerts ADD COLUMN address TEXT") } catch (_: Exception) {}
         try { db.execSQL("ALTER TABLE alerts ADD COLUMN isResolved INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
 
+        // Đảm bảo các cột mới luôn tồn tại trong users (gender, phoneNumber, address)
+        try { db.execSQL("ALTER TABLE users ADD COLUMN gender TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE users ADD COLUMN phoneNumber TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
+        try { db.execSQL("ALTER TABLE users ADD COLUMN address TEXT NOT NULL DEFAULT ''") } catch (_: Exception) {}
+
         // Dọn dẹp sạch sẽ toàn bộ các bản ghi dữ liệu mẫu giả lập cũ
         try {
             db.execSQL("DELETE FROM alerts WHERE memberName LIKE '%Nguyễn Văn Nam%' OR targetUserName LIKE '%Nguyễn Văn Nam%' OR memberName LIKE '%Nguyễn Hoàng%' OR targetUserName LIKE '%Nguyễn Hoàng%' OR message LIKE '%Nguyễn Hoàng%' OR memberName LIKE '%Trần Thị Lan%' OR targetUserName LIKE '%Trần Thị Lan%' OR message LIKE '%Trần Thị Lan%' OR memberId = 'user_demo_01' OR targetUserId = 'user_demo_01' OR familyId = 'fam_123456' OR message LIKE '%10.7769%'")
@@ -185,7 +193,27 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
             db.execSQL("UPDATE alerts SET alertLevel = 'CRITICAL', level = 'CRITICAL' WHERE alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'")
         } catch (_: Exception) {}
         try {
-            db.execSQL("DELETE FROM users WHERE fullName LIKE '%Nguyễn Văn Nam%' OR id = 'member_bac_nam' OR id = 'user_demo_01' OR id = 'user_01' OR fullName = 'Bác Trần Thị Lan' OR fullName = 'Con Nguyễn Hoàng'")
+            db.execSQL("DELETE FROM users WHERE fullName LIKE '%Nguyễn Văn Nam%' OR id IN ('member_bac_nam', 'user_demo_01', 'user_01', 'user_02', 'member_ly_tran', 'member_bo', 'member_me', 'member_anhtrai') OR fullName = 'Bác Trần Thị Lan' OR fullName = 'Con Nguyễn Hoàng'")
+        } catch (_: Exception) {}
+
+        // Khởi tạo và đồng bộ an toàn dữ liệu tổ ấm mặc định
+        try {
+            val cursor = db.rawQuery("SELECT id FROM users WHERE id = 'user_me' OR email = 'lytran@familycare.vn'", null)
+            val hasAdmin = cursor.use { it.moveToFirst() }
+            if (hasAdmin) {
+                db.execSQL("UPDATE users SET familyId = 'fam_default', familyName = 'Gia đình Tuệ An', inviteCode = 'FAM-8606', role = 'ADMIN' WHERE id = 'user_me' OR email = 'lytran@familycare.vn'")
+            } else {
+                db.execSQL("""
+                    INSERT OR REPLACE INTO users (id, email, password, fullName, role, familyId, familyName, inviteCode, createdAt, avatarUrl, birthDate, bloodType, chronicDiseasesJson, drugAllergiesJson, gender, phoneNumber, address)
+                    VALUES ('user_me', 'lytran@familycare.vn', '123456', 'Ly Trần', 'ADMIN', 'fam_default', 'Gia đình Tuệ An', 'FAM-8606', ${System.currentTimeMillis()}, '', '20/11/1992', 'A+', '[]', '[]', 'Nữ', '0912345678', 'Hà Nội')
+                """.trimIndent())
+            }
+
+            // Đồng bộ thành viên gia nhập qua mã mời FAM-8606
+            db.execSQL("UPDATE users SET familyId = 'fam_default', familyName = 'Gia đình Tuệ An' WHERE UPPER(inviteCode) = 'FAM-8606' AND (familyId IS NULL OR TRIM(familyId) = '')")
+
+            // Đảm bảo các tài khoản đăng ký mới chưa nhập mã mời hoặc chưa tạo tổ ấm sẽ có familyId rỗng
+            db.execSQL("UPDATE users SET familyId = '', familyName = '' WHERE (inviteCode IS NULL OR TRIM(inviteCode) = '') AND (familyName IS NULL OR TRIM(familyName) = '') AND id != 'user_me' AND email != 'lytran@familycare.vn'")
         } catch (_: Exception) {}
 
         db.execSQL(
@@ -221,7 +249,10 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
                 birthDate TEXT NOT NULL DEFAULT '',
                 bloodType TEXT NOT NULL DEFAULT '',
                 chronicDiseasesJson TEXT NOT NULL DEFAULT '[]',
-                drugAllergiesJson TEXT NOT NULL DEFAULT '[]'
+                drugAllergiesJson TEXT NOT NULL DEFAULT '[]',
+                gender TEXT NOT NULL DEFAULT '',
+                phoneNumber TEXT NOT NULL DEFAULT '',
+                address TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent()
         )
@@ -295,7 +326,27 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "familycare_d
             db.execSQL("UPDATE alerts SET alertLevel = 'CRITICAL', level = 'CRITICAL' WHERE alertType = 'SOS_EMERGENCY' OR type = 'SOS_EMERGENCY' OR title LIKE '%SOS%' OR title LIKE '%CẤP CỨU%'")
         } catch (_: Exception) {}
         try {
-            db.execSQL("DELETE FROM users WHERE fullName LIKE '%Nguyễn Văn Nam%' OR id = 'member_bac_nam' OR id = 'user_demo_01' OR id = 'user_01' OR fullName = 'Bác Trần Thị Lan' OR fullName = 'Con Nguyễn Hoàng'")
+            db.execSQL("DELETE FROM users WHERE fullName LIKE '%Nguyễn Văn Nam%' OR id IN ('member_bac_nam', 'user_demo_01', 'user_01', 'user_02', 'member_ly_tran', 'member_bo', 'member_me', 'member_anhtrai') OR fullName = 'Bác Trần Thị Lan' OR fullName = 'Con Nguyễn Hoàng'")
+        } catch (_: Exception) {}
+
+        // Khởi tạo và đồng bộ an toàn dữ liệu tổ ấm mặc định
+        try {
+            val cursor = db.rawQuery("SELECT id FROM users WHERE id = 'user_me' OR email = 'lytran@familycare.vn'", null)
+            val hasAdmin = cursor.use { it.moveToFirst() }
+            if (hasAdmin) {
+                db.execSQL("UPDATE users SET familyId = 'fam_default', familyName = 'Gia đình Tuệ An', inviteCode = 'FAM-8606', role = 'ADMIN' WHERE id = 'user_me' OR email = 'lytran@familycare.vn'")
+            } else {
+                db.execSQL("""
+                    INSERT OR REPLACE INTO users (id, email, password, fullName, role, familyId, familyName, inviteCode, createdAt, avatarUrl, birthDate, bloodType, chronicDiseasesJson, drugAllergiesJson, gender, phoneNumber, address)
+                    VALUES ('user_me', 'lytran@familycare.vn', '123456', 'Ly Trần', 'ADMIN', 'fam_default', 'Gia đình Tuệ An', 'FAM-8606', ${System.currentTimeMillis()}, '', '20/11/1992', 'A+', '[]', '[]', 'Nữ', '0912345678', 'Hà Nội')
+                """.trimIndent())
+            }
+
+            // Đồng bộ thành viên gia nhập qua mã mời FAM-8606
+            db.execSQL("UPDATE users SET familyId = 'fam_default', familyName = 'Gia đình Tuệ An' WHERE UPPER(inviteCode) = 'FAM-8606' AND (familyId IS NULL OR TRIM(familyId) = '')")
+
+            // Đảm bảo các tài khoản đăng ký mới chưa nhập mã mời hoặc chưa tạo tổ ấm sẽ có familyId rỗng
+            db.execSQL("UPDATE users SET familyId = '', familyName = '' WHERE (inviteCode IS NULL OR TRIM(inviteCode) = '') AND (familyName IS NULL OR TRIM(familyName) = '') AND id != 'user_me' AND email != 'lytran@familycare.vn'")
         } catch (_: Exception) {}
     }
 
@@ -579,6 +630,44 @@ class MedicineDaoImpl(private val dbHelper: DatabaseHelper) : MedicineDao {
     }
 
     override suspend fun updateMedicine(medicine: MedicineEntity) = insertMedicine(medicine)
+
+    override suspend fun getMedicineById(medicineId: String): MedicineEntity? = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.query("medicines", null, "id = ?", arrayOf(medicineId), null, null, null, "1")
+        cursor.use { c ->
+            if (c.moveToFirst()) {
+                val idCol = c.getColumnIndexOrThrow("id")
+                val userCol = c.getColumnIndexOrThrow("userId")
+                val nameCol = c.getColumnIndexOrThrow("name")
+                val dosCol = c.getColumnIndexOrThrow("dosage")
+                val insCol = c.getColumnIndexOrThrow("instruction")
+                val remCol = c.getColumnIndexOrThrow("reminderTimes")
+                val sCol = c.getColumnIndexOrThrow("startDate")
+                val eCol = c.getColumnIndexOrThrow("endDate")
+                val ocrCol = c.getColumnIndexOrThrow("scannedViaOcr")
+                val purCol = c.getColumnIndex("purpose")
+
+                val timesType = object : TypeToken<List<String>>() {}.type
+                val times: List<String> = runCatching {
+                    gson.fromJson<List<String>>(c.getString(remCol), timesType)
+                }.getOrDefault(emptyList())
+
+                val purpose = if (purCol != -1 && !c.isNull(purCol)) c.getString(purCol) else ""
+                MedicineEntity(
+                    id = c.getString(idCol),
+                    userId = c.getString(userCol),
+                    name = c.getString(nameCol),
+                    dosage = c.getString(dosCol),
+                    instruction = c.getString(insCol),
+                    reminderTimes = times,
+                    startDate = c.getLong(sCol),
+                    endDate = if (!c.isNull(eCol)) c.getLong(eCol) else null,
+                    scannedViaOcr = c.getInt(ocrCol) == 1,
+                    purpose = purpose
+                )
+            } else null
+        }
+    }
 
     override suspend fun deleteMedicine(medicineId: String) = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
@@ -1056,17 +1145,30 @@ class UserDaoImpl(private val dbHelper: DatabaseHelper) : UserDao {
 
     override suspend fun insertUser(user: UserEntity) = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
+        val existing = getUserAccountById(user.id)
+
+        val famId = user.familyId.ifBlank { existing?.familyId ?: "" }
+        val famName = if (famId.isNotBlank()) existing?.familyName ?: "" else ""
+        val code = if (famId.isNotBlank()) existing?.inviteCode ?: "" else ""
+        val pwd = existing?.password ?: ""
+
         val values = ContentValues().apply {
             put("id", user.id)
             put("fullName", user.fullName)
             put("email", user.email)
             put("avatarUrl", user.avatarUrl)
-            put("familyId", user.familyId)
+            put("familyId", famId)
+            put("familyName", famName)
+            put("inviteCode", code)
+            put("password", pwd)
             put("role", user.role)
             put("birthDate", user.birthDate)
             put("bloodType", user.bloodType)
             put("chronicDiseasesJson", user.chronicDiseasesJson)
             put("drugAllergiesJson", user.drugAllergiesJson)
+            put("gender", user.gender)
+            put("phoneNumber", user.phoneNumber)
+            put("address", user.address)
         }
         db.insertWithOnConflict("users", null, values, SQLiteDatabase.CONFLICT_REPLACE)
         _signal.value = System.currentTimeMillis()
@@ -1083,15 +1185,19 @@ class UserDaoImpl(private val dbHelper: DatabaseHelper) : UserDao {
         val existing = queryUserByEmail(user.email)
         if (existing != null) return@withContext false
 
+        val famId = user.familyId
+        val famName = user.familyName
+        val code = user.inviteCode
+
         val values = ContentValues().apply {
             put("id", user.id)
             put("email", user.email.trim().lowercase())
             put("password", user.password)
             put("fullName", user.fullName.trim())
             put("role", user.role)
-            user.familyId?.let { put("familyId", it) }
-            user.familyName?.let { put("familyName", it) }
-            user.inviteCode?.let { put("inviteCode", it) }
+            famId?.let { put("familyId", it) }
+            famName?.let { put("familyName", it) }
+            code?.let { put("inviteCode", it) }
             put("createdAt", user.createdAt)
         }
         val res = db.insertWithOnConflict("users", null, values, SQLiteDatabase.CONFLICT_IGNORE)
@@ -1120,8 +1226,43 @@ class UserDaoImpl(private val dbHelper: DatabaseHelper) : UserDao {
             role?.let { put("role", it) }
         }
         db.update("users", values, "id = ?", arrayOf(userId))
+
         _signal.value = System.currentTimeMillis()
         Unit
+    }
+
+    override suspend fun getActiveFamily(): FamilyInfo? = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT familyId, familyName, inviteCode FROM users WHERE familyName IS NOT NULL AND TRIM(familyName) != '' ORDER BY CASE WHEN role = 'ADMIN' THEN 0 ELSE 1 END, createdAt ASC LIMIT 1",
+            null
+        )
+        cursor.use { c ->
+            if (c.moveToFirst()) {
+                val fId = c.getString(c.getColumnIndexOrThrow("familyId")).orEmpty()
+                val fName = c.getString(c.getColumnIndexOrThrow("familyName")).orEmpty()
+                val fCode = c.getString(c.getColumnIndexOrThrow("inviteCode")).orEmpty()
+                if (fName.isNotBlank()) FamilyInfo(fId.ifBlank { "fam_default" }, fName, fCode.ifBlank { "FAM-8606" }) else null
+            } else null
+        }
+    }
+
+    override suspend fun getFamilyByInviteCode(code: String): FamilyInfo? = withContext(Dispatchers.IO) {
+        val cleanCode = code.trim().uppercase()
+        if (cleanCode.isBlank()) return@withContext null
+        val db = dbHelper.readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT familyId, familyName, inviteCode FROM users WHERE UPPER(inviteCode) = ? AND familyName IS NOT NULL AND TRIM(familyName) != '' LIMIT 1",
+            arrayOf(cleanCode)
+        )
+        cursor.use { c ->
+            if (c.moveToFirst()) {
+                val fId = c.getString(c.getColumnIndexOrThrow("familyId")).orEmpty()
+                val fName = c.getString(c.getColumnIndexOrThrow("familyName")).orEmpty()
+                val fCode = c.getString(c.getColumnIndexOrThrow("inviteCode")).orEmpty()
+                FamilyInfo(fId.ifBlank { "fam_joined" }, fName, fCode)
+            } else null
+        }
     }
 
     private fun queryUserByEmail(email: String): UserAccountEntity? {
@@ -1175,6 +1316,9 @@ class UserDaoImpl(private val dbHelper: DatabaseHelper) : UserDao {
         val bloodCol = c.getColumnIndexOrThrow("bloodType")
         val disCol = c.getColumnIndexOrThrow("chronicDiseasesJson")
         val allCol = c.getColumnIndexOrThrow("drugAllergiesJson")
+        val genderCol = c.getColumnIndex("gender")
+        val phoneCol = c.getColumnIndex("phoneNumber")
+        val addrCol = c.getColumnIndex("address")
 
         return UserEntity(
             id = c.getString(idCol),
@@ -1186,7 +1330,10 @@ class UserDaoImpl(private val dbHelper: DatabaseHelper) : UserDao {
             birthDate = if (!c.isNull(dobCol)) c.getString(dobCol) else "",
             bloodType = if (!c.isNull(bloodCol)) c.getString(bloodCol) else "",
             chronicDiseasesJson = if (!c.isNull(disCol)) c.getString(disCol) else "[]",
-            drugAllergiesJson = if (!c.isNull(allCol)) c.getString(allCol) else "[]"
+            drugAllergiesJson = if (!c.isNull(allCol)) c.getString(allCol) else "[]",
+            gender = if (genderCol >= 0 && !c.isNull(genderCol)) c.getString(genderCol) else "",
+            phoneNumber = if (phoneCol >= 0 && !c.isNull(phoneCol)) c.getString(phoneCol) else "",
+            address = if (addrCol >= 0 && !c.isNull(addrCol)) c.getString(addrCol) else ""
         )
     }
 }
@@ -1376,6 +1523,45 @@ class MedicationLogDaoImpl(private val dbHelper: DatabaseHelper) : MedicationLog
             put("actualTakenTime", takenAt)
         }
         db.update("medication_logs", values, "id = ?", arrayOf(logId))
+        _signal.value = System.currentTimeMillis()
+    }
+
+    override suspend fun markAsNotTaken(logId: String) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("isTaken", 0)
+            put("isSkipped", 0)
+            putNull("actualTakenTime")
+        }
+        db.update("medication_logs", values, "id = ?", arrayOf(logId))
+        _signal.value = System.currentTimeMillis()
+    }
+
+    override suspend fun markAsSkipped(logId: String) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("isSkipped", 1)
+            put("isTaken", 0)
+            putNull("actualTakenTime")
+        }
+        db.update("medication_logs", values, "id = ?", arrayOf(logId))
+        _signal.value = System.currentTimeMillis()
+    }
+
+    override suspend fun insertOrUpdate(log: MedicationLogEntity) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("id", log.id)
+            put("medicineId", log.medicineId)
+            put("medicineName", log.medicineName)
+            put("userId", log.userId)
+            put("scheduledDate", log.scheduledDate)
+            put("scheduledTime", log.scheduledTime)
+            log.actualTakenTime?.let { put("actualTakenTime", it) } ?: putNull("actualTakenTime")
+            put("isTaken", if (log.isTaken) 1 else 0)
+            put("isSkipped", if (log.isSkipped) 1 else 0)
+        }
+        db.insertWithOnConflict("medication_logs", null, values, SQLiteDatabase.CONFLICT_REPLACE)
         _signal.value = System.currentTimeMillis()
     }
 

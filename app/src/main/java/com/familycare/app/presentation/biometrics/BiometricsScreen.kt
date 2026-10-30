@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,13 +32,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.familycare.app.core.common.SessionManager
 import com.familycare.app.core.database.AppDatabase
 import com.familycare.app.core.database.HealthMetricEntity
 import com.familycare.app.domain.model.MetricType
 import com.familycare.app.presentation.biometrics.chart.BiometricsLineChart
 import com.familycare.app.presentation.biometrics.dialog.AddMetricDialog
+import com.familycare.app.presentation.schedule.MemberSwitcherRow
+import com.familycare.app.ui.theme.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -51,7 +53,66 @@ fun BiometricsScreen(
     val context = LocalContext.current
     val database = remember { AppDatabase.getInstance(context) }
     val sessionManager = remember { SessionManager(context) }
-    val currentUserId = remember(sessionManager.userId) { sessionManager.userId.ifEmpty { "user_me" } }
+    val defaultUserId = remember(sessionManager.userId) { sessionManager.userId.ifEmpty { "user_me" } }
+    var selectedMemberId by remember { mutableStateOf(defaultUserId) }
+    var familyMembers by remember { mutableStateOf<List<com.familycare.app.presentation.home.Member>>(emptyList()) }
+
+    LaunchedEffect(sessionManager.userId, sessionManager.familyId) {
+        val fakeIds = setOf("user_01", "user_demo_01", "member_bac_nam", "member_bo", "member_me", "member_anhtrai", "user_02", "member_ly_tran")
+        val allUsers = database.userDao.getAllUsers()
+        val currentDbUser = allUsers.firstOrNull { it.id == defaultUserId }
+        val currentFamilyId = currentDbUser?.familyId?.trim().orEmpty().ifBlank { sessionManager.familyId.trim() }
+
+        val membersList = mutableListOf<com.familycare.app.presentation.home.Member>()
+
+        // 1. Luôn đưa tài khoản đang đăng nhập lên ĐẦU TIÊN
+        val myName = currentDbUser?.fullName ?: sessionManager.userName.ifBlank { "Tôi" }
+        val myInitials = myName.trim().split("\\s+".toRegex())
+            .takeLast(2)
+            .mapNotNull { it.firstOrNull()?.uppercase() }
+            .joinToString("")
+            .ifBlank { myName.take(1).uppercase() }
+
+        membersList.add(
+            com.familycare.app.presentation.home.Member(
+                id = defaultUserId,
+                fullName = myName,
+                role = if (currentDbUser?.role?.uppercase() == "ADMIN" || sessionManager.userRole == "ADMIN") "Trưởng gia đình" else "Thành viên",
+                initials = myInitials
+            )
+        )
+
+        // 2. Thêm các thành viên CÙNG familyId với tài khoản hiện tại
+        if (currentFamilyId.isNotBlank()) {
+            allUsers.filter {
+                it.id != defaultUserId &&
+                it.id !in fakeIds &&
+                it.familyId.isNotBlank() &&
+                it.familyId == currentFamilyId
+            }.forEach { u ->
+                val initials = u.fullName.trim().split("\\s+".toRegex())
+                    .takeLast(2)
+                    .mapNotNull { it.firstOrNull()?.uppercase() }
+                    .joinToString("")
+                    .ifBlank { u.fullName.take(1).uppercase() }
+                membersList.add(
+                    com.familycare.app.presentation.home.Member(
+                        id = u.id,
+                        fullName = u.fullName,
+                        role = if (u.role.uppercase() == "ADMIN") "Trưởng gia đình" else "Thành viên",
+                        initials = initials
+                    )
+                )
+            }
+        }
+
+        familyMembers = membersList
+        if (selectedMemberId.isEmpty() || familyMembers.none { it.id == selectedMemberId }) {
+            selectedMemberId = defaultUserId
+        }
+    }
+
+    val currentUserId = selectedMemberId
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -132,18 +193,24 @@ fun BiometricsScreen(
         else metricsList.filter { it.type == historyFilter }
     }
 
-    // Lọc danh sách đo thuộc về ngày được chọn
+    // Lọc danh sách đo thuộc về ngày được chọn (00:00:00 -> 23:59:59.999 của ngày đã chọn)
     val metricsForSelectedDay = remember(filteredHistory, selectedDateMillis) {
-        val targetCal = Calendar.getInstance().apply { timeInMillis = selectedDateMillis }
-        val targetYear = targetCal.get(Calendar.YEAR)
-        val targetMonth = targetCal.get(Calendar.MONTH)
-        val targetDay = targetCal.get(Calendar.DAY_OF_MONTH)
+        val targetCal = Calendar.getInstance().apply {
+            timeInMillis = selectedDateMillis
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val startOfDay = targetCal.timeInMillis
+        targetCal.set(Calendar.HOUR_OF_DAY, 23)
+        targetCal.set(Calendar.MINUTE, 59)
+        targetCal.set(Calendar.SECOND, 59)
+        targetCal.set(Calendar.MILLISECOND, 999)
+        val endOfDay = targetCal.timeInMillis
 
         filteredHistory.filter { metric ->
-            val metricCal = Calendar.getInstance().apply { timeInMillis = metric.timestamp }
-            metricCal.get(Calendar.YEAR) == targetYear &&
-            metricCal.get(Calendar.MONTH) == targetMonth &&
-            metricCal.get(Calendar.DAY_OF_MONTH) == targetDay
+            metric.timestamp in startOfDay..endOfDay
         }
     }
 
@@ -160,40 +227,50 @@ fun BiometricsScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Color(0xFFF8F9FA),
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         text = "Chỉ Số Sinh Tồn",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
+                        fontSize = 22.sp,
                         color = Color(0xFF0F172A)
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFFF8F9FA),
+                    containerColor = Color.Transparent,
                     titleContentColor = Color(0xFF0F172A)
                 ),
                 actions = {
-                    IconButton(onClick = onNavigateToSmartwatch) {
-                        Icon(
-                            imageVector = Icons.Default.Watch,
-                            contentDescription = "Kết nối BLE Smartwatch",
-                            tint = Color(0xFF0F172A)
-                        )
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White,
+                        border = BorderStroke(1.dp, Color(0xFFE2E6EC)),
+                        shadowElevation = 1.dp,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                voiceSystolic = null
+                                voiceDiastolic = null
+                                voicePulse = null
+                                voiceBloodSugar = null
+                                voiceTemp = null
+                                dialogInitialType = MetricType.BLOOD_PRESSURE
+                                showAddDialog = true
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = "Nhập chỉ số thủ công",
+                                tint = Color(0xFF0F172A),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
-                    IconButton(onClick = {
-                        voiceSystolic = null
-                        voiceDiastolic = null
-                        voicePulse = null
-                        voiceBloodSugar = null
-                        voiceTemp = null
-                        dialogInitialType = MetricType.BLOOD_PRESSURE
-                        showAddDialog = true
-                    }) {
-                        Icon(Icons.Default.Add, contentDescription = "Nhập chỉ số thủ công", tint = Color(0xFF0F172A))
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
             )
         }
@@ -203,72 +280,82 @@ fun BiometricsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
         ) {
-            // 1. Banner Đo Nhịp Tim Quang Học (PPG) dạng ngang gọn gàng (cao ~80dp)
+            // 0. Bộ chọn thành viên trong gia đình (chuẩn phong cách Kế hoạch sức khỏe)
+            if (familyMembers.isNotEmpty()) {
+                item {
+                    MemberSwitcherRow(
+                        members = familyMembers,
+                        selectedMemberId = selectedMemberId,
+                        onSelectMember = { memberId ->
+                            selectedMemberId = memberId
+                        }
+                    )
+                }
+            }
+
+            // 1. Banner Đo Nhịp Tim Quang Học (PPG) tinh tế, sang trọng
             item {
                 Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(80.dp)
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFE2E6EC)),
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
+                            .fillMaxWidth()
+                            .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f, fill = false)
+                            modifier = Modifier.weight(1f)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(42.dp)
+                                    .size(44.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFFFFE4E6)),
+                                    .background(Color(0xFFFFF1F2)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Favorite,
                                     contentDescription = null,
                                     tint = Color(0xFFE11D48),
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(12.dp))
-                            Column(
-                                verticalArrangement = Arrangement.Center
-                            ) {
+                            Column {
                                 Text(
                                     text = "Đo nhịp tim (PPG)",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0F172A),
                                     maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "Đo nhanh qua Camera",
-                                    fontSize = 12.sp,
+                                    fontSize = 12.5.sp,
                                     color = Color(0xFF64748B)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
 
                         Button(
                             onClick = onNavigateToCameraPpg,
                             shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                            colors = ButtonDefaults.buttonColors(containerColor = WarmPrimaryTeal),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CameraAlt,
@@ -290,18 +377,19 @@ fun BiometricsScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "Nhập Chỉ Số Lâm Sàng Ngoài Máy",
-                        style = MaterialTheme.typography.labelLarge,
+                        text = "Nhập chỉ số lâm sàng ngoài máy",
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFF0F172A)
                     )
 
-                    // Nút Micro tròn to nổi bật màu xanh dương với nhãn "🎙️ Nói để nhập"
+                    // Nút Micro nhập giọng nói thông minh
                     Surface(
                         onClick = { startVoiceInput() },
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFEFF6FF), // Nền xanh dương siêu nhạt
-                        border = BorderStroke(1.dp, Color(0xFFBFDBFE)), // Viền mảnh
+                        shape = RoundedCornerShape(18.dp),
+                        color = WarmPrimaryLight,
+                        border = BorderStroke(1.dp, WarmPrimaryTeal.copy(alpha = 0.3f)),
+                        shadowElevation = 1.dp,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -314,7 +402,7 @@ fun BiometricsScreen(
                                 modifier = Modifier
                                     .size(46.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF2563EB)), // Xanh dương chủ đạo
+                                    .background(WarmPrimaryTeal),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -330,21 +418,21 @@ fun BiometricsScreen(
                                     text = "🎙️ Nói để nhập",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1E40AF) // Tiêu đề xanh đậm
+                                    color = WarmPrimaryTeal
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "Đọc: \"Huyết áp 120 trên 80, tim 75\"",
-                                    fontSize = 12.sp,
+                                    fontSize = 12.5.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = Color(0xFF2563EB)
+                                    color = WarmTextSecondary
                                 )
                             }
                             Icon(
                                 imageVector = Icons.Default.ChevronRight,
                                 contentDescription = null,
-                                tint = Color(0xFF3B82F6)
+                                tint = WarmPrimaryTeal
                             )
                         }
                     }
@@ -352,7 +440,7 @@ fun BiometricsScreen(
                     // 3 phím tắt Huyết Áp, Đường Huyết, Thân Nhiệt
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         QuickActionCard(
                             title = "+ Huyết Áp",
@@ -390,7 +478,7 @@ fun BiometricsScreen(
                             title = "+ Thân Nhiệt",
                             subtitle = "Nhiệt kế",
                             icon = Icons.Default.Thermostat,
-                            iconColor = Color(0xFF1E88E5),
+                            iconColor = Color(0xFF0288D1),
                             onClick = {
                                 voiceSystolic = null
                                 voiceDiastolic = null
@@ -413,7 +501,7 @@ fun BiometricsScreen(
 
             // 4. Tiêu đề Lịch sử đo & Bộ lọc Chips
             item {
-                Column(modifier = Modifier.padding(top = 6.dp)) {
+                Column(modifier = Modifier.padding(top = 4.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -425,12 +513,18 @@ fun BiometricsScreen(
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
                         )
-                        Text(
-                            text = "${filteredHistory.size} bản ghi",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF64748B)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFF1F5F9)
+                        ) {
+                            Text(
+                                text = "${filteredHistory.size} bản ghi",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF475569),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -438,7 +532,6 @@ fun BiometricsScreen(
                     // Thanh lọc danh sách lịch sử
                     LazyRow(
                         modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val filterList = listOf(
@@ -457,7 +550,7 @@ fun BiometricsScreen(
                                     Text(
                                         text = label,
                                         fontSize = 12.sp,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1,
                                         softWrap = false
                                     )
@@ -465,13 +558,13 @@ fun BiometricsScreen(
                                 shape = RoundedCornerShape(20.dp),
                                 colors = FilterChipDefaults.filterChipColors(
                                     containerColor = Color.White,
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedContainerColor = WarmPrimaryLight,
                                     labelColor = Color(0xFF475569),
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    selectedLabelColor = WarmPrimaryTeal
                                 ),
                                 border = BorderStroke(
                                     1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color(0xFFE2E8F0)
+                                    if (isSelected) WarmPrimaryTeal else Color(0xFFE2E6EC)
                                 )
                             )
                         }
@@ -483,37 +576,38 @@ fun BiometricsScreen(
             item {
                 Card(
                     onClick = { showDatePicker = true },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFECEFF1)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+                    border = BorderStroke(1.dp, Color(0xFFE2E6EC)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Cụm trái: Icon lịch + Text ngày + Chevron down
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f, fill = false)
+                            modifier = Modifier.weight(1f)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CalendarToday,
                                 contentDescription = "Chọn ngày đo",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
+                                tint = WarmPrimaryTeal,
+                                modifier = Modifier.size(17.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = selectedDateHeader,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B),
-                                maxLines = 1
+                                color = Color(0xFF0F172A),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Icon(
@@ -526,37 +620,18 @@ fun BiometricsScreen(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        // Cụm phải: Nút về Hôm nay (nếu đang chọn ngày khác) + Badge số lần đo
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (!isTodaySelected) {
-                                Surface(
-                                    onClick = { selectedDateMillis = System.currentTimeMillis() },
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                    modifier = Modifier.padding(end = 6.dp)
-                                ) {
-                                    Text(
-                                        text = "Hôm nay",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = Color(0xFFF1F5F9)
-                            ) {
-                                Text(
-                                    text = "${metricsForSelectedDay.size} lần đo",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF475569),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
+                        // Cụm phải: Badge số lần đo tinh gọn
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFF1F5F9)
+                        ) {
+                            Text(
+                                text = "${metricsForSelectedDay.size} lần đo",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF475569),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
                         }
                     }
                 }
@@ -567,32 +642,33 @@ fun BiometricsScreen(
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFECEFF1))
+                        border = BorderStroke(1.dp, Color(0xFFE2E6EC)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(32.dp),
+                                .padding(36.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(52.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFFF8F9FA)),
+                                    .background(Color(0xFFF8FAFC)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.EventNote,
                                     contentDescription = null,
                                     tint = Color(0xFF94A3B8),
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(26.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
                             Text(
                                 text = "Chưa có chỉ số nào được ghi nhận trong ngày này",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -611,19 +687,29 @@ fun BiometricsScreen(
                     )
                 }
             }
-
-            // Khoảng trống đệm dưới cùng để không bị che bởi FAB
-            item {
-                Spacer(modifier = Modifier.height(72.dp))
-            }
         }
     }
 
     // Modal nhập chỉ số thủ công
     if (showAddDialog) {
+        val dialogTimestamp = remember(isTodaySelected, selectedDateMillis) {
+            if (isTodaySelected) {
+                System.currentTimeMillis()
+            } else {
+                val nowCal = Calendar.getInstance()
+                Calendar.getInstance().apply {
+                    timeInMillis = selectedDateMillis
+                    set(Calendar.HOUR_OF_DAY, nowCal.get(Calendar.HOUR_OF_DAY))
+                    set(Calendar.MINUTE, nowCal.get(Calendar.MINUTE))
+                    set(Calendar.SECOND, nowCal.get(Calendar.SECOND))
+                }.timeInMillis
+            }
+        }
+
         AddMetricDialog(
             userId = currentUserId,
             initialType = dialogInitialType,
+            targetTimestamp = dialogTimestamp,
             initialSystolic = voiceSystolic ?: "",
             initialDiastolic = voiceDiastolic ?: "",
             initialPulse = voicePulse ?: "",
@@ -655,11 +741,18 @@ fun BiometricsScreen(
 
     // Modal DatePicker chọn ngày đo trong quá khứ
     if (showDatePicker) {
+        val initialUtcMillis = remember(selectedDateMillis) {
+            val cal = Calendar.getInstance().apply { timeInMillis = selectedDateMillis }
+            val utcCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                clear()
+                set(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH), 12, 0, 0)
+            }
+            utcCal.timeInMillis
+        }
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = selectedDateMillis,
+            initialSelectedDateMillis = initialUtcMillis,
             selectableDates = object : SelectableDates {
                 override fun isSelectableDate(utcTimeMillis: Long): Boolean {
-                    // Cho phép chọn các ngày từ quá khứ đến hôm nay (+ buffer 1 ngày múi giờ)
                     return utcTimeMillis <= System.currentTimeMillis() + 86400000L
                 }
             }
@@ -685,18 +778,19 @@ fun BiometricsScreen(
                                 set(Calendar.HOUR_OF_DAY, 12)
                                 set(Calendar.MINUTE, 0)
                                 set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
                             }
                             selectedDateMillis = localCal.timeInMillis
                         }
                         showDatePicker = false
                     }
                 ) {
-                    Text("Chọn", fontWeight = FontWeight.Bold)
+                    Text("Chọn", fontWeight = FontWeight.Bold, color = WarmPrimaryTeal)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) {
-                    Text("Hủy")
+                    Text("Hủy", color = Color(0xFF64748B))
                 }
             }
         ) {
@@ -707,7 +801,8 @@ fun BiometricsScreen(
                         text = "Chọn ngày xem chỉ số",
                         modifier = Modifier.padding(start = 24.dp, top = 16.dp),
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
                     )
                 }
             )
@@ -736,7 +831,7 @@ fun BiometricsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFFF8F9FA), RoundedCornerShape(12.dp))
+                            .background(Color(0xFFF8FAFC), RoundedCornerShape(12.dp))
                             .padding(14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -783,10 +878,10 @@ fun BiometricsScreen(
                     ) {
                         Text("Phương thức:", color = Color(0xFF64748B), fontSize = 13.sp)
                         Text(
-                            if (detail.isFromCameraPpg) "CameraX PPG quang học" else "Nhập thủ công",
+                            if (detail.isFromCameraPpg) "Camera PPG quang học" else "Nhập thủ công",
                             fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,
-                            color = if (detail.isFromCameraPpg) Color(0xFFE91E63) else Color(0xFF1E293B)
+                            color = if (detail.isFromCameraPpg) Color(0xFFE11D48) else Color(0xFF1E293B)
                         )
                     }
 
@@ -830,7 +925,7 @@ fun BiometricsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { metricDetailToView = null }) {
-                    Text("Đóng")
+                    Text("Đóng", color = Color(0xFF64748B))
                 }
             }
         )
@@ -859,7 +954,7 @@ fun BiometricsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { metricToDelete = null }) {
-                    Text("Hủy")
+                    Text("Hủy", color = Color(0xFF64748B))
                 }
             }
         )
@@ -879,36 +974,36 @@ private fun QuickActionCard(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFECEFF1)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        border = BorderStroke(1.dp, Color(0xFFE2E6EC)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.Start
         ) {
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(iconColor.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(16.dp))
+                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(17.dp))
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = title,
                 fontWeight = FontWeight.Bold,
-                fontSize = 11.5.sp,
+                fontSize = 12.sp,
                 color = Color(0xFF0F172A),
                 maxLines = 1,
                 softWrap = false
             )
             Text(
                 text = subtitle,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.5.sp,
+                color = Color(0xFF64748B),
                 maxLines = 1
             )
         }
@@ -927,15 +1022,15 @@ private fun MetricHistoryCard(
             val dia = metric.valueSecondary?.toInt() ?: 80
             val (badge, color) = when {
                 sys < 90 || dia < 60 -> Pair("Huyết áp thấp", Color(0xFFEA580C))
-                sys < 120 && dia < 80 -> Pair("Tối ưu", Color(0xFF16A34A))
-                sys in 120..129 && dia < 80 -> Pair("Bình thường cao", Color(0xFF16A34A))
+                sys < 120 && dia < 80 -> Pair("Tối ưu", Color(0xFF15803D))
+                sys in 120..129 && dia < 80 -> Pair("Bình thường", Color(0xFF15803D))
                 sys in 130..139 || dia in 80..89 -> Pair("Tiền tăng HA", Color(0xFFEA580C))
                 else -> Pair("Tăng huyết áp", Color(0xFFDC2626))
             }
             Tuple7(
                 Icons.Default.Speed,
                 Color(0xFFE53935),
-                Color(0xFFFFEBEE), // pastel red
+                Color(0xFFFFEBEE),
                 "Huyết áp",
                 "$sys / $dia mmHg",
                 badge,
@@ -946,14 +1041,14 @@ private fun MetricHistoryCard(
             val sugar = metric.valuePrimary
             val (badge, color) = when {
                 sugar < 70 -> Pair("Hạ đường huyết", Color(0xFFDC2626))
-                sugar in 70.0..140.0 -> Pair("Bình thường", Color(0xFF16A34A))
+                sugar in 70.0..140.0 -> Pair("Bình thường", Color(0xFF15803D))
                 sugar in 140.1..199.0 -> Pair("Tiền tiểu đường", Color(0xFFEA580C))
                 else -> Pair("Đường huyết cao", Color(0xFFDC2626))
             }
             Tuple7(
                 Icons.Default.WaterDrop,
                 Color(0xFFFB8C00),
-                Color(0xFFFFF3E0), // pastel orange
+                Color(0xFFFFF3E0),
                 "Đường huyết",
                 "${sugar.toInt()} mg/dL",
                 badge,
@@ -964,14 +1059,14 @@ private fun MetricHistoryCard(
             val temp = metric.valuePrimary
             val (badge, color) = when {
                 temp < 36.0 -> Pair("Thân nhiệt thấp", Color(0xFF0288D1))
-                temp in 36.0..37.5 -> Pair("Bình thường", Color(0xFF16A34A))
+                temp in 36.0..37.5 -> Pair("Bình thường", Color(0xFF15803D))
                 temp in 37.6..38.5 -> Pair("Sốt nhẹ", Color(0xFFEA580C))
                 else -> Pair("Sốt cao", Color(0xFFDC2626))
             }
             Tuple7(
                 Icons.Default.Thermostat,
                 Color(0xFF0288D1),
-                Color(0xFFE1F5FE), // pastel blue
+                Color(0xFFE1F5FE),
                 "Thân nhiệt",
                 "$temp °C",
                 badge,
@@ -982,13 +1077,13 @@ private fun MetricHistoryCard(
             val bpm = metric.valuePrimary.toInt()
             val (badge, color) = when {
                 bpm < 60 -> Pair("Nhịp chậm", Color(0xFF0288D1))
-                bpm in 60..100 -> Pair("Bình thường", Color(0xFF16A34A))
+                bpm in 60..100 -> Pair("Bình thường", Color(0xFF15803D))
                 else -> Pair("Nhịp nhanh", Color(0xFFDC2626))
             }
             Tuple7(
                 Icons.Default.Favorite,
-                Color(0xFFE91E63),
-                Color(0xFFFCE4EC), // pastel pink
+                Color(0xFFE11D48),
+                Color(0xFFFFF1F2),
                 if (metric.isFromCameraPpg) "Nhịp tim PPG" else "Nhịp tim",
                 "$bpm BPM",
                 badge,
@@ -1010,10 +1105,10 @@ private fun MetricHistoryCard(
     Card(
         onClick = onCardClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFECEFF1)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp, pressedElevation = 2.dp)
+        border = BorderStroke(1.dp, Color(0xFFE2E6EC)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -1022,15 +1117,14 @@ private fun MetricHistoryCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // === CỘT TRÁI ===
-            // Icon background pastel + Tên chỉ số + Badge trạng thái
+            // CỘT TRÁI: Icon background pastel + Tên chỉ số + Badge trạng thái
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(42.dp)
                         .clip(CircleShape)
                         .background(pastelBg),
                     contentAlignment = Alignment.Center
@@ -1039,7 +1133,7 @@ private fun MetricHistoryCard(
                         imageVector = icon,
                         contentDescription = null,
                         tint = iconColor,
-                        modifier = Modifier.size(19.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -1048,7 +1142,7 @@ private fun MetricHistoryCard(
                 Column(verticalArrangement = Arrangement.Center) {
                     Text(
                         text = title,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = Color(0xFF0F172A),
                         maxLines = 1,
@@ -1064,8 +1158,8 @@ private fun MetricHistoryCard(
                         Text(
                             text = statusBadge,
                             color = badgeColor,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
                             maxLines = 1,
                             softWrap = false,
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
@@ -1074,18 +1168,17 @@ private fun MetricHistoryCard(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
-            // === CỘT PHẢI ===
-            // Chỉ số đo to rõ (align right) + Text thời gian & ghi chú (màu xám nhạt)
+            // CỘT PHẢI: Chỉ số đo to rõ + Text thời gian & ghi chú
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
                     text = displayValue,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 16.5.sp,
                     color = Color(0xFF0F172A),
                     textAlign = TextAlign.End,
                     maxLines = 1,
@@ -1114,6 +1207,12 @@ private fun formatSelectedDateHeader(timestamp: Long): String {
     val isToday = calTarget.get(Calendar.YEAR) == calNow.get(Calendar.YEAR) &&
             calTarget.get(Calendar.DAY_OF_YEAR) == calNow.get(Calendar.DAY_OF_YEAR)
 
+    val calYesterday = Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_YEAR, -1)
+    }
+    val isYesterday = calTarget.get(Calendar.YEAR) == calYesterday.get(Calendar.YEAR) &&
+            calTarget.get(Calendar.DAY_OF_YEAR) == calYesterday.get(Calendar.DAY_OF_YEAR)
+
     val dayOfWeek = when (calTarget.get(Calendar.DAY_OF_WEEK)) {
         Calendar.MONDAY -> "Thứ Hai"
         Calendar.TUESDAY -> "Thứ Ba"
@@ -1127,10 +1226,10 @@ private fun formatSelectedDateHeader(timestamp: Long): String {
 
     val dateStr = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(timestamp))
 
-    return if (isToday) {
-        "Hôm nay, $dateStr"
-    } else {
-        "$dayOfWeek, $dateStr"
+    return when {
+        isToday -> "Hôm nay, $dateStr"
+        isYesterday -> "Hôm qua, $dateStr"
+        else -> "$dayOfWeek, $dateStr"
     }
 }
 
@@ -1152,11 +1251,6 @@ data class ParsedVoiceData(
 
 /**
  * Hàm phân tích câu nói tiếng Việt để bóc tách chỉ số sinh tồn
- * Ví dụ:
- * - "Huyết áp 120 trên 80 nhịp tim 75" -> SYS=120, DIA=80, PULSE=75
- * - "130 trên 85" -> SYS=130, DIA=85
- * - "Đường huyết 110" -> BLOOD_SUGAR=110
- * - "Thân nhiệt 37 độ 5" -> TEMPERATURE=37.5
  */
 fun parseVoiceMetrics(spokenText: String): ParsedVoiceData {
     val lower = spokenText.lowercase().trim()

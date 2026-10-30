@@ -37,6 +37,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.familycare.app.domain.model.NearbyHospital
+import com.familycare.app.presentation.common.FamilyCareAmbientBackground
+import com.familycare.app.ui.theme.*
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,27 +101,29 @@ fun EmergencyScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Trung Tâm SOS Khẩn Cấp",
-                        fontWeight = FontWeight.Bold,
-                        color = if (isActivated) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    FamilyCareAmbientBackground {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "Trung Tâm SOS Khẩn Cấp",
+                            fontWeight = FontWeight.Bold,
+                            color = if (isActivated) SosRed else WarmTextPrimary
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại", tint = WarmTextPrimary)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = if (isActivated) SosRedLight.copy(alpha = 0.5f) else Color.Transparent
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isActivated) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface
                 )
-            )
-        }
-    ) { paddingValues ->
+            }
+        ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -201,11 +205,20 @@ fun EmergencyScreen(
                                 fontSize = 14.sp,
                                 color = if (isActivated) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Text(
-                                text = "${uiState.familyOwnerName} (${uiState.familyOwnerRole})",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "${uiState.familyOwnerName} (${uiState.familyOwnerRole})",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "• ${if (uiState.familyOwnerPhone.isNotBlank()) uiState.familyOwnerPhone else "Chưa có thông tin"}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (uiState.familyOwnerPhone.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    fontWeight = if (uiState.familyOwnerPhone.isNotBlank()) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                            }
                         }
                     }
 
@@ -229,7 +242,7 @@ fun EmergencyScreen(
                                     val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${uiState.familyOwnerPhone.replace(".", "")}"))
                                     context.startActivity(intent)
                                 } else {
-                                    Toast.makeText(context, "Chưa có số điện thoại", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Chưa có thông tin số điện thoại trong hồ sơ", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier.weight(1f),
@@ -252,11 +265,15 @@ fun EmergencyScreen(
                         // Nút SMS Tọa Độ
                         OutlinedButton(
                             onClick = {
-                                val lat = uiState.currentLatitude
-                                val lng = uiState.currentLongitude
-                                val mapLink = if (lat != null && lng != null) "https://maps.google.com/?q=$lat,$lng" else "Chưa có tọa độ GPS"
-                                val message = "🚨 KHẨN CẤP! ${uiState.targetUserName} cần trợ giúp tại: ${uiState.currentAddress}. Bản đồ: $mapLink"
-                                sendSmsCoordinates(context, uiState.familyOwnerPhone.replace(".", ""), message)
+                                if (uiState.familyOwnerPhone.isNotBlank()) {
+                                    val lat = uiState.currentLatitude
+                                    val lng = uiState.currentLongitude
+                                    val mapLink = if (lat != null && lng != null) "https://maps.google.com/?q=$lat,$lng" else "Chưa có tọa độ GPS"
+                                    val message = "🚨 KHẨN CẤP! ${uiState.targetUserName} cần trợ giúp tại: ${uiState.currentAddress}. Bản đồ: $mapLink"
+                                    sendSmsCoordinates(context, uiState.familyOwnerPhone.replace(".", ""), message)
+                                } else {
+                                    Toast.makeText(context, "Chưa có thông tin số điện thoại trong hồ sơ", Toast.LENGTH_SHORT).show()
+                                }
                             },
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
@@ -544,20 +561,66 @@ fun EmergencyScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    uiState.emergencyContacts.forEach { contact ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(contact, style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    if (uiState.emergencyContacts.isEmpty()) {
+                        Text(
+                            text = "Chưa có thành viên nào trong danh bạ gia đình.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        uiState.emergencyContacts.forEach { contact ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = if (contact.hasPhone) Icons.Default.CheckCircle else Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = if (contact.hasPhone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = "${contact.name} (${contact.role})",
+                                            fontWeight = FontWeight.Medium,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = contact.displayPhone,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (contact.hasPhone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                            fontWeight = if (contact.hasPhone) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    }
+                                }
+
+                                if (contact.hasPhone && !contact.isMe) {
+                                    IconButton(
+                                        onClick = {
+                                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${contact.phone.replace(".", "")}"))
+                                            context.startActivity(intent)
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Phone,
+                                            contentDescription = "Gọi cho ${contact.name}",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -567,6 +630,7 @@ fun EmergencyScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
+}
 }
 
 @Composable

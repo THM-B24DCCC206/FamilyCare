@@ -199,6 +199,7 @@ fun evaluateHeartRate(bpm: Int): HealthEvaluation {
 fun AddMetricDialog(
     userId: String = "user_me",
     initialType: MetricType = MetricType.BLOOD_PRESSURE,
+    targetTimestamp: Long = System.currentTimeMillis(),
     initialSystolic: String = "",
     initialDiastolic: String = "",
     initialPulse: String = "",
@@ -395,7 +396,7 @@ fun AddMetricDialog(
                     Button(
                         onClick = {
                             if (!canSave) return@Button
-                            val now = System.currentTimeMillis()
+                            val now = targetTimestamp
                             val metricId = UUID.randomUUID().toString()
 
                             when (selectedType) {

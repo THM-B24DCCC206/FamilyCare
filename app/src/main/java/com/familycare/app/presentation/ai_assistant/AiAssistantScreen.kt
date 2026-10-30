@@ -71,7 +71,7 @@ fun AiAssistantScreen(
     val listState = rememberLazyListState()
     val context = LocalContext.current
 
-    // Launcher nhận diện giọng nói tiếng Việt (Google Speech Recognizer vi-VN)
+    // Launcher nhận diện giọng nói tiếng Việt
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -87,7 +87,7 @@ fun AiAssistantScreen(
         }
     }
 
-    // Cuộn xuống tin nhắn mới nhất mỗi khi danh sách có cập nhật hoặc AI đang trả lời
+    // Cuộn xuống tin nhắn mới nhất
     LaunchedEffect(uiState.messages.size, uiState.isLoading) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
@@ -111,6 +111,7 @@ fun AiAssistantScreen(
     val healthSummaryText = "HA: $bpShort • $hrShort"
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             AiAssistantTopBar(
                 onNavigateBack = onNavigateBack,
@@ -244,9 +245,7 @@ fun AiAssistantScreen(
 }
 
 /**
- * 1. Thiết Kế Lại TopAppBar Theo Phong Cách Phẳng (Flat & Seamless Header)
- * Gỡ bỏ hoàn toàn Card/Surface bao quanh; tích hợp avatar tròn 38dp, tên thành viên và trạng thái
- * cân đối tự nhiên cùng các nút thao tác.
+ * 1. TopAppBar Theo Phong Cách Phẳng, Tự Nhiên & Sang Trọng
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -281,27 +280,26 @@ fun AiAssistantTopBar(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .clickable { expandedMemberMenu = true }
                         .padding(vertical = 4.dp)
                 ) {
-                    // Avatar tròn: Kích thước 38.dp
+                    // Avatar tròn: Kích thước 38.dp với nền xanh nhạt
                     Box(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF2563EB)),
+                            .background(Color(0xFFEFF6FF)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Person,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = Color(0xFF2563EB),
                             modifier = Modifier.size(22.dp)
                         )
                     }
 
-                    // Cụm văn bản trong Column(modifier = Modifier.padding(start = 10.dp))
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -416,8 +414,7 @@ fun AiAssistantTopBar(
 }
 
 /**
- * 2. Thu Gọn Thanh Nhập Liệu Chân Trang (Slim & Minimalist Input Bar)
- * Chiều cao thanh mảnh 40-44dp, BasicTextField bo góc mềm 22dp, nút micro 38dp, nút gửi đổi màu xanh.
+ * 2. Thu Gọn Thanh Nhập Liệu Chân Trang Tinh Tế & Chuẩn Mực
  */
 @Composable
 fun AiAssistantBottomBar(
@@ -432,22 +429,21 @@ fun AiAssistantBottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(Color.White)
     ) {
-        // Viền siêu mỏng phía trên
-        HorizontalDivider(thickness = 1.dp, color = Color(0xFFF1F5F9))
+        HorizontalDivider(thickness = 1.dp, color = Color(0xFFE2E6EC))
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Nút Micro thu âm 38.dp (icon 20.dp)
+            // Nút Micro thu âm 40.dp
             Box(
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(if (isRecordingVoice) Color(0xFFDC2626) else Color(0xFFEFF6FF))
                     .clickable(enabled = !isLoading, onClick = onStartVoiceInput),
@@ -463,15 +459,15 @@ fun AiAssistantBottomBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Ô nhập văn bản thon gọn (chiều cao 38-42dp ở 1 dòng, tối đa 3 dòng)
+            // Ô nhập văn bản thon gọn (chiều cao 38-84dp)
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 38.dp, max = 84.dp)
+                    .heightIn(min = 40.dp, max = 88.dp)
                     .clip(RoundedCornerShape(22.dp))
                     .background(Color(0xFFF8FAFC))
-                    .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), RoundedCornerShape(22.dp))
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .border(BorderStroke(1.dp, Color(0xFFE2E6EC)), RoundedCornerShape(22.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
                 if (inputText.isEmpty()) {
@@ -499,11 +495,11 @@ fun AiAssistantBottomBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Nút gửi tin nhắn (38.dp)
+            // Nút gửi tin nhắn (40.dp)
             val hasText = inputText.isNotBlank()
             Box(
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(if (hasText) Color(0xFF2563EB) else Color(0xFFF1F5F9))
                     .clickable(
@@ -524,7 +520,7 @@ fun AiAssistantBottomBar(
 }
 
 /**
- * Hàng gợi ý câu hỏi thông minh dạng LazyRow cuộn ngang với padding chuẩn
+ * Hàng gợi ý câu hỏi thông minh dạng LazyRow cuộn ngang
  */
 @Composable
 fun QuickPromptRow(
@@ -543,7 +539,7 @@ fun QuickPromptRow(
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = Color(0xFFEFF6FF),
-                border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                border = BorderStroke(1.dp, Color(0xFFDBEAFE)),
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
                     .clickable { onQuestionClick(prompt) }
@@ -563,7 +559,7 @@ fun QuickPromptRow(
 }
 
 /**
- * 3. Parser Markdown đơn giản để tự động in đậm các cụm từ bọc trong **...**
+ * Parser Markdown đơn giản để tự động in đậm các cụm từ bọc trong **...**
  */
 fun parseMarkdownToAnnotatedString(text: String): AnnotatedString {
     return buildAnnotatedString {
@@ -630,10 +626,10 @@ fun ChatMessageBubble(
                 color = if (isUser) {
                     Color(0xFF2563EB)
                 } else {
-                    Color(0xFFF8FAFC)
+                    Color.White
                 },
-                border = if (!isUser) BorderStroke(1.dp, Color(0xFFE2E8F0)) else null,
-                tonalElevation = if (isUser) 2.dp else 1.dp,
+                border = if (!isUser) BorderStroke(1.dp, Color(0xFFE2E6EC)) else null,
+                shadowElevation = if (isUser) 1.5.dp else 1.dp,
                 modifier = Modifier.widthIn(min = 60.dp, max = 340.dp)
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
@@ -643,7 +639,7 @@ fun ChatMessageBubble(
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFFEFF6FF),
-                            border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                            border = BorderStroke(1.dp, Color(0xFFDBEAFE)),
                             modifier = Modifier.padding(bottom = 8.dp)
                         ) {
                             Row(
@@ -702,7 +698,7 @@ fun ChatMessageBubble(
                     // Thời gian gửi tin
                     Text(
                         text = formatTime(message.timestamp),
-                        color = if (isUser) Color.White.copy(alpha = 0.7f) else Color(0xFF94A3B8),
+                        color = if (isUser) Color.White.copy(alpha = 0.75f) else Color(0xFF94A3B8),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.align(Alignment.End)
                     )
@@ -861,12 +857,13 @@ fun ErrorMessageCard(
 
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
+            containerColor = Color(0xFFFEF2F2)
         ),
-        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -875,8 +872,8 @@ fun ErrorMessageCard(
             Icon(
                 Icons.Default.ErrorOutline,
                 contentDescription = "Lỗi",
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(28.dp)
+                tint = Color(0xFFDC2626),
+                modifier = Modifier.size(26.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -884,13 +881,13 @@ fun ErrorMessageCard(
                     text = if (isApiKeyError) "Chưa cấu hình API Key" else "Không thể gửi tin nhắn",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onErrorContainer
+                    color = Color(0xFF991B1B)
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = errorMessage,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer
+                    color = Color(0xFF7F1D1D)
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
@@ -908,13 +905,13 @@ fun ErrorMessageCard(
                 FilledTonalButton(
                     onClick = onRetry,
                     colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
+                        containerColor = Color(0xFFFEE2E2),
+                        contentColor = Color(0xFFDC2626)
                     ),
                     shape = RoundedCornerShape(10.dp),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    Text("Thử lại", fontSize = 12.sp)
+                    Text("Thử lại", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -928,13 +925,13 @@ fun ErrorMessageCard(
 fun WarningLevelBanner(warningLevel: ContextWarningLevel) {
     val (bgColor, textColor, icon, label) = when (warningLevel) {
         ContextWarningLevel.CRITICAL -> Quadruple(
-            MaterialTheme.colorScheme.error,
-            MaterialTheme.colorScheme.onError,
+            Color(0xFFDC2626),
+            Color.White,
             Icons.Default.Warning,
             "CẢNH BÁO NGUY HIỂM - GỌI 115 HOẶC BẤM SOS NGAY"
         )
         ContextWarningLevel.ATTENTION -> Quadruple(
-            Color(0xFFE65100),
+            Color(0xFFEA580C),
             Color.White,
             Icons.Default.PriorityHigh,
             "LƯU Ý ĐẶC BIỆT THEO TIỀN SỬ BỆNH"
@@ -985,7 +982,7 @@ fun GeminiApiKeyDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
             Column(
                 modifier = Modifier
@@ -1093,9 +1090,7 @@ fun ContextInjectionDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
+            colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
             Column(
                 modifier = Modifier
@@ -1115,7 +1110,7 @@ fun ContextInjectionDialog(
                         text = "Ngữ Cảnh Được Tiêm (100% Room DB)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = Color(0xFF0F172A)
                     )
                 }
 
@@ -1131,7 +1126,7 @@ fun ContextInjectionDialog(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    border = BorderStroke(1.dp, Color(0xFFE2E6EC)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -1165,7 +1160,7 @@ fun ContextInjectionDialog(
                         }
 
                         if (context.otherFamilyMembers.isNotEmpty()) {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFFE2E6EC))
                             Text(
                                 text = "2. TỔ ẤM GIA ĐÌNH (${context.otherFamilyMembers.size} người)",
                                 fontWeight = FontWeight.Bold,
@@ -1185,6 +1180,7 @@ fun ContextInjectionDialog(
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.align(Alignment.End),
+                    shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                 ) {
                     Text("Đóng")

@@ -6,6 +6,12 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
+data class FamilyInfo(
+    val familyId: String,
+    val familyName: String,
+    val inviteCode: String
+)
+
 @Dao
 interface UserDao {
     // TV2 & Profile / AI context
@@ -32,4 +38,6 @@ interface UserDao {
     suspend fun getUserByEmail(email: String): UserAccountEntity?
     suspend fun getUserAccountById(userId: String): UserAccountEntity?
     suspend fun updateFamily(userId: String, familyId: String, familyName: String, inviteCode: String, role: String? = null)
+    suspend fun getActiveFamily(): FamilyInfo?
+    suspend fun getFamilyByInviteCode(code: String): FamilyInfo?
 }

@@ -57,6 +57,31 @@ interface MedicationLogDao {
 
     @Query(
         """
+        UPDATE medication_logs
+        SET isTaken = 0,
+            isSkipped = 0,
+            actualTakenTime = NULL
+        WHERE id = :logId
+        """
+    )
+    suspend fun markAsNotTaken(logId: String)
+
+    @Query(
+        """
+        UPDATE medication_logs
+        SET isSkipped = 1,
+            isTaken = 0,
+            actualTakenTime = NULL
+        WHERE id = :logId
+        """
+    )
+    suspend fun markAsSkipped(logId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(log: MedicationLogEntity)
+
+    @Query(
+        """
         SELECT * FROM medication_logs
         WHERE id = :logId
         LIMIT 1

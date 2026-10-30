@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.familycare.app.core.database.AlertEntity
 import com.familycare.app.domain.model.AlertLevel
+import com.familycare.app.presentation.common.FamilyCareAmbientBackground
+import com.familycare.app.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -42,169 +44,187 @@ fun AlertCenterScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Trung Tâm Cảnh Báo",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.clearAllAlerts() }) {
-                        Icon(
-                            Icons.Default.DeleteOutline,
-                            contentDescription = "Xóa sạch tất cả cảnh báo",
-                            tint = Color(0xFF64748B)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
-                )
-            )
-        },
-        containerColor = Color(0xFFF8FAFC)
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            // THANH TAB BỘ LỌC (FILTER CHIPS HEADER)
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                item {
-                    val isSelected = uiState.selectedFilter == AlertFilter.ALL
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { viewModel.onFilterSelected(AlertFilter.ALL) },
-                        label = {
-                            Text(
-                                text = "Tất cả (${uiState.allCount})",
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 13.sp,
-                                modifier = Modifier.wrapContentWidth()
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFFE2E8F0),
-                            selectedLabelColor = Color(0xFF0F172A)
-                        )
-                    )
-                }
-
-                item {
-                    val isSelected = uiState.selectedFilter == AlertFilter.CRITICAL
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { viewModel.onFilterSelected(AlertFilter.CRITICAL) },
-                        label = {
-                            Text(
-                                text = "Khẩn cấp (${uiState.criticalCount})",
-                                color = if (isSelected) Color(0xFFDC2626) else Color(0xFF64748B),
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 13.sp,
-                                modifier = Modifier.wrapContentWidth()
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFFFEE2E2),
-                            selectedLabelColor = Color(0xFFDC2626)
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = if (isSelected) Color(0xFFEF4444) else Color(0xFFCBD5E1),
-                            enabled = true,
-                            selected = isSelected
-                        )
-                    )
-                }
-
-                item {
-                    val isSelected = uiState.selectedFilter == AlertFilter.WARNING
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { viewModel.onFilterSelected(AlertFilter.WARNING) },
-                        label = {
-                            Text(
-                                text = "Nhắc nhở (${uiState.warningCount})",
-                                color = if (isSelected) Color(0xFFD97706) else Color(0xFF64748B),
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 13.sp,
-                                modifier = Modifier.wrapContentWidth()
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFFFEF3C7),
-                            selectedLabelColor = Color(0xFFD97706)
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = if (isSelected) Color(0xFFF59E0B) else Color(0xFFCBD5E1),
-                            enabled = true,
-                            selected = isSelected
-                        )
-                    )
-                }
-            }
-
-            // DANH SÁCH THẺ CẢNH BÁO
-            if (uiState.alerts.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = Color(0xFF10B981),
-                            modifier = Modifier.size(56.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
+    FamilyCareAmbientBackground {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
                         Text(
-                            text = "Không có cảnh báo bất thường",
-                            style = MaterialTheme.typography.titleMedium,
+                            text = "Trung Tâm Cảnh Báo",
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
+                            color = WarmTextPrimary
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Các chỉ số sức khỏe của gia đình đang ở vùng an toàn.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF64748B)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Quay lại",
+                                tint = WarmTextPrimary
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.clearAllAlerts() }) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = "Xóa sạch tất cả cảnh báo",
+                                tint = WarmTextSecondary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent
+                    )
+                )
+            },
+            containerColor = Color.Transparent
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                // THANH TAB BỘ LỌC (FILTER CHIPS HEADER)
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    item {
+                        val isSelected = uiState.selectedFilter == AlertFilter.ALL
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.onFilterSelected(AlertFilter.ALL) },
+                            label = {
+                                Text(
+                                    text = "Tất cả (${uiState.allCount})",
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp,
+                                    color = if (isSelected) WarmPrimaryTeal else WarmTextSecondary,
+                                    modifier = Modifier.wrapContentWidth()
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = WarmCreamSurface,
+                                selectedContainerColor = WarmPrimaryLight,
+                                labelColor = WarmTextSecondary,
+                                selectedLabelColor = WarmPrimaryTeal
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = if (isSelected) WarmPrimaryTeal else WarmDivider,
+                                enabled = true,
+                                selected = isSelected
+                            )
+                        )
+                    }
+
+                    item {
+                        val isSelected = uiState.selectedFilter == AlertFilter.CRITICAL
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.onFilterSelected(AlertFilter.CRITICAL) },
+                            label = {
+                                Text(
+                                    text = "Khẩn cấp (${uiState.criticalCount})",
+                                    color = if (isSelected) SosRed else WarmTextSecondary,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.wrapContentWidth()
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = WarmCreamSurface,
+                                selectedContainerColor = SosRedLight,
+                                labelColor = WarmTextSecondary,
+                                selectedLabelColor = SosRed
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = if (isSelected) SosRedBorder else WarmDivider,
+                                enabled = true,
+                                selected = isSelected
+                            )
+                        )
+                    }
+
+                    item {
+                        val isSelected = uiState.selectedFilter == AlertFilter.WARNING
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.onFilterSelected(AlertFilter.WARNING) },
+                            label = {
+                                Text(
+                                    text = "Nhắc nhở (${uiState.warningCount})",
+                                    color = if (isSelected) HealthWarning else WarmTextSecondary,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.wrapContentWidth()
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = WarmCreamSurface,
+                                selectedContainerColor = HealthWarningLight,
+                                labelColor = WarmTextSecondary,
+                                selectedLabelColor = HealthWarning
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = if (isSelected) HealthWarningBorder else WarmDivider,
+                                enabled = true,
+                                selected = isSelected
+                            )
                         )
                     }
                 }
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(
-                        items = uiState.alerts,
-                        key = { alert -> "${alert.id}_${alert.timestamp}" }
-                    ) { alert ->
-                        AlertItemCard(
-                            alert = alert,
-                            onMarkAsRead = { viewModel.onMarkAsRead(alert.id) },
-                            onOpenMap = { lat, lng ->
-                                openNavigationMap(context, lat, lng)
-                            }
-                        )
+
+                // DANH SÁCH THẺ CẢNH BÁO
+                if (uiState.alerts.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = WarmPrimaryTeal,
+                                modifier = Modifier.size(56.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Không có cảnh báo bất thường",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = WarmTextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Các chỉ số sức khỏe của gia đình đang ở vùng an toàn.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = WarmTextSecondary
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(
+                            items = uiState.alerts,
+                            key = { alert -> "${alert.id}_${alert.timestamp}" }
+                        ) { alert ->
+                            AlertItemCard(
+                                alert = alert,
+                                onMarkAsRead = { viewModel.onMarkAsRead(alert.id) },
+                                onOpenMap = { lat, lng ->
+                                    openNavigationMap(context, lat, lng)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -221,19 +241,19 @@ fun AlertItemCard(
     val isCritical = alert.alertLevel == AlertLevel.CRITICAL
     val isWarning = alert.alertLevel == AlertLevel.WARNING
 
-    val cardBg = if (alert.isRead) Color(0xFFF8FAFC) else Color.White
-    // Viền bo tròn trực tiếp trên Card: đỏ tươi cho khẩn cấp chưa đọc, vàng hổ phách cho nhắc nhở chưa đọc, xám mỏng khi đã đọc
+    val cardBg = if (alert.isRead) WarmCreamSecondary.copy(alpha = 0.45f) else WarmCreamSurface
+    // Viền bo tròn trực tiếp trên Card: đỏ tươi cho khẩn cấp chưa đọc, cam hổ phách cho nhắc nhở chưa đọc, viền be nhẹ khi đã đọc
     val cardBorder = when {
-        !alert.isRead && isCritical -> BorderStroke(1.5.dp, Color(0xFFEF4444))
-        !alert.isRead && isWarning -> BorderStroke(1.5.dp, Color(0xFFF59E0B))
-        else -> BorderStroke(1.dp, Color(0xFFE2E8F0))
+        !alert.isRead && isCritical -> BorderStroke(1.5.dp, SosRedBorder)
+        !alert.isRead && isWarning -> BorderStroke(1.5.dp, HealthWarningBorder)
+        else -> BorderStroke(1.dp, WarmDivider)
     }
 
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = cardBg),
         border = cardBorder,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (alert.isRead) 1.dp else 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (alert.isRead) 0.5.dp else 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -251,15 +271,15 @@ fun AlertItemCard(
                     text = "${alert.memberName.ifBlank { "Thành viên gia đình" }} • ${formatAlertTime(alert.timestamp)}",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF64748B),
+                    color = WarmTextSecondary,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
                 if (!alert.isRead) {
-                    val badgeBg = if (isCritical) Color(0xFFFEE2E2) else Color(0xFFFEF3C7)
-                    val badgeTextColor = if (isCritical) Color(0xFFDC2626) else Color(0xFFB45309)
+                    val badgeBg = if (isCritical) SosRedLight else HealthWarningLight
+                    val badgeTextColor = if (isCritical) SosRed else HealthWarning
                     Surface(
                         color = badgeBg,
                         shape = RoundedCornerShape(6.dp)
@@ -288,7 +308,7 @@ fun AlertItemCard(
                 text = displayTitle,
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isCritical) Color(0xFFDC2626) else if (isWarning) Color(0xFFD97706) else Color(0xFF0F172A),
+                color = if (isCritical) SosRed else if (isWarning) HealthWarning else WarmTextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -310,11 +330,11 @@ fun AlertItemCard(
             Text(
                 text = displayMessage,
                 fontSize = 13.5.sp,
-                color = Color(0xFF334155),
+                color = WarmTextPrimary.copy(alpha = 0.85f),
                 lineHeight = 19.sp
             )
 
-            // 4. Địa chỉ duy nhất bên dưới với icon ghim định vị màu cam
+            // 4. Địa chỉ duy nhất bên dưới với icon ghim định vị
             val cleanAddress = alert.address?.takeIf {
                 it.isNotBlank() &&
                         !it.startsWith("QPG2") &&
@@ -329,7 +349,7 @@ fun AlertItemCard(
                     Icon(
                         Icons.Default.LocationOn,
                         contentDescription = null,
-                        tint = Color(0xFFEA580C),
+                        tint = WarmAccent,
                         modifier = Modifier.size(15.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -337,7 +357,7 @@ fun AlertItemCard(
                         text = cleanAddress,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF475569),
+                        color = WarmTextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -355,8 +375,7 @@ fun AlertItemCard(
                 val lat = alert.latitude
                 val lng = alert.longitude
                 if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
-                    // Chưa đọc: màu đỏ cấp cứu Color(0xFFDC2626) | Đã xử lý: màu xám xanh Color(0xFF475569)
-                    val mapBtnBg = if (!alert.isRead) Color(0xFFDC2626) else Color(0xFF475569)
+                    val mapBtnBg = if (!alert.isRead) SosRed else WarmTextSecondary
                     Button(
                         onClick = { onOpenMap(lat, lng) },
                         modifier = Modifier
@@ -385,24 +404,24 @@ fun AlertItemCard(
                         onClick = onMarkAsRead,
                         modifier = Modifier.height(36.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        border = BorderStroke(1.dp, WarmDivider),
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = Color(0xFF475569)
+                            contentColor = WarmTextSecondary
                         )
                     ) {
                         Icon(
                             Icons.Default.Check,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = Color(0xFF475569)
+                            tint = WarmTextSecondary
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Đánh dấu đã xem",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF475569),
+                            color = WarmTextSecondary,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -415,14 +434,14 @@ fun AlertItemCard(
                         Icon(
                             Icons.Default.DoneAll,
                             contentDescription = null,
-                            tint = Color(0xFF16A34A),
+                            tint = WarmPrimaryTeal,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Đã xử lý",
                             fontSize = 12.sp,
-                            color = Color(0xFF16A34A),
+                            color = WarmPrimaryTeal,
                             fontWeight = FontWeight.Medium
                         )
                     }

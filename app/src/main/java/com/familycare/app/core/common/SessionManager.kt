@@ -36,10 +36,18 @@ class SessionManager(context: Context) {
             putString(KEY_USER_NAME, name)
             putString(KEY_USER_EMAIL, email)
             putString(KEY_USER_ROLE, role)
-            if (!familyId.isNullOrEmpty()) {
-                putString(KEY_FAMILY_ID, familyId)
-                putString(KEY_FAMILY_NAME, familyName ?: "Tổ Ấm Gia Đình")
-                putString(KEY_INVITE_CODE, inviteCode ?: "")
+            val currentFamId = prefs.getString(KEY_FAMILY_ID, null)
+            val currentFamName = prefs.getString(KEY_FAMILY_NAME, null)
+            val currentCode = prefs.getString(KEY_INVITE_CODE, null)
+
+            val effectiveFamId = if (!familyId.isNullOrBlank()) familyId else currentFamId
+            val effectiveFamName = if (!familyName.isNullOrBlank()) familyName else currentFamName
+            val effectiveCode = if (!inviteCode.isNullOrBlank()) inviteCode else currentCode
+
+            if (!effectiveFamId.isNullOrBlank() || !effectiveFamName.isNullOrBlank()) {
+                putString(KEY_FAMILY_ID, effectiveFamId ?: "fam_default")
+                putString(KEY_FAMILY_NAME, effectiveFamName ?: "Tổ Ấm Gia Đình")
+                putString(KEY_INVITE_CODE, effectiveCode ?: "FAM-8606")
             } else {
                 remove(KEY_FAMILY_ID)
                 remove(KEY_FAMILY_NAME)
@@ -84,7 +92,10 @@ class SessionManager(context: Context) {
         get() = prefs.getBoolean(KEY_IS_LOGGED_IN, false)
 
     val hasFamily: Boolean
-        get() = !prefs.getString(KEY_FAMILY_ID, null).isNullOrEmpty()
+        get() = !prefs.getString(KEY_FAMILY_ID, null).isNullOrEmpty() || !prefs.getString(KEY_FAMILY_NAME, null).isNullOrEmpty()
+
+    val familyId: String
+        get() = prefs.getString(KEY_FAMILY_ID, "") ?: ""
 
     val userId: String
         get() = prefs.getString(KEY_USER_ID, "") ?: ""

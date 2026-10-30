@@ -15,7 +15,10 @@ data class User(
     val birthDate: String = "",
     val bloodType: String = "",          // A, B, AB, O
     val chronicDiseases: List<String> = emptyList(), // Bệnh nền
-    val drugAllergies: List<String> = emptyList()    // Dị ứng thuốc
+    val drugAllergies: List<String> = emptyList(),    // Dị ứng thuốc
+    val gender: String = "",             // Nam / Nữ
+    val phoneNumber: String = "",
+    val address: String = ""
 )
 
 data class Family(
