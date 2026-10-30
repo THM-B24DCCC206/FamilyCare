@@ -837,16 +837,70 @@ fun BiometricsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = when (detail.type) {
-                                MetricType.BLOOD_PRESSURE.name -> "Huyết áp"
-                                MetricType.BLOOD_SUGAR.name -> "Đường huyết"
-                                MetricType.TEMPERATURE.name -> "Thân nhiệt"
-                                else -> "Nhịp tim"
-                            },
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF475569)
-                        )
+                        Column {
+                            Text(
+                                text = when (detail.type) {
+                                    MetricType.BLOOD_PRESSURE.name -> "Huyết áp"
+                                    MetricType.BLOOD_SUGAR.name -> "Đường huyết"
+                                    MetricType.TEMPERATURE.name -> "Thân nhiệt"
+                                    else -> "Nhịp tim"
+                                },
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF475569)
+                            )
+
+                            val (evalBadge, evalColor) = when (detail.type) {
+                                MetricType.BLOOD_PRESSURE.name -> {
+                                    val sys = detail.valuePrimary.toInt()
+                                    val dia = detail.valueSecondary?.toInt() ?: 80
+                                    when {
+                                        sys < 90 || dia < 60 -> Pair("Huyết áp thấp", Color(0xFFEA580C))
+                                        sys >= 140 || dia >= 90 -> Pair("Tăng huyết áp", Color(0xFFDC2626))
+                                        sys in 130..139 || dia in 81..89 -> Pair("Tiền tăng HA", Color(0xFFEA580C))
+                                        sys < 120 && dia < 80 -> Pair("Tối ưu", Color(0xFF15803D))
+                                        else -> Pair("Bình thường", Color(0xFF15803D))
+                                    }
+                                }
+                                MetricType.BLOOD_SUGAR.name -> {
+                                    val sugar = detail.valuePrimary
+                                    when {
+                                        sugar < 70 -> Pair("Hạ đường huyết", Color(0xFFDC2626))
+                                        sugar in 70.0..140.0 -> Pair("Bình thường", Color(0xFF15803D))
+                                        sugar in 140.1..199.0 -> Pair("Tiền tiểu đường", Color(0xFFEA580C))
+                                        else -> Pair("Đường huyết cao", Color(0xFFDC2626))
+                                    }
+                                }
+                                MetricType.TEMPERATURE.name -> {
+                                    val temp = detail.valuePrimary
+                                    when {
+                                        temp < 36.0 -> Pair("Thân nhiệt thấp", Color(0xFF0288D1))
+                                        temp in 36.0..37.5 -> Pair("Bình thường", Color(0xFF15803D))
+                                        temp in 37.6..38.5 -> Pair("Sốt nhẹ", Color(0xFFEA580C))
+                                        else -> Pair("Sốt cao", Color(0xFFDC2626))
+                                    }
+                                }
+                                else -> { // HEART_RATE
+                                    val bpm = detail.valuePrimary.toInt()
+                                    val hrLevel = HeartRateClassifier.classify(bpm)
+                                    Pair(hrLevel.title, hrLevel.color)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = evalColor.copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = evalBadge,
+                                    color = evalColor,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
                         Text(
                             text = when (detail.type) {
                                 MetricType.BLOOD_PRESSURE.name -> "${detail.valuePrimary.toInt()} / ${detail.valueSecondary?.toInt() ?: 80} mmHg"
@@ -1081,7 +1135,7 @@ private fun MetricHistoryCard(
                 Icons.Default.Favorite,
                 Color(0xFFE11D48),
                 Color(0xFFFFF1F2),
-                if (metric.isFromCameraPpg) "Nhịp tim PPG" else "Nhịp tim",
+                "Nhịp tim",
                 "$bpm BPM",
                 hrLevel.badgeLabel,
                 hrLevel.color
@@ -1092,11 +1146,12 @@ private fun MetricHistoryCard(
     val timeStr = timeFormat.format(Date(metric.timestamp))
     val subtitleText = remember(metric) {
         val note = metric.notes.trim()
-        when {
-            note.isNotEmpty() -> "$timeStr • $note"
-            metric.isFromCameraPpg -> "$timeStr • Camera PPG"
-            else -> "$timeStr • Nhập thủ công"
+        val displayNote = when {
+            metric.isFromCameraPpg || note.contains("PPG", ignoreCase = true) -> "Camera PPG"
+            note.isNotEmpty() -> note
+            else -> "Nhập thủ công"
         }
+        "$timeStr • $displayNote"
     }
 
     Card(
@@ -1114,10 +1169,10 @@ private fun MetricHistoryCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // CỘT TRÁI: Icon background pastel + Tên chỉ số + Badge trạng thái
+            // CỘT TRÁI: Icon background pastel + Tên chỉ số + Badge trạng thái (Chiếm ưu tiên không gian)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1.15f)
             ) {
                 Box(
                     modifier = Modifier
@@ -1143,7 +1198,7 @@ private fun MetricHistoryCard(
                         fontSize = 15.sp,
                         color = Color(0xFF0F172A),
                         maxLines = 1,
-                        softWrap = false
+                        overflow = TextOverflow.Ellipsis
                     )
 
                     Spacer(modifier = Modifier.height(3.dp))
@@ -1158,17 +1213,17 @@ private fun MetricHistoryCard(
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
                             maxLines = 1,
-                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             // CỘT PHẢI: Chỉ số đo to rõ + Text thời gian & ghi chú
             Column(
+                modifier = Modifier.weight(0.85f),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.Center
             ) {
