@@ -7,75 +7,82 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // =========================================================================
-// QUY CHUẨN KIỂU CHỮ CHO NGƯỜI CAO TUỔI (LARGE TEXT SCALE ACCESSIBILITY)
+// DESIGN SYSTEM TYPOGRAPHY (DESIGN.md)
+// Uses system SansSerif with generous lineHeights (1.3 - 1.7) for low
+// cognitive load, high contrast and excellent readability for seniors.
 // =========================================================================
 
 val Typography = Typography(
-    // 1. Tiêu đề chính (Title Large): 26sp, Đậm (Bold)
+    // H1 equivalent: 26sp, Bold 700, lineHeight 33sp
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
         fontSize = 26.sp,
-        lineHeight = 32.sp,
-        letterSpacing = 0.sp
+        lineHeight = 33.sp,
+        letterSpacing = (-0.3).sp
     ),
-    // 2. Tiêu đề phụ (Title Medium): 20sp, Đậm vừa
+    // H2 equivalent: 21sp, SemiBold 600, lineHeight 28sp
     titleMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 20.sp,
-        lineHeight = 26.sp,
-        letterSpacing = 0.15.sp
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 21.sp,
+        lineHeight = 28.sp,
+        letterSpacing = (-0.2).sp
     ),
+    // H3 equivalent: 18sp, SemiBold 600, lineHeight 24sp
     titleSmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
         fontSize = 18.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.sp
     ),
-    // 3. Văn bản thông thường (Body Large): 17sp, rõ ràng cho mắt kém
+    // Body Large: 17sp, Normal 400, generous lineHeight 27sp (1.6x)
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
         fontSize = 17.sp,
-        lineHeight = 25.sp,
-        letterSpacing = 0.5.sp
+        lineHeight = 27.sp,
+        letterSpacing = 0.2.sp
     ),
+    // Body Medium: 15.5sp, Normal 400, lineHeight 24sp
     bodyMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.25.sp
+        fontSize = 15.5.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.2.sp
     ),
+    // Body Small / Secondary: 13.5sp, Normal 400, lineHeight 20sp
     bodySmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.4.sp
+        fontSize = 13.5.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.2.sp
     ),
-    // 4. Các nút bấm (Buttons / Label Large): 16sp, Đậm (Bold) để bấm chuẩn xác
+    // Button labels / Primary actions: 15.5sp, SemiBold 600
     labelLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 16.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.5.sp
-    ),
-    labelMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.5.sp
+        fontSize = 15.5.sp,
+        lineHeight = 22.sp,
+        letterSpacing = 0.1.sp
     ),
+    // Secondary action / Filter chip: 13.5sp, Medium 500
+    labelMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Medium,
+        fontSize = 13.5.sp,
+        lineHeight = 18.sp,
+        letterSpacing = 0.1.sp
+    ),
+    // Captions / Badges: 12sp, Medium 500
     labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
+        letterSpacing = 0.sp
     )
 )

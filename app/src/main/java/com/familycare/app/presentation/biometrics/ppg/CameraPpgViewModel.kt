@@ -5,12 +5,15 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.familycare.app.core.database.AppDatabase
 import com.familycare.app.core.database.HealthMetricEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class PpgUiState(
     val isFingerDetected: Boolean = false,
@@ -113,8 +116,8 @@ class CameraPpgViewModel(application: Application) : AndroidViewModel(applicatio
         _uiState.update { it.copy(progress = 0f) }
     }
 
-    fun saveResult(userId: String = "user_me") {
-        viewModelScope.launch {
+    fun saveResult(userId: String = "user_me", onComplete: () -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val bpm = _uiState.value.finalBpm
             if (bpm > 0) {
                 val entity = HealthMetricEntity(
@@ -129,6 +132,9 @@ class CameraPpgViewModel(application: Application) : AndroidViewModel(applicatio
                 )
                 healthMetricDao.insertMetric(entity)
                 _uiState.update { it.copy(isSaved = true) }
+            }
+            withContext(Dispatchers.Main) {
+                onComplete()
             }
         }
     }

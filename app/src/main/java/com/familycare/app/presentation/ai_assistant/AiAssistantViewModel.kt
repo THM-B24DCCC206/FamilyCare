@@ -317,49 +317,17 @@ class AiAssistantViewModel(
             currentUser = newCurr
         }
 
-        runCatching {
-            userDao.deleteUserById("user_01")
-            userDao.deleteUserById("user_demo_01")
-            userDao.deleteUserById("member_bac_nam")
+        val fakeIds = setOf("user_01", "user_demo_01", "member_bac_nam", "member_bo", "member_me", "member_anhtrai", "user_02", "member_ly_tran")
+        fakeIds.forEach { id ->
+            runCatching { userDao.deleteUserById(id) }
         }
 
-        var allDbUsers = userDao.getAllUsers()
-        val otherMembersInDb = allDbUsers.filter {
-            it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01" && it.id != "member_bac_nam"
-        }
-
-        if (otherMembersInDb.isEmpty()) {
-            val isCurrentLy = currentUser.fullName.contains("Ly", ignoreCase = true)
-            if (isCurrentLy) {
-                val haiMinh = UserEntity(
-                    id = "user_02",
-                    fullName = "Hải Minh Trần",
-                    email = "haiminh@familycare.vn",
-                    role = "MEMBER",
-                    birthDate = "28/11/2006",
-                    bloodType = "O+",
-                    chronicDiseasesJson = "[]",
-                    drugAllergiesJson = "[]"
-                )
-                userDao.insertUser(haiMinh)
-            } else {
-                val lyTran = UserEntity(
-                    id = "member_ly_tran",
-                    fullName = "Ly Trần",
-                    email = "ly.tran@familycare.vn",
-                    role = "ADMIN",
-                    birthDate = "20/11/1992",
-                    bloodType = "A+",
-                    chronicDiseasesJson = "[]",
-                    drugAllergiesJson = "[]"
-                )
-                userDao.insertUser(lyTran)
-            }
-            allDbUsers = userDao.getAllUsers()
-        }
+        val allDbUsers = userDao.getAllUsers()
+        val currentDbUser = allDbUsers.firstOrNull { it.id == currentUserId } ?: currentUser
+        val currentFamilyId = currentDbUser.familyId.trim().ifBlank { sessionManager.familyId.trim() }
 
         val membersList = mutableListOf<Member>()
-        val curDomain = currentUser.toDomainModel()
+        val curDomain = currentDbUser.toDomainModel()
         membersList.add(
             Member(
                 id = currentUserId,
@@ -370,24 +338,32 @@ class AiAssistantViewModel(
             )
         )
 
-        allDbUsers
-            .filter { it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01" }
-            .forEach { u ->
-                val displayRole = when (u.role) {
-                    "ADMIN" -> "Trưởng gia đình"
-                    "MEMBER" -> "Thành viên"
-                    else -> u.role
+        // CHỈ thêm các thành viên CÙNG familyId với tài khoản hiện tại
+        if (currentFamilyId.isNotBlank()) {
+            allDbUsers
+                .filter {
+                    it.id != currentUserId &&
+                    it.id !in fakeIds &&
+                    it.familyId.isNotBlank() &&
+                    it.familyId == currentFamilyId
                 }
-                membersList.add(
-                    Member(
-                        id = u.id,
-                        fullName = u.fullName,
-                        avatarUrl = u.avatarUrl.takeIf { it.isNotBlank() },
-                        initials = u.fullName.trim().take(1).uppercase(),
-                        role = displayRole
+                .forEach { u ->
+                    val displayRole = when (u.role.uppercase()) {
+                        "ADMIN" -> "Trưởng gia đình"
+                        "MEMBER" -> "Thành viên"
+                        else -> u.role
+                    }
+                    membersList.add(
+                        Member(
+                            id = u.id,
+                            fullName = u.fullName,
+                            avatarUrl = u.avatarUrl.takeIf { it.isNotBlank() },
+                            initials = u.fullName.trim().take(1).uppercase(),
+                            role = displayRole
+                        )
                     )
-                )
-            }
+                }
+        }
 
         return membersList
     }

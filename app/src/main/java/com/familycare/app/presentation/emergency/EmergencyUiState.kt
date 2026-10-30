@@ -10,6 +10,23 @@ sealed interface SosStatus {
     data class Error(val message: String) : SosStatus
 }
 
+data class EmergencyContactItem(
+    val id: String = "",
+    val name: String = "",
+    val role: String = "",
+    val phone: String = "",
+    val isMe: Boolean = false
+) {
+    val hasPhone: Boolean
+        get() = phone.isNotBlank()
+
+    val displayPhone: String
+        get() = phone.trim().ifBlank { "Chưa có thông tin" }
+
+    val formattedString: String
+        get() = "$name ($role) • $displayPhone"
+}
+
 data class EmergencyUiState(
     val sosStatus: SosStatus = SosStatus.Idle,
     val isSirenPlaying: Boolean = false,
@@ -36,5 +53,5 @@ data class EmergencyUiState(
     val familyOwnerPhone: String = "",
     val isOwnerNotified: Boolean = false,
     val nearbyHospitals: List<NearbyHospital> = emptyList(),
-    val emergencyContacts: List<String> = emptyList()
+    val emergencyContacts: List<EmergencyContactItem> = emptyList()
 )

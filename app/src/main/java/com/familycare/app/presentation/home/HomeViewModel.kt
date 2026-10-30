@@ -25,16 +25,46 @@ class HomeViewModel(
     private val medicineDao: MedicineDao,
     private val medicationLogDao: MedicationLogDao,
     private val analyzeThresholdUseCase: AnalyzeThresholdUseCase,
-    private val bleManager: SmartwatchBleManager
+    private val bleManager: SmartwatchBleManager,
+    private val appointmentDao: AppointmentDao? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    private var activeMedicationJob: kotlinx.coroutines.Job? = null
+    private var currentLoadedDate: String = ""
+
+    private fun getTodayDateString(): String {
+        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    }
+
     init {
         observeBleDevice()
         observeNotifications()
         loadInitialData()
+        startDayChangeMonitor()
+    }
+
+    private fun startDayChangeMonitor() {
+        viewModelScope.launch(Dispatchers.Default) {
+            while (true) {
+                kotlinx.coroutines.delay(30000L)
+                val today = getTodayDateString()
+                if (currentLoadedDate.isNotBlank() && today != currentLoadedDate) {
+                    withContext(Dispatchers.Main) {
+                        refresh()
+                    }
+                }
+            }
+        }
+    }
+
+    fun checkAndRefreshIfDayChanged() {
+        val today = getTodayDateString()
+        if (currentLoadedDate.isNotBlank() && today != currentLoadedDate) {
+            refresh()
+        }
     }
 
     private fun observeNotifications() {
@@ -76,6 +106,20 @@ class HomeViewModel(
                     // 1. Đồng bộ và lấy danh sách thành viên thực tế (Luôn ưu tiên tài khoản đăng nhập)
                     val members = loadRealFamilyMembers()
 
+                    // Đồng bộ tên tổ ấm cho tài khoản thành viên (nếu DB hoặc Session chưa kịp nạp)
+                    val activeFam = userDao.getActiveFamily()
+                    val resolvedFamName = activeFam?.familyName?.takeIf { it.isNotBlank() }
+                        ?: sessionManager.familyName.takeIf { it.isNotBlank() && it != "Gia đình" }
+                        ?: "Tổ Ấm Yêu Thương"
+
+                    if (sessionManager.familyName.isBlank() || sessionManager.familyName == "Gia đình") {
+                        sessionManager.saveFamilySession(
+                            familyId = activeFam?.familyId ?: sessionManager.familyId.ifBlank { "fam_default" },
+                            familyName = resolvedFamName,
+                            inviteCode = activeFam?.inviteCode ?: sessionManager.inviteCode.ifBlank { "FAM-8606" }
+                        )
+                    }
+
                     // Thành viên được chọn mặc định luôn là người dùng đang đăng nhập
                     val currentUserId = sessionManager.userId.ifBlank { members.firstOrNull()?.id ?: "" }
                     val selectedId = if (_uiState.value.selectedMemberId.isNotBlank() &&
@@ -86,10 +130,14 @@ class HomeViewModel(
                         currentUserId
                     }
 
+                    val currentInviteCode = activeFam?.inviteCode ?: sessionManager.inviteCode.ifBlank { "FAM-8606" }
+
                     _uiState.update {
                         it.copy(
                             familyMembers = members,
-                            selectedMemberId = selectedId
+                            selectedMemberId = selectedId,
+                            familyName = resolvedFamName,
+                            inviteCode = currentInviteCode
                         )
                     }
 
@@ -121,9 +169,9 @@ class HomeViewModel(
         val currentRole = sessionManager.userRole
 
         // Xóa sạch các ID mẫu cứng cũ nếu có
-        runCatching {
-            userDao.deleteUserById("user_01")
-            userDao.deleteUserById("user_demo_01")
+        val fakeIds = listOf("user_01", "user_demo_01", "member_bac_nam", "member_bo", "member_me", "member_anhtrai", "user_02", "member_ly_tran")
+        fakeIds.forEach { id ->
+            runCatching { userDao.deleteUserById(id) }
         }
 
         // Đảm bảo người dùng hiện tại đã có trong bảng users của SQLite
@@ -140,33 +188,46 @@ class HomeViewModel(
         }
 
         val allDbUsers = userDao.getAllUsers()
+        val currentDbUser = allDbUsers.firstOrNull { it.id == currentUserId }
+        val currentFamilyId = currentDbUser?.familyId?.trim().orEmpty().ifBlank { sessionManager.familyId.trim() }
+
         val membersList = mutableListOf<Member>()
 
         // 1. Luôn đưa tài khoản đang đăng nhập lên ĐẦU TIÊN
-        val currentDbUser = allDbUsers.firstOrNull { it.id == currentUserId }
         val currentMember = Member(
             id = currentUserId,
             fullName = currentDbUser?.fullName ?: currentUserName,
             avatarUrl = currentDbUser?.avatarUrl?.takeIf { it.isNotBlank() },
             initials = (currentDbUser?.fullName ?: currentUserName).trim().take(1).uppercase(),
-            role = if (currentRole == "ADMIN") "Trưởng gia đình" else "Thành viên"
+            role = if (currentRole == "ADMIN" || currentDbUser?.role?.uppercase() == "ADMIN") "Trưởng gia đình" else "Thành viên"
         )
         membersList.add(currentMember)
 
-        // 2. Thêm các thành viên gia đình khác (nếu có trong DB và không phải user_01 / user_demo_01)
-        allDbUsers.filter { it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01" }.forEach { u ->
-            membersList.add(
-                Member(
-                    id = u.id,
-                    fullName = u.fullName,
-                    avatarUrl = u.avatarUrl.takeIf { it.isNotBlank() },
-                    initials = u.fullName.trim().take(1).uppercase(),
-                    role = if (u.role == "ADMIN") "Trưởng gia đình" else "Thành viên"
+        // 2. Thêm các thành viên gia đình khác (CHỈ lấy thành viên CÙNG familyId với tài khoản hiện tại)
+        if (currentFamilyId.isNotBlank()) {
+            allDbUsers.filter {
+                it.id != currentUserId &&
+                it.id !in fakeIds &&
+                it.familyId.isNotBlank() &&
+                it.familyId == currentFamilyId
+            }.forEach { u ->
+                membersList.add(
+                    Member(
+                        id = u.id,
+                        fullName = u.fullName,
+                        avatarUrl = u.avatarUrl.takeIf { it.isNotBlank() },
+                        initials = u.fullName.trim().take(1).uppercase(),
+                        role = if (u.role.uppercase() == "ADMIN") "Trưởng gia đình" else "Thành viên"
+                    )
                 )
-            )
+            }
         }
 
         membersList
+    }
+
+    fun refreshHomeData() {
+        loadInitialData()
     }
 
     /**
@@ -175,7 +236,8 @@ class HomeViewModel(
      * - Nếu chưa có thuốc: Để danh sách rỗng!
      */
     private suspend fun fetchMemberDetails(memberId: String) = withContext(Dispatchers.IO) {
-        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val todayStr = getTodayDateString()
+        currentLoadedDate = todayStr
 
         // 1. Chỉ số sinh tồn thực tế (KHÔNG seed số giả nếu chưa đo)
         val bpEntity = healthMetricDao.getLatestMetricByType(memberId, MetricType.BLOOD_PRESSURE.name)
@@ -247,17 +309,16 @@ class HomeViewModel(
         }
 
         // 3. Lịch uống thuốc thực tế (Lấy từ medicineDao của đúng thành viên này)
-        val realSchedules = mutableListOf<MedicationSchedule>()
+        val initialSchedules = mutableListOf<MedicationSchedule>()
         try {
-            // Lấy danh sách thuốc của thành viên
-            val medicinesFlow = medicineDao.getMedicinesByMember(memberId)
-            val medicines = medicinesFlow.firstOrNull() ?: emptyList()
+            val medicines = medicineDao.getMedicinesByMember(memberId).firstOrNull() ?: emptyList()
+            val logs = medicationLogDao.getLogsForDate(memberId, todayStr).firstOrNull() ?: emptyList()
+            val logMap = logs.associateBy { "${it.medicineId}_${it.scheduledTime}" }
 
             for (medicine in medicines) {
                 for (time in medicine.reminderTimes) {
-                    val log = medicationLogDao.getLog(medicine.id, todayStr, time)
-                    val isTaken = log?.isTaken ?: false
-                    realSchedules.add(
+                    val log = logMap["${medicine.id}_$time"]
+                    initialSchedules.add(
                         MedicationSchedule(
                             id = log?.id ?: "${medicine.id}_${todayStr}_$time",
                             medicineId = medicine.id,
@@ -265,13 +326,39 @@ class HomeViewModel(
                             dosage = medicine.dosage,
                             instruction = medicine.instruction,
                             scheduledTime = time,
-                            isTaken = isTaken
+                            isTaken = log?.isTaken ?: false,
+                            isSkipped = log?.isSkipped ?: false,
+                            actualTakenTime = log?.actualTakenTime
                         )
                     )
                 }
             }
+            initialSchedules.sortBy { it.scheduledTime }
         } catch (_: Exception) {
             // Giữ danh sách rỗng nếu chưa có dữ liệu thuốc
+        }
+
+        // Bắt đầu quan sát reactive flow từ Room DB
+        observeMedicationFlow(memberId, todayStr)
+
+        // 4. Lịch khám / Cuộc hẹn y tế sắp tới của thành viên (nếu có)
+        var nextApptItem: AppointmentItem? = null
+        if (appointmentDao != null) {
+            try {
+                val apptList = appointmentDao.getAppointmentsByMember(memberId).firstOrNull() ?: emptyList()
+                val upcoming = apptList.filter { !it.isCompleted && it.appointmentTime >= System.currentTimeMillis() - 3600_000L }
+                    .minByOrNull { it.appointmentTime }
+                if (upcoming != null) {
+                    val dateFmt = SimpleDateFormat("EEE, dd/MM", Locale("vi", "VN")).format(Date(upcoming.appointmentTime))
+                    val docOrDept = if (upcoming.doctorName.isNotBlank()) "Bác sĩ ${upcoming.doctorName}" else upcoming.department
+                    nextApptItem = AppointmentItem(
+                        id = upcoming.id,
+                        title = if (upcoming.hospitalName.isNotBlank()) upcoming.hospitalName else "Khám định kỳ",
+                        timeFormatted = dateFmt,
+                        doctorOrDepartment = docOrDept
+                    )
+                }
+            } catch (_: Exception) {}
         }
 
         _uiState.update {
@@ -279,10 +366,46 @@ class HomeViewModel(
                 selectedMemberId = memberId,
                 alertStatus = alert,
                 latestVitals = vitals,
-                todayMedications = realSchedules,
+                todayMedications = initialSchedules,
+                upcomingAppointment = nextApptItem,
                 isLoading = false,
                 errorMessage = null
             )
+        }
+    }
+
+    private fun observeMedicationFlow(memberId: String, todayStr: String) {
+        activeMedicationJob?.cancel()
+        activeMedicationJob = viewModelScope.launch(Dispatchers.IO) {
+            combine(
+                medicineDao.getMedicinesByMember(memberId),
+                medicationLogDao.getLogsForDate(memberId, todayStr)
+            ) { medicines, logs ->
+                val logMap = logs.associateBy { "${it.medicineId}_${it.scheduledTime}" }
+                val schedules = mutableListOf<MedicationSchedule>()
+                for (med in medicines) {
+                    for (time in med.reminderTimes) {
+                        val log = logMap["${med.id}_$time"]
+                        schedules.add(
+                            MedicationSchedule(
+                                id = log?.id ?: "${med.id}_${todayStr}_$time",
+                                medicineId = med.id,
+                                medicineName = med.name,
+                                dosage = med.dosage,
+                                instruction = med.instruction,
+                                scheduledTime = time,
+                                isTaken = log?.isTaken ?: false,
+                                isSkipped = log?.isSkipped ?: false,
+                                actualTakenTime = log?.actualTakenTime
+                            )
+                        )
+                    }
+                }
+                schedules.sortBy { it.scheduledTime }
+                schedules
+            }.collect { schedules ->
+                _uiState.update { it.copy(todayMedications = schedules) }
+            }
         }
     }
 
@@ -294,16 +417,221 @@ class HomeViewModel(
         }
     }
 
-    fun onTakeMedicine(scheduleId: String) {
+    /**
+     * Thêm thành viên mới trực tiếp vào gia đình từ Dashboard
+     */
+    fun addNewMember(fullName: String, relationship: String) {
+        val trimmedName = fullName.trim()
+        if (trimmedName.isBlank()) return
+
+        val newId = "member_${UUID.randomUUID().toString().take(8)}"
+        val newMemberEntity = UserEntity(
+            id = newId,
+            fullName = trimmedName,
+            email = "",
+            role = relationship.ifBlank { "Thành viên" },
+            familyId = sessionManager.familyId,
+            bloodType = "O+"
+        )
+
         viewModelScope.launch(Dispatchers.IO) {
-            medicationLogDao.markAsTaken(scheduleId, System.currentTimeMillis())
+            userDao.insertUser(newMemberEntity)
+            val updatedMembers = loadRealFamilyMembers()
             _uiState.update { state ->
                 state.copy(
-                    todayMedications = state.todayMedications.map {
-                        if (it.id == scheduleId) it.copy(isTaken = true) else it
-                    }
+                    familyMembers = updatedMembers,
+                    selectedMemberId = newId
                 )
             }
+            fetchMemberDetails(newId)
+        }
+    }
+
+    fun onTakeMedicine(medicineId: String, scheduledTime: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val todayStr = getTodayDateString()
+                val memberId = _uiState.value.selectedMemberId.ifBlank { sessionManager.userId }
+                val now = System.currentTimeMillis()
+                val log = medicationLogDao.getLog(medicineId, todayStr, scheduledTime)
+                if (log == null) {
+                    val med = medicineDao.getMedicineById(medicineId)
+                    val newLog = MedicationLogEntity(
+                        id = UUID.randomUUID().toString(),
+                        medicineId = medicineId,
+                        medicineName = med?.name ?: "Thuốc",
+                        userId = memberId,
+                        scheduledDate = todayStr,
+                        scheduledTime = scheduledTime,
+                        actualTakenTime = now,
+                        isTaken = true,
+                        isSkipped = false
+                    )
+                    medicationLogDao.insertIfAbsent(newLog)
+                    medicationLogDao.markAsTaken(newLog.id, now)
+                } else {
+                    medicationLogDao.markAsTaken(log.id, now)
+                }
+
+                _uiState.update { state ->
+                    state.copy(
+                        todayMedications = state.todayMedications.map {
+                            if (it.medicineId == medicineId && it.scheduledTime == scheduledTime) {
+                                it.copy(isTaken = true, isSkipped = false, actualTakenTime = now)
+                            } else it
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "Lỗi khi ghi nhận uống thuốc") }
+            }
+        }
+    }
+
+    fun onTakeMedicine(scheduleId: String) {
+        val schedule = _uiState.value.todayMedications.firstOrNull { it.id == scheduleId }
+        if (schedule != null) {
+            onTakeMedicine(schedule.medicineId, schedule.scheduledTime)
+        } else {
+            viewModelScope.launch(Dispatchers.IO) {
+                medicationLogDao.markAsTaken(scheduleId, System.currentTimeMillis())
+            }
+        }
+    }
+
+    /**
+     * Xác nhận uống toàn bộ các thuốc trong cùng một cữ giờ (1 chạm)
+     */
+    fun onTakeSession(scheduledTime: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val todayStr = getTodayDateString()
+                val memberId = _uiState.value.selectedMemberId.ifBlank { sessionManager.userId }
+                val now = System.currentTimeMillis()
+
+                val sessionDoses = _uiState.value.todayMedications.filter { it.scheduledTime == scheduledTime }
+                for (dose in sessionDoses) {
+                    var log = medicationLogDao.getLog(dose.medicineId, todayStr, scheduledTime)
+                    if (log == null) {
+                        val med = medicineDao.getMedicineById(dose.medicineId)
+                        val newLog = MedicationLogEntity(
+                            id = UUID.randomUUID().toString(),
+                            medicineId = dose.medicineId,
+                            medicineName = med?.name ?: dose.medicineName,
+                            userId = memberId,
+                            scheduledDate = todayStr,
+                            scheduledTime = scheduledTime,
+                            actualTakenTime = now,
+                            isTaken = true,
+                            isSkipped = false
+                        )
+                        medicationLogDao.insertIfAbsent(newLog)
+                        medicationLogDao.markAsTaken(newLog.id, now)
+                    } else {
+                        medicationLogDao.markAsTaken(log.id, now)
+                    }
+                }
+
+                _uiState.update { state ->
+                    state.copy(
+                        todayMedications = state.todayMedications.map {
+                            if (it.scheduledTime == scheduledTime) {
+                                it.copy(isTaken = true, isSkipped = false, actualTakenTime = now)
+                            } else it
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "Lỗi khi ghi nhận cả cữ thuốc") }
+            }
+        }
+    }
+
+    /**
+     * Hoàn tác toàn bộ các thuốc trong cùng một cữ giờ
+     */
+    fun onUndoTakeSession(scheduledTime: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val todayStr = getTodayDateString()
+                val sessionDoses = _uiState.value.todayMedications.filter { it.scheduledTime == scheduledTime }
+                for (dose in sessionDoses) {
+                    val log = medicationLogDao.getLog(dose.medicineId, todayStr, scheduledTime)
+                    if (log != null) {
+                        medicationLogDao.markAsNotTaken(log.id)
+                    }
+                }
+
+                _uiState.update { state ->
+                    state.copy(
+                        todayMedications = state.todayMedications.map {
+                            if (it.scheduledTime == scheduledTime) {
+                                it.copy(isTaken = false, actualTakenTime = null)
+                            } else it
+                        }
+                    )
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun onUndoTakeMedicine(medicineId: String, scheduledTime: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val todayStr = getTodayDateString()
+                val log = medicationLogDao.getLog(medicineId, todayStr, scheduledTime)
+                if (log != null) {
+                    medicationLogDao.markAsNotTaken(log.id)
+                }
+
+                _uiState.update { state ->
+                    state.copy(
+                        todayMedications = state.todayMedications.map {
+                            if (it.medicineId == medicineId && it.scheduledTime == scheduledTime) {
+                                it.copy(isTaken = false, actualTakenTime = null)
+                            } else it
+                        }
+                    )
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun onSkipMedicine(medicineId: String, scheduledTime: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val todayStr = getTodayDateString()
+                val memberId = _uiState.value.selectedMemberId.ifBlank { sessionManager.userId }
+                val log = medicationLogDao.getLog(medicineId, todayStr, scheduledTime)
+                if (log == null) {
+                    val med = medicineDao.getMedicineById(medicineId)
+                    val newLog = MedicationLogEntity(
+                        id = UUID.randomUUID().toString(),
+                        medicineId = medicineId,
+                        medicineName = med?.name ?: "Thuốc",
+                        userId = memberId,
+                        scheduledDate = todayStr,
+                        scheduledTime = scheduledTime,
+                        actualTakenTime = null,
+                        isTaken = false,
+                        isSkipped = true
+                    )
+                    medicationLogDao.insertIfAbsent(newLog)
+                    medicationLogDao.markAsSkipped(newLog.id)
+                } else {
+                    medicationLogDao.markAsSkipped(log.id)
+                }
+
+                _uiState.update { state ->
+                    state.copy(
+                        todayMedications = state.todayMedications.map {
+                            if (it.medicineId == medicineId && it.scheduledTime == scheduledTime) {
+                                it.copy(isSkipped = true, isTaken = false)
+                            } else it
+                        }
+                    )
+                }
+            } catch (_: Exception) {}
         }
     }
 
@@ -342,7 +670,8 @@ class HomeViewModel(
                     medicineDao = db.medicineDao(),
                     medicationLogDao = db.medicationLogDao(),
                     analyzeThresholdUseCase = analyzeUseCase,
-                    bleManager = ble
+                    bleManager = ble,
+                    appointmentDao = db.appointmentDao()
                 ) as T
             }
         }

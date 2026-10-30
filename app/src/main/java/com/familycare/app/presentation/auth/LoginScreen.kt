@@ -3,6 +3,7 @@ package com.familycare.app.presentation.auth
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -29,6 +30,8 @@ import com.familycare.app.R
 import com.familycare.app.core.common.SessionManager
 import com.familycare.app.core.database.AppDatabase
 import com.familycare.app.core.database.UserAccountEntity
+import com.familycare.app.presentation.common.FamilyCareAmbientBackground
+import com.familycare.app.ui.theme.*
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
@@ -131,73 +134,131 @@ fun LoginScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // 1. Logo & Tên Ứng Dụng
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.size(80.dp)
+    FamilyCareAmbientBackground {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Default.Favorite,
-                    contentDescription = null,
-                    tint = Color(0xFFE91E63),
-                    modifier = Modifier.size(44.dp)
-                )
+            // 1. Logo & Tên Ứng Dụng
+            Surface(
+                shape = CircleShape,
+                color = WarmPrimaryLight,
+                modifier = Modifier.size(80.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = Color(0xFFE91E63),
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "FamilyCare",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Text(
-            text = "Hệ thống chăm sóc & bảo vệ sức khỏe gia đình",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        // 2. Tab Chuyển đổi Đăng nhập / Đăng ký
-        TabRow(
-            selectedTabIndex = if (isRegisterMode) 1 else 0,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Tab(
-                selected = !isRegisterMode,
-                onClick = {
-                    isRegisterMode = false
-                    errorMessage = null
-                },
-                text = { Text("Đăng Nhập", fontWeight = FontWeight.Bold) }
+            Text(
+                text = "FamilyCare",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = WarmPrimaryTeal
             )
-            Tab(
-                selected = isRegisterMode,
-                onClick = {
-                    isRegisterMode = true
-                    errorMessage = null
-                },
-                text = { Text("Đăng Ký", fontWeight = FontWeight.Bold) }
-            )
-        }
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Hệ thống chăm sóc & bảo vệ sức khỏe gia đình",
+                style = MaterialTheme.typography.bodyMedium,
+                color = WarmTextSecondary,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // 2. Segmented Pill Switcher (Dạng viên nang bo tròn 2 tab)
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = WarmCreamSecondary,
+                border = BorderStroke(1.dp, WarmDivider),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Tab 1: Đăng Nhập
+                    Surface(
+                        onClick = {
+                            isRegisterMode = false
+                            errorMessage = null
+                        },
+                        shape = RoundedCornerShape(50),
+                        color = if (!isRegisterMode) Color.White else Color.Transparent,
+                        shadowElevation = if (!isRegisterMode) 2.dp else 0.dp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Text(
+                                text = "Đăng Nhập",
+                                fontSize = 14.sp,
+                                fontWeight = if (!isRegisterMode) FontWeight.Bold else FontWeight.Medium,
+                                color = if (!isRegisterMode) WarmPrimaryTeal else WarmTextSecondary
+                            )
+                        }
+                    }
+
+                    // Tab 2: Đăng Ký
+                    Surface(
+                        onClick = {
+                            isRegisterMode = true
+                            errorMessage = null
+                        },
+                        shape = RoundedCornerShape(50),
+                        color = if (isRegisterMode) Color.White else Color.Transparent,
+                        shadowElevation = if (isRegisterMode) 2.dp else 0.dp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Text(
+                                text = "Đăng Ký",
+                                fontSize = 14.sp,
+                                fontWeight = if (isRegisterMode) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isRegisterMode) WarmPrimaryTeal else WarmTextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+        val textFieldColors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = WarmCreamSurface,
+            unfocusedContainerColor = WarmCreamSurface,
+            focusedBorderColor = WarmPrimaryTeal,
+            unfocusedBorderColor = WarmDivider,
+            focusedLabelColor = WarmPrimaryTeal,
+            unfocusedLabelColor = WarmTextSecondary,
+            focusedTextColor = WarmTextPrimary,
+            unfocusedTextColor = WarmTextPrimary,
+            cursorColor = WarmPrimaryTeal
+        )
 
         // 3. Form Nhập Liệu
         if (isRegisterMode) {
@@ -206,9 +267,10 @@ fun LoginScreen(
                 onValueChange = { fullName = it },
                 label = { Text("Họ và Tên") },
                 placeholder = { Text("VD: Ly Trần") },
-                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = WarmTextSecondary) },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
+                colors = textFieldColors,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -222,10 +284,11 @@ fun LoginScreen(
             },
             label = { Text("Email") },
             placeholder = { Text("example@gmail.com") },
-            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = WarmTextSecondary) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
+            colors = textFieldColors,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -238,12 +301,13 @@ fun LoginScreen(
                 errorMessage = null
             },
             label = { Text("Mật khẩu") },
-            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = WarmTextSecondary) },
             trailingIcon = {
                 IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
                     Icon(
                         imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = null
+                        contentDescription = null,
+                        tint = WarmTextSecondary
                     )
                 }
             },
@@ -251,6 +315,7 @@ fun LoginScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
+            colors = textFieldColors,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -258,7 +323,8 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(14.dp))
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                color = SosRedLight,
+                border = BorderStroke(1.dp, SosRedBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -268,7 +334,7 @@ fun LoginScreen(
                     Icon(
                         Icons.Default.ErrorOutline,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
+                        tint = SosRed,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -362,18 +428,19 @@ fun LoginScreen(
                                 return@launch
                             }
 
-                            // Đăng nhập thành công -> Nạp đúng tổ ấm cũ của người này
+                            // Đăng nhập thành công -> Kiểm tra xem tài khoản này đã có tổ ấm chưa
+                            val hasFamily = !user.familyId.isNullOrBlank() && !user.familyName.isNullOrBlank()
+
                             sessionManager.saveUserSession(
                                 userId = user.id,
                                 name = user.fullName,
                                 email = user.email,
                                 role = user.role,
-                                familyId = user.familyId,
-                                familyName = user.familyName,
-                                inviteCode = user.inviteCode
+                                familyId = user.familyId ?: "",
+                                familyName = user.familyName ?: "",
+                                inviteCode = user.inviteCode ?: ""
                             )
 
-                            val hasFamily = !user.familyId.isNullOrEmpty()
                             onLoginSuccess(hasFamily)
                         }
                     } catch (e: Exception) {
@@ -383,6 +450,10 @@ fun LoginScreen(
                     }
                 }
             },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = WarmPrimaryTeal,
+                contentColor = Color.White
+            ),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
@@ -391,7 +462,7 @@ fun LoginScreen(
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(22.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    color = Color.White,
                     strokeWidth = 2.dp
                 )
             } else {
@@ -410,14 +481,14 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            HorizontalDivider(modifier = Modifier.weight(1f))
+            HorizontalDivider(modifier = Modifier.weight(1f), color = WarmDivider)
             Text(
                 text = "HOẶC",
                 modifier = Modifier.padding(horizontal = 12.dp),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = WarmTextSecondary
             )
-            HorizontalDivider(modifier = Modifier.weight(1f))
+            HorizontalDivider(modifier = Modifier.weight(1f), color = WarmDivider)
         }
 
         Spacer(modifier = Modifier.height(18.dp))
@@ -436,8 +507,10 @@ fun LoginScreen(
                 .fillMaxWidth()
                 .height(50.dp),
             colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
+                containerColor = WarmCreamSurface,
+                contentColor = WarmTextPrimary
+            ),
+            border = BorderStroke(1.dp, WarmDivider)
         ) {
             Icon(
                 imageVector = Icons.Default.AccountCircle,
@@ -450,8 +523,9 @@ fun LoginScreen(
                 text = "Tiếp tục với Google",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = WarmTextPrimary
             )
         }
     }
+}
 }

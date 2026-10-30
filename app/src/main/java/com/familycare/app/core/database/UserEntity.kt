@@ -17,7 +17,10 @@ data class UserEntity(
     val birthDate: String = "",
     val bloodType: String = "",
     val chronicDiseasesJson: String = "[]",
-    val drugAllergiesJson: String = "[]"
+    val drugAllergiesJson: String = "[]",
+    val gender: String = "",
+    val phoneNumber: String = "",
+    val address: String = ""
 ) {
     fun toDomainModel(): User {
         val userRole = runCatching { UserRole.valueOf(role) }.getOrDefault(UserRole.MEMBER)
@@ -34,7 +37,10 @@ data class UserEntity(
             birthDate = birthDate,
             bloodType = bloodType,
             chronicDiseases = diseases,
-            drugAllergies = allergies
+            drugAllergies = allergies,
+            gender = gender,
+            phoneNumber = phoneNumber,
+            address = address
         )
     }
 
@@ -63,7 +69,10 @@ data class UserEntity(
                 birthDate = user.birthDate,
                 bloodType = user.bloodType,
                 chronicDiseasesJson = diseasesJson,
-                drugAllergiesJson = allergiesJson
+                drugAllergiesJson = allergiesJson,
+                gender = user.gender,
+                phoneNumber = user.phoneNumber,
+                address = user.address
             )
         }
 

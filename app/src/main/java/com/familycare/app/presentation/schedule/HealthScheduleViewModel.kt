@@ -43,17 +43,50 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
     val uiState: StateFlow<HealthScheduleUiState> = _uiState.asStateFlow()
 
     private var activeMemberJob: Job? = null
+    private var currentLoadedDate: String = ""
 
     init {
         loadFamilyMembersAndInitialData()
+        startDayChangeMonitor()
     }
 
     private fun getTodayDateString(): String {
-        return SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    }
+
+    private fun startDayChangeMonitor() {
+        viewModelScope.launch(Dispatchers.Default) {
+            while (true) {
+                kotlinx.coroutines.delay(30000L)
+                val today = getTodayDateString()
+                if (currentLoadedDate.isNotBlank() && today != currentLoadedDate) {
+                    val memberId = _uiState.value.selectedMemberId
+                    if (memberId.isNotBlank()) {
+                        withContext(Dispatchers.Main) {
+                            observeDataForMember(memberId)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun checkAndRefreshIfDayChanged() {
+        val today = getTodayDateString()
+        if (currentLoadedDate.isNotBlank() && today != currentLoadedDate) {
+            val memberId = _uiState.value.selectedMemberId
+            if (memberId.isNotBlank()) {
+                observeDataForMember(memberId)
+            }
+        }
     }
 
     fun selectTab(tab: HealthScheduleTab) {
         _uiState.update { it.copy(selectedTab = tab) }
+    }
+
+    fun selectMedicationViewMode(mode: MedicationViewMode) {
+        _uiState.update { it.copy(medicationViewMode = mode) }
     }
 
     fun selectMember(memberId: String) {
@@ -104,10 +137,10 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
         val currentUserEmail = sessionManager.userEmail
         val currentRole = sessionManager.userRole
 
+        val fakeIds = setOf("user_01", "user_demo_01", "member_bac_nam", "member_bo", "member_me", "member_anhtrai", "user_02", "member_ly_tran")
         // Xóa sạch các ID mẫu cũ nếu có
-        runCatching {
-            userDao.deleteUserById("user_01")
-            userDao.deleteUserById("user_demo_01")
+        fakeIds.forEach { id ->
+            runCatching { userDao.deleteUserById(id) }
         }
 
         // Đảm bảo người dùng hiện tại có trong DB
@@ -124,30 +157,39 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
         }
 
         val allDbUsers = userDao.getAllUsers()
+        val currentDbUser = allDbUsers.firstOrNull { it.id == currentUserId }
+        val currentFamilyId = currentDbUser?.familyId?.trim().orEmpty().ifBlank { sessionManager.familyId.trim() }
+
         val membersList = mutableListOf<Member>()
 
         // 1. Luôn đưa tài khoản đang đăng nhập lên ĐẦU TIÊN
-        val currentDbUser = allDbUsers.firstOrNull { it.id == currentUserId }
         val currentMember = Member(
             id = currentUserId,
             fullName = currentDbUser?.fullName ?: currentUserName,
             avatarUrl = currentDbUser?.avatarUrl?.takeIf { it.isNotBlank() },
             initials = (currentDbUser?.fullName ?: currentUserName).trim().take(1).uppercase(),
-            role = if (currentRole == "ADMIN") "Trưởng gia đình" else "Thành viên"
+            role = if (currentRole == "ADMIN" || currentDbUser?.role?.uppercase() == "ADMIN") "Trưởng gia đình" else "Thành viên"
         )
         membersList.add(currentMember)
 
-        // 2. Thêm các thành viên khác
-        allDbUsers.filter { it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01" }.forEach { u ->
-            membersList.add(
-                Member(
-                    id = u.id,
-                    fullName = u.fullName,
-                    avatarUrl = u.avatarUrl.takeIf { it.isNotBlank() },
-                    initials = u.fullName.trim().take(1).uppercase(),
-                    role = if (u.role == "ADMIN") "Trưởng gia đình" else "Thành viên"
+        // 2. Thêm các thành viên khác CÙNG familyId với tài khoản hiện tại
+        if (currentFamilyId.isNotBlank()) {
+            allDbUsers.filter {
+                it.id != currentUserId &&
+                it.id !in fakeIds &&
+                it.familyId.isNotBlank() &&
+                it.familyId == currentFamilyId
+            }.forEach { u ->
+                membersList.add(
+                    Member(
+                        id = u.id,
+                        fullName = u.fullName,
+                        avatarUrl = u.avatarUrl.takeIf { it.isNotBlank() },
+                        initials = u.fullName.trim().take(1).uppercase(),
+                        role = if (u.role.uppercase() == "ADMIN") "Trưởng gia đình" else "Thành viên"
+                    )
                 )
-            )
+            }
         }
 
         membersList
@@ -157,6 +199,7 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
         activeMemberJob?.cancel()
         activeMemberJob = viewModelScope.launch {
             val todayDate = getTodayDateString()
+            currentLoadedDate = todayDate
 
             // 1. Observe thuốc
             launch {
@@ -246,6 +289,93 @@ class HealthScheduleViewModel(application: Application) : AndroidViewModel(appli
 
             if (log != null) {
                 medicationLogDao.markAsTaken(log.id, System.currentTimeMillis())
+            }
+        }
+    }
+
+    fun undoMedicationTaken(medicine: Medicine, scheduledTime: String) {
+        viewModelScope.launch {
+            val todayDate = getTodayDateString()
+            val log = medicationLogDao.getLog(medicine.id, todayDate, scheduledTime)
+            if (log != null) {
+                medicationLogDao.markAsNotTaken(log.id)
+            }
+        }
+    }
+
+    fun addMedicineSession(
+        sessionTime: String,
+        commonInstruction: String,
+        items: List<Pair<String, String>> // (name, dosage)
+    ) {
+        val validItems = items.filter { it.first.isNotBlank() }
+        if (validItems.isEmpty() || sessionTime.isBlank()) return
+        val memberId = _uiState.value.selectedMemberId.ifBlank { sessionManager.userId }
+        val todayDate = getTodayDateString()
+
+        viewModelScope.launch {
+            val newMedicines = validItems.map { (name, dosage) ->
+                Medicine(
+                    id = UUID.randomUUID().toString(),
+                    userId = memberId,
+                    name = name.trim(),
+                    dosage = dosage.ifBlank { "1 viên" }.trim(),
+                    instruction = commonInstruction.trim(),
+                    reminderTimes = listOf(sessionTime),
+                    purpose = ""
+                )
+            }
+
+            for (medicine in newMedicines) {
+                medicineDao.insertMedicine(MedicineEntity.fromDomain(medicine))
+                medicationAlarmScheduler.schedule(
+                    medicine.id,
+                    medicine.name,
+                    medicine.dosage,
+                    medicine.reminderTimes
+                )
+            }
+            ensureTodayLogsForMedicines(newMedicines, memberId, todayDate)
+        }
+    }
+
+    fun markSessionTaken(sessionTime: String, medicines: List<Medicine>) {
+        viewModelScope.launch {
+            val memberId = _uiState.value.selectedMemberId.ifBlank { sessionManager.userId }
+            val todayDate = getTodayDateString()
+            val now = System.currentTimeMillis()
+
+            for (medicine in medicines) {
+                var log = medicationLogDao.getLog(medicine.id, todayDate, sessionTime)
+                if (log == null) {
+                    val newLog = MedicationLogEntity(
+                        id = UUID.randomUUID().toString(),
+                        medicineId = medicine.id,
+                        medicineName = medicine.name,
+                        userId = memberId,
+                        scheduledDate = todayDate,
+                        scheduledTime = sessionTime,
+                        actualTakenTime = now,
+                        isTaken = true,
+                        isSkipped = false
+                    )
+                    medicationLogDao.insertIfAbsent(newLog)
+                    medicationLogDao.markAsTaken(newLog.id, now)
+                } else {
+                    medicationLogDao.markAsTaken(log.id, now)
+                }
+            }
+        }
+    }
+
+    fun undoSessionTaken(sessionTime: String, medicines: List<Medicine>) {
+        viewModelScope.launch {
+            val todayDate = getTodayDateString()
+            for (medicine in medicines) {
+                val log = medicationLogDao.getLog(medicine.id, todayDate, sessionTime)
+                if (log != null) {
+                    medicationLogDao.markAsNotTaken(log.id)
+                }
             }
         }
     }

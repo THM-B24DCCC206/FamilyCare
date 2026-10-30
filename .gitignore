@@ -12,3 +12,7 @@ build/
 .externalNativeBuild
 .cxx
 *.db
+__pycache__/
+*.pyc
+~$*
+

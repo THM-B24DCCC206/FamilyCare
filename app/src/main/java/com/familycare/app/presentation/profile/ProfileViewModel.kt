@@ -11,7 +11,6 @@ import com.familycare.app.core.database.MedicineDao
 import com.familycare.app.core.database.UserDao
 import com.familycare.app.core.database.UserEntity
 import com.familycare.app.domain.model.User
-import com.familycare.app.domain.model.UserRole
 import com.familycare.app.presentation.home.Member
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,11 +22,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
-/**
- * ViewModel quản lý màn hình Hồ Sơ Sức Khỏe (Profile Screen)
- * Hỗ trợ chuyển đổi xem và chỉnh sửa thông tin y tế (nhóm máu, bệnh nền, dị ứng)
- * cho từng thành viên trong gia đình và xuất báo cáo PDF tương ứng.
- */
 class ProfileViewModel(
     private val userDao: UserDao,
     private val sessionManager: SessionManager,
@@ -65,14 +59,13 @@ class ProfileViewModel(
         val currentUserEmail = sessionManager.userEmail
         val currentRole = sessionManager.userRole
 
-        // Dọn dẹp các user id giả nếu có
-        runCatching {
-            userDao.deleteUserById("user_01")
-            userDao.deleteUserById("user_demo_01")
-            userDao.deleteUserById("member_bac_nam")
+        // Dọn dẹp sạch sẽ toàn bộ các ID mẫu / dữ liệu ảo cũ nếu có trong DB
+        val fakeIds = listOf("user_01", "user_demo_01", "member_bac_nam", "member_bo", "member_me", "member_anhtrai", "user_02", "member_ly_tran")
+        fakeIds.forEach { id ->
+            runCatching { userDao.deleteUserById(id) }
         }
 
-        // Đảm bảo tài khoản đăng nhập hiện tại có trong DB
+        // Đảm bảo tài khoản đăng nhập hiện tại có trong DB với đúng thông tin thật
         var currentDbUser = userDao.getUserById(currentUserId)
         if (currentDbUser == null) {
             val newCurr = UserEntity(
@@ -80,50 +73,22 @@ class ProfileViewModel(
                 fullName = currentUserName,
                 email = currentUserEmail,
                 role = currentRole,
-                bloodType = "O+",
+                birthDate = "",
+                bloodType = "",
                 chronicDiseasesJson = "[]",
-                drugAllergiesJson = "[]"
+                drugAllergiesJson = "[]",
+                gender = "",
+                phoneNumber = "",
+                address = ""
             )
             userDao.insertUser(newCurr)
             currentDbUser = newCurr
         }
 
-        var allDbUsers = userDao.getAllUsers()
+        val currentFamilyId = currentDbUser.familyId.trim().ifBlank { sessionManager.familyId.trim() }
+        val allDbUsers = userDao.getAllUsers().filter { it.id !in fakeIds }
 
-        // Nếu chưa có thành viên khác trong DB, seed thành viên người thân thật (Hải Minh Trần)
-        val otherMembersInDb = allDbUsers.filter { it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01" && it.id != "member_bac_nam" }
-        if (otherMembersInDb.isEmpty()) {
-            val isCurrentLy = currentUserName.contains("Ly", ignoreCase = true)
-            if (isCurrentLy) {
-                val haiMinh = UserEntity(
-                    id = "user_02",
-                    fullName = "Hải Minh Trần",
-                    email = "haiminh@familycare.vn",
-                    role = "MEMBER",
-                    birthDate = "28/11/2006",
-                    bloodType = "O+",
-                    chronicDiseasesJson = "[]",
-                    drugAllergiesJson = "[]"
-                )
-                userDao.insertUser(haiMinh)
-            } else {
-                val lyTran = UserEntity(
-                    id = "member_ly_tran",
-                    fullName = "Ly Trần",
-                    email = "ly.tran@familycare.vn",
-                    role = "ADMIN",
-                    birthDate = "20/11/1992",
-                    bloodType = "A+",
-                    chronicDiseasesJson = "[]",
-                    drugAllergiesJson = "[]"
-                )
-                userDao.insertUser(lyTran)
-            }
-
-            allDbUsers = userDao.getAllUsers()
-        }
-
-        // Tạo danh sách Member cho LazyRow: Tài khoản đăng nhập luôn đứng ĐẦU TIÊN
+        // Tạo danh sách Member
         val membersList = mutableListOf<Member>()
         val currentUserObj = currentDbUser.toDomainModel()
 
@@ -132,31 +97,39 @@ class ProfileViewModel(
                 id = currentUserId,
                 fullName = currentUserObj.fullName.ifBlank { "Tôi" },
                 avatarUrl = currentUserObj.avatarUrl.takeIf { it.isNotBlank() },
-                initials = "Tôi",
-                role = if (currentRole == "ADMIN") "Trưởng gia đình" else "Tôi"
+                initials = (currentUserObj.fullName.ifBlank { "Tôi" }).trim().take(1).uppercase(),
+                role = if (currentRole == "ADMIN" || currentDbUser.role.uppercase() == "ADMIN") "Trưởng gia đình" else "Thành viên"
             )
         )
 
-        allDbUsers
-            .filter { it.id != currentUserId && it.id != "user_01" && it.id != "user_demo_01" }
-            .forEach { u ->
-                val displayRole = when (u.role) {
-                    "ADMIN" -> "Trưởng gia đình"
-                    "MEMBER" -> "Thành viên"
-                    else -> u.role
-                }
-                membersList.add(
-                    Member(
-                        id = u.id,
-                        fullName = u.fullName,
-                        avatarUrl = u.avatarUrl.takeIf { it.isNotBlank() },
-                        initials = u.fullName.trim().take(1).uppercase(),
-                        role = displayRole
+        if (currentFamilyId.isNotBlank()) {
+            allDbUsers
+                .filter { it.id != currentUserId && it.familyId.isNotBlank() && it.familyId == currentFamilyId }
+                .forEach { u ->
+                    val displayRole = when (u.role.uppercase()) {
+                        "ADMIN" -> "Trưởng gia đình"
+                        "MEMBER" -> "Thành viên"
+                        else -> u.role
+                    }
+                    membersList.add(
+                        Member(
+                            id = u.id,
+                            fullName = u.fullName,
+                            avatarUrl = u.avatarUrl.takeIf { it.isNotBlank() },
+                            initials = u.fullName.trim().take(1).uppercase(),
+                            role = displayRole
+                        )
                     )
-                )
-            }
+                }
+        }
 
-        // Xác định thành viên được chọn
+        val allDomainUsers = if (currentFamilyId.isNotBlank()) {
+            allDbUsers.filter { it.id == currentUserId || (it.familyId.isNotBlank() && it.familyId == currentFamilyId) }.map { it.toDomainModel() }
+        } else {
+            listOf(currentUserObj)
+        }
+
+        // Thành viên được chọn
         val selectedId = when {
             targetMemberId != null && membersList.any { it.id == targetMemberId } -> targetMemberId
             _uiState.value.selectedMemberId.isNotBlank() && membersList.any { it.id == _uiState.value.selectedMemberId } -> _uiState.value.selectedMemberId
@@ -173,17 +146,27 @@ class ProfileViewModel(
             } ?: emptyList()
         }.getOrDefault(emptyList())
 
+        // Cập nhật viewingMember nếu đang xem
+        val currentViewing = _uiState.value.viewingMember?.let { vm ->
+            allDomainUsers.find { it.id == vm.id } ?: vm
+        }
+
         _uiState.update { state ->
             state.copy(
                 status = ProfileUiStatus.Success,
                 currentUser = currentUserObj,
                 familyMembers = membersList,
+                allUsers = allDomainUsers,
                 selectedMemberId = selectedId,
                 selectedMemberUser = selectedUser,
                 selectedMemberMedicines = medicinesList,
+                viewingMember = currentViewing,
                 isEditing = false,
                 editedFullName = selectedUser.fullName,
                 editedBirthDate = selectedUser.birthDate,
+                editedGender = selectedUser.gender,
+                editedPhoneNumber = selectedUser.phoneNumber,
+                editedAddress = selectedUser.address,
                 editedBloodType = selectedUser.bloodType,
                 editedChronicDiseases = selectedUser.chronicDiseases,
                 editedDrugAllergies = selectedUser.drugAllergies
@@ -192,62 +175,130 @@ class ProfileViewModel(
     }
 
     /**
-     * Chuyển đổi thành viên được chọn từ thanh avatar LazyRow
+     * Mở màn hình Chi tiết Thành viên khi bấm vào thành viên trong danh sách gia đình
      */
-    fun onMemberSelect(memberId: String) {
-        if (_uiState.value.selectedMemberId == memberId) return
-
+    fun openMemberDetail(memberId: String) {
         viewModelScope.launch {
-            _uiState.update { it.copy(selectedMemberId = memberId) }
             withContext(Dispatchers.IO) {
                 val memberEntity = userDao.getUserById(memberId)
                 val memberUser = memberEntity?.toDomainModel()
-                val medicinesList = runCatching {
+                val medicines = runCatching {
                     medicineDao.getMedicinesByMember(memberId).firstOrNull()?.map {
                         if (it.dosage.isNotBlank()) "${it.name} (${it.dosage})" else it.name
                     } ?: emptyList()
                 }.getOrDefault(emptyList())
 
-                _uiState.update { state ->
-                    state.copy(
-                        selectedMemberUser = memberUser,
-                        selectedMemberMedicines = medicinesList,
-                        isEditing = false,
-                        showEditHealthCardDialog = false,
-                        editedFullName = memberUser?.fullName.orEmpty(),
-                        editedBirthDate = memberUser?.birthDate.orEmpty(),
-                        editedBloodType = memberUser?.bloodType.orEmpty(),
-                        editedChronicDiseases = memberUser?.chronicDiseases.orEmpty(),
-                        editedDrugAllergies = memberUser?.drugAllergies.orEmpty()
+                _uiState.update {
+                    it.copy(
+                        viewingMember = memberUser,
+                        viewingMemberMedicines = medicines,
+                        selectedMemberId = memberId,
+                        selectedMemberUser = memberUser
                     )
                 }
             }
         }
     }
 
+    fun closeMemberDetail() {
+        _uiState.update { it.copy(viewingMember = null, viewingMemberMedicines = emptyList()) }
+    }
+
+    fun onMemberSelect(memberId: String) {
+        if (_uiState.value.selectedMemberId == memberId) return
+        openMemberDetail(memberId)
+    }
+
     /**
-     * Mở Dialog chỉnh sửa Y bạ cho thành viên đang chọn
+     * Mở Dialog chỉnh sửa Hồ sơ cá nhân (thông tin + y bạ)
      */
-    fun openEditHealthCardDialog() {
-        val u = _uiState.value.selectedMemberUser ?: return
+    fun openEditProfileDialog(targetUser: User? = null) {
+        val userToEdit = targetUser ?: _uiState.value.currentUser ?: return
         _uiState.update {
             it.copy(
-                showEditHealthCardDialog = true,
-                editedBloodType = u.bloodType,
-                editedChronicDiseases = u.chronicDiseases,
-                editedDrugAllergies = u.drugAllergies,
+                showEditProfileDialog = true,
+                editedFullName = userToEdit.fullName,
+                editedBirthDate = userToEdit.birthDate,
+                editedGender = userToEdit.gender,
+                editedPhoneNumber = userToEdit.phoneNumber,
+                editedAddress = userToEdit.address,
+                editedBloodType = userToEdit.bloodType,
+                editedChronicDiseases = userToEdit.chronicDiseases,
+                editedDrugAllergies = userToEdit.drugAllergies,
                 saveSuccessMessage = null
             )
         }
     }
 
-    fun dismissEditHealthCardDialog() {
-        _uiState.update { it.copy(showEditHealthCardDialog = false) }
+    fun dismissEditProfileDialog() {
+        _uiState.update { it.copy(showEditProfileDialog = false) }
     }
 
     /**
-     * Mở Dialog thêm thành viên mới
+     * Lưu hồ sơ người dùng / thành viên
      */
+    fun saveProfile(
+        userId: String,
+        fullName: String,
+        birthDate: String,
+        gender: String,
+        phoneNumber: String,
+        address: String,
+        bloodType: String,
+        chronicDiseases: List<String>,
+        drugAllergies: List<String>
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = userDao.getUserById(userId)
+            val updatedEntity = UserEntity(
+                id = userId,
+                fullName = fullName.trim(),
+                email = existing?.email.orEmpty(),
+                role = existing?.role ?: "MEMBER",
+                birthDate = birthDate.trim(),
+                bloodType = bloodType.trim(),
+                chronicDiseasesJson = "[${chronicDiseases.joinToString(",") { "\"$it\"" }}]",
+                drugAllergiesJson = "[${drugAllergies.joinToString(",") { "\"$it\"" }}]",
+                gender = gender.trim(),
+                phoneNumber = phoneNumber.trim(),
+                address = address.trim(),
+                avatarUrl = existing?.avatarUrl.orEmpty(),
+                familyId = existing?.familyId.orEmpty()
+            )
+            userDao.insertUser(updatedEntity)
+
+            // Cập nhật lại session nếu là tài khoản hiện tại
+            val currentUserId = sessionManager.userId.ifBlank { "user_me" }
+            if (userId == currentUserId) {
+                sessionManager.saveUserSession(
+                    userId = currentUserId,
+                    name = fullName.trim(),
+                    email = sessionManager.userEmail,
+                    role = sessionManager.userRole
+                )
+            }
+
+            loadProfileDataInternal(targetMemberId = userId)
+
+            _uiState.update {
+                it.copy(
+                    showEditProfileDialog = false,
+                    showEditHealthCardDialog = false,
+                    saveSuccessMessage = "Đã lưu thông tin của $fullName thành công!"
+                )
+            }
+        }
+    }
+
+    fun openEditHealthCardDialog() {
+        val u = _uiState.value.selectedMemberUser ?: _uiState.value.currentUser ?: return
+        openEditProfileDialog(u)
+    }
+
+    fun dismissEditHealthCardDialog() {
+        dismissEditProfileDialog()
+    }
+
     fun openAddMemberDialog() {
         _uiState.update { it.copy(showAddMemberDialog = true) }
     }
@@ -256,42 +307,16 @@ class ProfileViewModel(
         _uiState.update { it.copy(showAddMemberDialog = false) }
     }
 
-    /**
-     * Lưu thông tin Y bạ (nhóm máu, bệnh nền, dị ứng) cho thành viên đang chọn
-     */
-    fun saveHealthCard(
-        bloodType: String,
-        chronicDiseases: List<String>,
-        drugAllergies: List<String>
-    ) {
-        val currentMember = _uiState.value.selectedMemberUser ?: return
-        val updated = currentMember.copy(
-            bloodType = bloodType.trim(),
-            chronicDiseases = chronicDiseases,
-            drugAllergies = drugAllergies
-        )
-
-        viewModelScope.launch(Dispatchers.IO) {
-            userDao.insertUser(UserEntity.fromDomainModel(updated))
-            _uiState.update { state ->
-                state.copy(
-                    selectedMemberUser = updated,
-                    showEditHealthCardDialog = false,
-                    saveSuccessMessage = "Đã cập nhật thông tin y tế cho ${updated.fullName}!"
-                )
-            }
-        }
-    }
-
-    /**
-     * Thêm thành viên mới vào gia đình
-     */
     fun addNewMember(
         fullName: String,
         relationship: String,
-        bloodType: String,
-        chronicDiseases: List<String>,
-        drugAllergies: List<String>
+        birthDate: String = "",
+        gender: String = "",
+        phoneNumber: String = "",
+        address: String = "",
+        bloodType: String = "O+",
+        chronicDiseases: List<String> = emptyList(),
+        drugAllergies: List<String> = emptyList()
     ) {
         val trimmedName = fullName.trim()
         if (trimmedName.isBlank()) return
@@ -302,9 +327,13 @@ class ProfileViewModel(
             fullName = trimmedName,
             email = "",
             role = relationship.ifBlank { "Thành viên" },
+            birthDate = birthDate.trim(),
             bloodType = bloodType.trim(),
             chronicDiseasesJson = "[${chronicDiseases.joinToString(",") { "\"$it\"" }}]",
-            drugAllergiesJson = "[${drugAllergies.joinToString(",") { "\"$it\"" }}]"
+            drugAllergiesJson = "[${drugAllergies.joinToString(",") { "\"$it\"" }}]",
+            gender = gender.trim(),
+            phoneNumber = phoneNumber.trim(),
+            address = address.trim()
         )
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -318,6 +347,16 @@ class ProfileViewModel(
             }
         }
     }
+
+    // Dialogs điều khiển
+    fun openHealthDataDialog() { _uiState.update { it.copy(showHealthDataDialog = true) } }
+    fun dismissHealthDataDialog() { _uiState.update { it.copy(showHealthDataDialog = false) } }
+
+    fun openSettingsDialog() { _uiState.update { it.copy(showSettingsDialog = true) } }
+    fun dismissSettingsDialog() { _uiState.update { it.copy(showSettingsDialog = false) } }
+
+    fun openHelpDialog() { _uiState.update { it.copy(showHelpDialog = true) } }
+    fun dismissHelpDialog() { _uiState.update { it.copy(showHelpDialog = false) } }
 
     fun clearSaveMessage() {
         _uiState.update { it.copy(saveSuccessMessage = null) }

@@ -273,8 +273,14 @@ fun FamilySetupScreen(
                                     isSubmitting = false
                                     return@launch
                                 }
-                                val familyId = "fam_joined_" + System.currentTimeMillis()
-                                val familyName = "Tổ Ấm Yêu Thương"
+                                val targetFamily = database.userDao.getFamilyByInviteCode(code)
+                                if (targetFamily == null) {
+                                    errorMessage = "Không tìm thấy tổ ấm nào với mã mời '$code'. Vui lòng kiểm tra lại!"
+                                    isSubmitting = false
+                                    return@launch
+                                }
+                                val familyId = targetFamily.familyId
+                                val familyName = targetFamily.familyName
 
                                 // 1. Lưu vào Session (TỰ ĐỘNG GÁN VAI TRÒ: THÀNH VIÊN)
                                 sessionManager.saveUserSession(
