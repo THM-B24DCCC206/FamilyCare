@@ -13,7 +13,9 @@ import android.media.AudioAttributes
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -27,6 +29,10 @@ class MedicationAlarmService : Service() {
     private var medicineName = "Thuốc"
     private var dosage = ""
     private var time = ""
+
+    // Bộ hẹn giờ tự động tắt chuông sau 1 phút nếu người bệnh không bấm gì
+    private var autoStopHandler: Handler? = null
+    private var autoStopRunnable: Runnable? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -147,6 +153,18 @@ class MedicationAlarmService : Service() {
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Không thể rung thiết bị", e)
         }
+
+        // Tự động ngắt chuông sau 60 giây và tự động hoãn 5 phút nếu không ai bấm gì (tránh hao pin/nóng máy)
+        cancelAutoStopTimer()
+        val handler = Handler(Looper.getMainLooper())
+        val runnable = Runnable {
+            android.util.Log.i(TAG, "Chuông reo đủ 60 giây không có tương tác -> Tự động chuyển sang chế độ nhắc lại 5 phút")
+            scheduleSnooze()
+            stopAlarm()
+        }
+        autoStopHandler = handler
+        autoStopRunnable = runnable
+        handler.postDelayed(runnable, AUTO_STOP_DELAY_MS)
     }
 
     private fun buildNotification(): Notification {
@@ -288,6 +306,7 @@ class MedicationAlarmService : Service() {
     }
 
     private fun stopRinging() {
+        cancelAutoStopTimer()
         try {
             ringtone?.stop()
         } catch (e: Exception) {
@@ -310,7 +329,14 @@ class MedicationAlarmService : Service() {
         }
     }
 
+    private fun cancelAutoStopTimer() {
+        autoStopRunnable?.let { autoStopHandler?.removeCallbacks(it) }
+        autoStopRunnable = null
+        autoStopHandler = null
+    }
+
     private fun stopAlarm() {
+        cancelAutoStopTimer()
         stopRinging()
 
         getSystemService(NotificationManager::class.java)
@@ -321,6 +347,7 @@ class MedicationAlarmService : Service() {
     }
 
     override fun onDestroy() {
+        cancelAutoStopTimer()
         stopRinging()
         super.onDestroy()
     }
@@ -340,5 +367,6 @@ class MedicationAlarmService : Service() {
         private const val CHANNEL_ALARM = "medication_alarm_channel"
         private const val SNOOZE_REQUEST_CODE = 92031
         private const val SNOOZE_DELAY_MS = 5 * 60 * 1000L
+        private const val AUTO_STOP_DELAY_MS = 60 * 1000L // 60 giây (1 phút) tự động ngắt chuông và hoãn
     }
 }
