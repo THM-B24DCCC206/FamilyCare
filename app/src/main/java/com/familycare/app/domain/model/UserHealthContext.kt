@@ -92,8 +92,8 @@ data class UserHealthContext(
         val classification = when {
             sys >= 180 || dia >= 120 -> "NGUY HIỂM: Cơn tăng huyết áp cấp cứu"
             sys >= 140 || dia >= 90 -> "Tăng huyết áp (Vượt ngưỡng an toàn)"
-            sys in 120..139 || dia in 80..89 -> "Tiền tăng huyết áp (Hơi cao)"
-            sys in 90..119 && dia in 60..79 -> "Bình thường lý tưởng"
+            sys in 130..139 || dia in 81..89 -> "Tiền tăng huyết áp (Hơi cao)"
+            sys in 90..129 && dia in 60..80 -> "Bình thường"
             sys < 90 || dia < 60 -> "Huyết áp thấp"
             else -> "Cần theo dõi thêm"
         }

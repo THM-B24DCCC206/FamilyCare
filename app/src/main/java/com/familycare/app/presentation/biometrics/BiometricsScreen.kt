@@ -1022,10 +1022,10 @@ private fun MetricHistoryCard(
             val dia = metric.valueSecondary?.toInt() ?: 80
             val (badge, color) = when {
                 sys < 90 || dia < 60 -> Pair("Huyết áp thấp", Color(0xFFEA580C))
+                sys >= 140 || dia >= 90 -> Pair("Tăng huyết áp", Color(0xFFDC2626))
+                sys in 130..139 || dia in 81..89 -> Pair("Tiền tăng HA", Color(0xFFEA580C))
                 sys < 120 && dia < 80 -> Pair("Tối ưu", Color(0xFF15803D))
-                sys in 120..129 && dia < 80 -> Pair("Bình thường", Color(0xFF15803D))
-                sys in 130..139 || dia in 80..89 -> Pair("Tiền tăng HA", Color(0xFFEA580C))
-                else -> Pair("Tăng huyết áp", Color(0xFFDC2626))
+                else -> Pair("Bình thường", Color(0xFF15803D))
             }
             Tuple7(
                 Icons.Default.Speed,
